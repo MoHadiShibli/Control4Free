@@ -8,6 +8,7 @@
 #include <string.h>
 #include "autorun.h"
 #include "draw.h"
+#include "logo.h"
 #include "qrcodegen.h"
 
 /* Page CSS pixels to TV pixels. */
@@ -267,32 +268,45 @@ static void c4fBlurUnder(C4fCanvas *c, float x, float y, float w, float h, float
 
 /* ---- pieces of the page ---- */
 
-static float c4fCapsuleDistance(float x, float y, float ax, float ay, float bx, float by, float r)
+/* The DualShock 4 mark, its cut-outs showing what is behind. */
+static void c4fMark(C4fCanvas *c, float x, float y, float width, C4fColor color)
 {
-    float vx = bx - ax, vy = by - ay, fx = x - ax, fy = y - ay;
-    float t = c4fClamp((fx * vx + fy * vy) / (vx * vx + vy * vy));
-    return hypotf(fx - t * vx, fy - t * vy) - r;
+    C4fPath path = { 0 };
+    c4fLogoPath(&path, 1);
+    c4fFillPath(c, &path, c4fLogoAt(x, y, width, 0), color);
+    c4fPathFree(&path);
 }
 
-/* The page's controller mark (.app-mark, viewBox 0 0 32 32) from simple shapes. */
-static float c4fMarkDistance(float x, float y)
+/* A DualShock 4 with its light bar lit: the bar glows over the top edge, and
+ * the cut-outs read as dark recesses. */
+static void c4fLitController(C4fCanvas *c, float x, float y, float width, float angle,
+                             C4fColor body, C4fColor light, int shadow)
 {
-    float body = c4fRoundBoxDistance(x, y, 16, 15, 12.9f, 5, 5);
-    float grips = fminf(c4fCapsuleDistance(x, y, 6.4f, 16.5f, 7.6f, 21.2f, 3.3f),
-                        c4fCapsuleDistance(x, y, 25.6f, 16.5f, 24.4f, 21.2f, 3.3f));
-    float dpad = fminf(c4fRoundBoxDistance(x, y, 11, 17, 1, 3, 0.3f), c4fRoundBoxDistance(x, y, 11, 17, 3, 1, 0.3f));
-    float buttons = fminf(hypotf(x - 21.5f, y - 15.5f), hypotf(x - 19, y - 19)) - 1.5f;
-    return fmaxf(fminf(body, grips), -fminf(dpad, buttons));
-}
-
-static void c4fMark(C4fCanvas *c, float cx, float cy, float unit, C4fColor color)
-{
-    for (int y = (int)floorf(cy - 8 * unit); y <= (int)ceilf(cy + 8 * unit); y++)
-        for (int x = (int)floorf(cx - 14 * unit); x <= (int)ceilf(cx + 14 * unit); x++) {
-            float d = c4fMarkDistance(16 + (x + 0.5f - cx) / unit, 17.3f + (y + 0.5f - cy) / unit) * unit;
-            float cov = c4fClamp(0.5f - d);
-            if (cov > 0) c4fBlend(c, x, y, color, cov);
-        }
+    C4fPath outline = { 0 }, detail = { 0 }, bar = { 0 };
+    C4fPlacement at = c4fLogoAt(x, y, width, angle);
+    const float k = width / C4F_LOGO_WIDTH;
+    c4fLogoPath(&outline, 0);
+    c4fLogoPath(&detail, 1);
+    c4fLogoLightPath(&bar);
+    if (shadow) c4fShadowPath(c, &outline, at, 0, 26 * k, (int)fmaxf(2, 22 * k), C4F_RGBA(0, 4, 18, .75f));
+    /* The light spills up and out over the top edge, like the real bar: a
+     * wide soft source behind the edge, and a tight one at the bar. */
+    C4fPath spill = { 0 };
+    c4fPathRoundRect(&spill, 330, 46, 340, 56, 28, 0);
+    c4fShadowPath(c, &spill, at, 0, -6 * k, (int)fmaxf(3, 42 * k), light);
+    c4fShadowPath(c, &bar, at, 0, -8 * k, (int)fmaxf(2, 22 * k), light);
+    c4fPathFree(&spill);
+    c4fFillPath(c, &outline, at, C4F_RGBA(6, 22, 62, 1));
+    c4fFillPath(c, &detail, at, body);
+    c4fFillPath(c, &bar, at, light);
+    /* A bright core makes it read as a light, not paint. */
+    C4fPath core = { 0 };
+    c4fPathRoundRect(&core, 370, 83, 260, 7, 3.5f, 0);
+    c4fFillPath(c, &core, at, C4F_RGBA((light.r + 255) / 2, (light.g + 255) / 2, (light.b + 255) / 2, .9f));
+    c4fPathFree(&core);
+    c4fPathFree(&outline);
+    c4fPathFree(&detail);
+    c4fPathFree(&bar);
 }
 
 static void c4fTextCentered(C4fCanvas *c, int font, float size, float cx, float y, C4fColor color, const char *text)
@@ -454,8 +468,8 @@ void c4fDrawLauncher(uint32_t *pixels, const C4fLauncherScreen *s)
     else memset(pixels, 0, (size_t)c.w * (size_t)c.h * sizeof(uint32_t));
 
     /* .topbar: the app mark, the name and the state. */
-    c4fMark(&c, 64 + 13 * C4F_S, 54, 26 * C4F_S / 32, C4F_WHITE);
-    float x = 64 + 26 * C4F_S + 10 * C4F_S;
+    c4fMark(&c, 64 + 24, 54, 48, C4F_WHITE);
+    float x = 64 + 48 + 16;
     x += c4fText(&c, C4F_FONT_LIGHT, 17 * C4F_S, x, 63, C4F_TEXT, "Control4Free") + 14 * C4F_S;
     c4fDot(&c, x + 4 * C4F_S, 55, look.dot, look.glow);
     c4fText(&c, C4F_FONT_LIGHT, 13 * C4F_S, x + 16 * C4F_S, 62, C4F_MUTED, look.pill);
@@ -502,7 +516,7 @@ void c4fDrawLauncher(uint32_t *pixels, const C4fLauncherScreen *s)
     } else {
         c4fFillRoundRect(&c, cardX, cardY, card, card, 6 * C4F_S, C4F_RGBA(0, 0, 0, .3f));
         c4fInsetRoundRect(&c, cardX, cardY, card, card, 6 * C4F_S, 1 * C4F_S, C4F_LINE_SOFT);
-        c4fMark(&c, cardX + card / 2, cardY + card / 2, 5, C4F_FAINT);
+        c4fMark(&c, cardX + card / 2, cardY + card / 2, 180, C4F_RGBA(226, 236, 255, .3f));
         c4fTextCentered(&c, C4F_FONT_LIGHT, 24, qrX + qrWidth / 2, cardY + card + 50, C4F_MUTED,
                         "The code appears once it runs");
     }
@@ -575,9 +589,13 @@ void c4fDrawLauncher(uint32_t *pixels, const C4fLauncherScreen *s)
 void c4fDrawIcon(uint32_t *pixels, int size)
 {
     C4fCanvas c = { pixels, size, size };
-    c4fPaintBackdrop(&c, size / 360.0f);
-    c4fMark(&c, size / 2.0f, size * 0.40f, size * 0.60f / 26, C4F_WHITE);
-    c4fTextCentered(&c, C4F_FONT_LIGHT, size * 0.105f, size / 2.0f, size * 0.80f, C4F_TEXT, "Control4Free");
+    const float s = (float)size;
+    c4fPaintBackdrop(&c, s / 360.0f);
+    /* Three players, their light bars in the page's player colours. */
+    c4fLitController(&c, s * 0.31f, s * 0.385f, s * 0.50f, -15, C4F_RGBA(196, 210, 240, 1), C4F_RGBA(255, 48, 64, 1), 0);
+    c4fLitController(&c, s * 0.69f, s * 0.385f, s * 0.50f, 15, C4F_RGBA(196, 210, 240, 1), C4F_RGBA(48, 200, 96, 1), 0);
+    c4fLitController(&c, s * 0.50f, s * 0.50f, s * 0.62f, 0, C4F_WHITE, C4F_RGBA(58, 140, 255, 1), 1);
+    c4fTextCentered(&c, C4F_FONT_LIGHT, s * 0.1f, s / 2.0f, s * 0.89f, C4F_TEXT, "Control4Free");
 }
 
 int c4fScreenInit(void)

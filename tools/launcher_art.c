@@ -6,6 +6,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include "autorun.h"
+#include "logo.h"
 #include "screen.h"
 
 static int c4fWrite(const char *path, const uint32_t *pixels, size_t count)
@@ -20,8 +21,25 @@ static int c4fWrite(const char *path, const uint32_t *pixels, size_t count)
     return fclose(out) != 0;
 }
 
+/* The mark as an SVG path in its design box (viewBox 0 0 1000 640), for the page. */
+static int c4fPrintSvg(void)
+{
+    C4fPath path = { 0 };
+    c4fLogoPath(&path, 1);
+    for (int i = 0; i < path.count; i++) {
+        const C4fPathOp *o = &path.ops[i];
+        if (o->op == 'C') printf("C%g %g %g %g %g %g", o->v[0], o->v[1], o->v[2], o->v[3], o->v[4], o->v[5]);
+        else printf("%c%g %g", o->op, o->v[0], o->v[1]);
+        printf(i + 1 < path.count && path.ops[i + 1].op == 'M' ? "Z" : "");
+    }
+    printf("Z\n");
+    c4fPathFree(&path);
+    return 0;
+}
+
 int main(int argc, char **argv)
 {
+    if (argc == 2 && !strcmp(argv[1], "svg")) return c4fPrintSvg();
     if (argc != 4 || c4fScreenInit()) return 2;
     if (!strcmp(argv[1], "icon")) {
         int size = atoi(argv[2]);

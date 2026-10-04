@@ -258,6 +258,187 @@ void c4fTriangleOutline(C4fCanvas *c, float cx, float cy, float radius, float wi
         }
 }
 
+/* ---- paths ---- */
+
+static C4fPathOp *c4fPathPush(C4fPath *p, char op)
+{
+    if (p->count == p->capacity) {
+        int capacity = p->capacity ? p->capacity * 2 : 64;
+        C4fPathOp *ops = realloc(p->ops, (size_t)capacity * sizeof(*ops));
+        if (!ops) return NULL;
+        p->ops = ops;
+        p->capacity = capacity;
+    }
+    C4fPathOp *o = &p->ops[p->count++];
+    memset(o, 0, sizeof(*o));
+    o->op = op;
+    return o;
+}
+
+void c4fPathMove(C4fPath *p, float x, float y)
+{
+    C4fPathOp *o = c4fPathPush(p, 'M');
+    if (o) { o->v[0] = x; o->v[1] = y; }
+}
+
+void c4fPathLine(C4fPath *p, float x, float y)
+{
+    C4fPathOp *o = c4fPathPush(p, 'L');
+    if (o) { o->v[0] = x; o->v[1] = y; }
+}
+
+void c4fPathCubic(C4fPath *p, float x1, float y1, float x2, float y2, float x, float y)
+{
+    C4fPathOp *o = c4fPathPush(p, 'C');
+    if (o) { o->v[0] = x1; o->v[1] = y1; o->v[2] = x2; o->v[3] = y2; o->v[4] = x; o->v[5] = y; }
+}
+
+/* Screen y points down, so "clockwise" is as seen on screen. */
+void c4fPathCircle(C4fPath *p, float cx, float cy, float r, int clockwise)
+{
+    const float k = 0.5522847f * r, s = clockwise ? 1.0f : -1.0f;
+    c4fPathMove(p, cx, cy - r);
+    c4fPathCubic(p, cx + s * k, cy - r, cx + s * r, cy - k, cx + s * r, cy);
+    c4fPathCubic(p, cx + s * r, cy + k, cx + s * k, cy + r, cx, cy + r);
+    c4fPathCubic(p, cx - s * k, cy + r, cx - s * r, cy + k, cx - s * r, cy);
+    c4fPathCubic(p, cx - s * r, cy - k, cx - s * k, cy - r, cx, cy - r);
+}
+
+void c4fPathRoundRect(C4fPath *p, float x, float y, float w, float h, float r, int clockwise)
+{
+    const float k = 0.5522847f * r, x1 = x + w, y1 = y + h;
+    if (clockwise) {
+        c4fPathMove(p, x + r, y);
+        c4fPathLine(p, x1 - r, y);
+        c4fPathCubic(p, x1 - r + k, y, x1, y + r - k, x1, y + r);
+        c4fPathLine(p, x1, y1 - r);
+        c4fPathCubic(p, x1, y1 - r + k, x1 - r + k, y1, x1 - r, y1);
+        c4fPathLine(p, x + r, y1);
+        c4fPathCubic(p, x + r - k, y1, x, y1 - r + k, x, y1 - r);
+        c4fPathLine(p, x, y + r);
+        c4fPathCubic(p, x, y + r - k, x + r - k, y, x + r, y);
+    } else {
+        c4fPathMove(p, x + r, y);
+        c4fPathCubic(p, x + r - k, y, x, y + r - k, x, y + r);
+        c4fPathLine(p, x, y1 - r);
+        c4fPathCubic(p, x, y1 - r + k, x + r - k, y1, x + r, y1);
+        c4fPathLine(p, x1 - r, y1);
+        c4fPathCubic(p, x1 - r + k, y1, x1, y1 - r + k, x1, y1 - r);
+        c4fPathLine(p, x1, y + r);
+        c4fPathCubic(p, x1, y + r - k, x1 - r + k, y, x1 - r, y);
+        c4fPathLine(p, x + r, y);
+    }
+}
+
+void c4fPathFree(C4fPath *p)
+{
+    free(p->ops);
+    memset(p, 0, sizeof(*p));
+}
+
+/* stb_truetype's rasterizer takes 16-bit vertices: work in 1/16 pixels. */
+#define C4F_SUBPIXEL 16.0f
+
+static stbtt_vertex_type c4fVertexUnit(float v)
+{
+    float u = v * C4F_SUBPIXEL;
+    return (stbtt_vertex_type)(u > 32000 ? 32000 : u < -32000 ? -32000 : u);
+}
+
+int c4fPathMask(const C4fCanvas *c, const C4fPath *p, C4fPlacement at, unsigned char **mask, int *x0, int *y0, int *w, int *h)
+{
+    const float angle = at.angle * 3.14159265f / 180.0f, cs = cosf(angle), sn = sinf(angle);
+    float minX = 1e9f, minY = 1e9f, maxX = -1e9f, maxY = -1e9f;
+    stbtt_vertex *v = calloc((size_t)p->count + 1, sizeof(*v));
+    if (!v || !p->count) { free(v); return 0; }
+    for (int i = 0; i < p->count; i++) {
+        const C4fPathOp *o = &p->ops[i];
+        float placed[6];
+        int points = o->op == 'C' ? 3 : 1;
+        for (int k = 0; k < points; k++) {
+            float dx = (o->v[k * 2] - at.originX) * at.scale, dy = (o->v[k * 2 + 1] - at.originY) * at.scale;
+            placed[k * 2] = at.x + dx * cs - dy * sn;
+            placed[k * 2 + 1] = at.y + dx * sn + dy * cs;
+            minX = fminf(minX, placed[k * 2]); maxX = fmaxf(maxX, placed[k * 2]);
+            minY = fminf(minY, placed[k * 2 + 1]); maxY = fmaxf(maxY, placed[k * 2 + 1]);
+        }
+        const float *end = &placed[(points - 1) * 2];
+        v[i].type = o->op == 'M' ? STBTT_vmove : o->op == 'L' ? STBTT_vline : STBTT_vcubic;
+        v[i].x = c4fVertexUnit(end[0]);
+        v[i].y = c4fVertexUnit(end[1]);
+        if (o->op == 'C') {
+            v[i].cx = c4fVertexUnit(placed[0]); v[i].cy = c4fVertexUnit(placed[1]);
+            v[i].cx1 = c4fVertexUnit(placed[2]); v[i].cy1 = c4fVertexUnit(placed[3]);
+        }
+    }
+    int bx0 = c4fMaxI((int)floorf(minX), 0), by0 = c4fMaxI((int)floorf(minY), 0);
+    int bx1 = c4fMinI((int)ceilf(maxX) + 1, c->w), by1 = c4fMinI((int)ceilf(maxY) + 1, c->h);
+    if (bx0 >= bx1 || by0 >= by1) { free(v); return 0; }
+    stbtt__bitmap bitmap;
+    bitmap.w = bx1 - bx0;
+    bitmap.h = by1 - by0;
+    bitmap.stride = bitmap.w;
+    bitmap.pixels = calloc((size_t)bitmap.w * (size_t)bitmap.h, 1);
+    if (!bitmap.pixels) { free(v); return 0; }
+    stbtt_Rasterize(&bitmap, 0.25f, v, p->count, 1 / C4F_SUBPIXEL, 1 / C4F_SUBPIXEL, 0, 0, bx0, by0, 0, NULL);
+    free(v);
+    *mask = bitmap.pixels; *x0 = bx0; *y0 = by0; *w = bitmap.w; *h = bitmap.h;
+    return 1;
+}
+
+void c4fFillPath(C4fCanvas *c, const C4fPath *p, C4fPlacement at, C4fColor color)
+{
+    unsigned char *mask;
+    int x0, y0, w, h;
+    if (!c4fPathMask(c, p, at, &mask, &x0, &y0, &w, &h)) return;
+    for (int y = 0; y < h; y++)
+        for (int x = 0; x < w; x++)
+            if (mask[y * w + x]) c4fBlend(c, x0 + x, y0 + y, color, mask[y * w + x] / 255.0f);
+    free(mask);
+}
+
+/* One box-blur pass over an 8-bit buffer, along rows or columns, edges zero. */
+static void c4fBlurMask(const unsigned char *src, unsigned char *dst, int w, int h, int radius, int horizontal)
+{
+    const int n = horizontal ? w : h, lines = horizontal ? h : w, step = horizontal ? 1 : w, lineStep = horizontal ? w : 1;
+    const int divisor = 2 * radius + 1;
+    for (int line = 0; line < lines; line++) {
+        const unsigned char *s = src + (size_t)line * lineStep;
+        unsigned char *d = dst + (size_t)line * lineStep;
+        int sum = 0;
+        for (int i = 0; i <= radius && i < n; i++) sum += s[i * step];
+        for (int i = 0; i < n; i++) {
+            d[i * step] = (unsigned char)(sum / divisor);
+            if (i + radius + 1 < n) sum += s[(i + radius + 1) * step];
+            if (i - radius >= 0) sum -= s[(i - radius) * step];
+        }
+    }
+}
+
+void c4fShadowPath(C4fCanvas *c, const C4fPath *p, C4fPlacement at, float dx, float dy, int radius, C4fColor color)
+{
+    unsigned char *mask;
+    int x0, y0, w, h;
+    /* Rasterize on a canvas-sized frame so the blur has room at the edges. */
+    if (radius < 1 || !c4fPathMask(c, p, at, &mask, &x0, &y0, &w, &h)) return;
+    const int margin = 3 * radius, bw = w + 2 * margin, bh = h + 2 * margin;
+    unsigned char *a = calloc((size_t)bw * bh, 1), *b = calloc((size_t)bw * bh, 1);
+    if (a && b) {
+        for (int y = 0; y < h; y++) memcpy(a + (size_t)(y + margin) * bw + margin, mask + (size_t)y * w, (size_t)w);
+        for (int pass = 0; pass < 3; pass++) {
+            c4fBlurMask(a, b, bw, bh, radius, 1);
+            c4fBlurMask(b, a, bw, bh, radius, 0);
+        }
+        const int ox = x0 - margin + (int)lroundf(dx), oy = y0 - margin + (int)lroundf(dy);
+        for (int y = 0; y < bh; y++)
+            for (int x = 0; x < bw; x++)
+                if (a[(size_t)y * bw + x]) c4fBlend(c, ox + x, oy + y, color, a[(size_t)y * bw + x] / 255.0f);
+    }
+    free(a);
+    free(b);
+    free(mask);
+}
+
 /* ---- text ---- */
 
 static C4fFace *c4fFace(int font, float size)

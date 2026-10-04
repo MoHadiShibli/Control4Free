@@ -42,6 +42,26 @@ void c4fSegment(C4fCanvas *c, float x0, float y0, float x1, float y1, float widt
 void c4fSquareOutline(C4fCanvas *c, float cx, float cy, float half, float width, C4fColor color);
 void c4fTriangleOutline(C4fCanvas *c, float cx, float cy, float radius, float width, C4fColor color);
 
+/* Vector paths (moves, lines, cubic curves), filled with non-zero winding:
+ * draw holes the opposite way round. Coordinates are in a design space that
+ * a transform places on the canvas. */
+typedef struct { char op; float v[6]; } C4fPathOp; /* 'M', 'L', 'C' (c1 c2 end) */
+typedef struct { C4fPathOp *ops; int count, capacity; } C4fPath;
+typedef struct { float originX, originY, scale, angle, x, y; } C4fPlacement; /* design origin -> canvas x,y */
+
+void c4fPathMove(C4fPath *p, float x, float y);
+void c4fPathLine(C4fPath *p, float x, float y);
+void c4fPathCubic(C4fPath *p, float x1, float y1, float x2, float y2, float x, float y);
+void c4fPathCircle(C4fPath *p, float cx, float cy, float r, int clockwise);
+void c4fPathRoundRect(C4fPath *p, float x, float y, float w, float h, float r, int clockwise);
+void c4fPathFree(C4fPath *p);
+/* Coverage of the path at a placement, as an 8-bit mask the size of its
+ * bounding box (caller frees *mask). 0 when nothing lands on the canvas. */
+int c4fPathMask(const C4fCanvas *c, const C4fPath *p, C4fPlacement at, unsigned char **mask, int *x0, int *y0, int *w, int *h);
+void c4fFillPath(C4fCanvas *c, const C4fPath *p, C4fPlacement at, C4fColor color);
+/* The mask blurred and spread: a soft halo or drop shadow under a shape. */
+void c4fShadowPath(C4fCanvas *c, const C4fPath *p, C4fPlacement at, float dx, float dy, int radius, C4fColor color);
+
 /* Text on a baseline. Sizes are CSS font-size in pixels. ASCII only. */
 float c4fText(C4fCanvas *c, int font, float size, float x, float y, C4fColor color, const char *text);
 float c4fTextN(C4fCanvas *c, int font, float size, float x, float y, C4fColor color, const char *text, int length);

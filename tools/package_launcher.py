@@ -35,7 +35,7 @@ def build_art_tool():
     stb = OUT / 'stb_truetype-host.o'
     subprocess.run([*flags, '-w', '-c', str(ROOT / 'launcher/stb_truetype.c'), '-o', str(stb)], check=True)
     subprocess.run([*flags, '-Wall', '-Wextra', '-Werror', str(ROOT / 'tools/launcher_art.c'),
-                    str(ROOT / 'launcher/screen.c'), str(ROOT / 'launcher/draw.c'),
+                    str(ROOT / 'launcher/screen.c'), str(ROOT / 'launcher/draw.c'), str(ROOT / 'launcher/logo.c'),
                     str(ROOT / 'vendor/qrcodegen/qrcodegen.c'), str(FONTS), str(stb), '-lm', '-o', str(ART)],
                    check=True)
 
