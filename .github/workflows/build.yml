@@ -1,0 +1,59 @@
+name: build
+
+# Builds both toolchain images, the payload, the installable package, and runs
+# every host test. On a vX.Y.Z tag it also publishes the release.
+on:
+  push:
+    branches: [main, next]
+    tags: ['v*']
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: write   # the release step needs it; nothing else writes
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build the toolchain images
+        run: |
+          docker build -t control4free-build -f docker/Dockerfile docker
+          docker build -t control4free-launcher-build -f docker/Dockerfile.launcher docker
+
+      - name: Build the payload and the package
+        run: |
+          docker run --rm --network none -v "$PWD:/src" -w /src \
+            control4free-launcher-build bash -lc 'make && make -C launcher'
+
+      - name: Host tests
+        run: |
+          docker run --rm --network none -v "$PWD:/src" -w /src \
+            control4free-launcher-build python3 -B tests/run.py
+
+      - name: Collect what was built
+        run: |
+          version=$(cat VERSION)
+          mkdir -p artifacts
+          cp build/control4free.elf "build/Control4Free-$version.pkg" artifacts/
+          cd artifacts && sha256sum * > SHA256SUMS && cat SHA256SUMS
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: control4free
+          path: artifacts/
+          if-no-files-found: error
+
+      - name: Check the tag matches VERSION
+        if: startsWith(github.ref, 'refs/tags/v')
+        run: |
+          test "v$(cat VERSION)" = "${GITHUB_REF#refs/tags/}" \
+            || { echo "tag ${GITHUB_REF#refs/tags/} does not match VERSION $(cat VERSION)"; exit 1; }
+
+      - name: Publish the release
+        if: startsWith(github.ref, 'refs/tags/v')
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release create "${GITHUB_REF#refs/tags/}" artifacts/* --verify-tag --notes-file CHANGELOG.md

@@ -5,10 +5,13 @@ keyboard, or an Xbox/other controller exposed by the browser's Gamepad API.
 Virtual controllers use the PS4's native user-selection screen, so they work on
 the home screen, at sign-in and in games.
 
-**Status: browser control, native user sign-in, gameplay, the launcher,
-GoldHEN AutoRun and recovery after rest mode have been confirmed on the
-development console.** Four virtual slots are exposed; the console's device
-limits apply.
+Browser control, native user sign-in, gameplay, the launcher app, GoldHEN
+AutoRun and recovery after rest mode are all confirmed on the development
+console. Four controllers at a time; the console's own device limits apply.
+
+See [CHANGELOG.md](CHANGELOG.md) for what is in a release, and
+[SECURITY.md](SECURITY.md) for what being open on your network does and does not
+mean.
 
 ## Requirements
 
@@ -172,6 +175,10 @@ readable over GoldHEN's FTP server, with the previous run kept beside it.
   a PC starts it again.
 
 ## Build
+
+Everything builds in Docker, so nothing has to be installed on the machine. CI
+(`.github/workflows/build.yml`) runs exactly these steps and attaches the payload,
+the package and their SHA256 sums to each tagged release.
 
 The [ps4-payload-sdk](https://github.com/ps4-payload-dev/sdk) toolchain is pinned
 in the Docker image:

@@ -225,6 +225,62 @@ static void c4fEnqueue(C4fWebPad *p, const ScePadData *data)
     p->queue[(p->head+p->count)%C4F_QUEUE_SIZE] = *data; p->count++;
 }
 
+#ifdef C4F_PROBE_SETTING
+/* Research only, built with `make C4F_PROBE=1`, never in a release.
+ *
+ * A real DualShock 4 is told to rumble and to change its light bar by the game.
+ * For a virtual pad that has to arrive through the same API the Remote Play path
+ * uses, and scePadVirtualDeviceGetRemoteSetting is the only call that looks like
+ * it carries anything back. Nothing is known about its buffer, so this polls it
+ * for every live controller and logs the return code once and then only what
+ * changes. Play something that rumbles, set a light bar, and read the log.
+ *
+ * The page already knows how to act on both ('v' and 'l' messages), so if the
+ * fields turn up here, driving them is a small step. */
+static void c4fProbeSetting(C4fWeb *app, uint64_t now)
+{
+    static uint64_t nextAt;
+    static unsigned char previous[C4F_MAX_PADS][256];
+    static int32_t lastRet[C4F_MAX_PADS];
+    static int seen[C4F_MAX_PADS];
+    unsigned char current[256];
+
+    if (now < nextAt) return;
+    nextAt = now + 100;
+    for (int i = 0; i < C4F_MAX_PADS; i++) {
+        C4fWebPad *p = &app->pads[i];
+        int32_t ret;
+        int first, from = -1, to = -1;
+
+        if (!p->active) { seen[i] = 0; continue; }
+        if (!scePadVirtualDeviceGetRemoteSetting) {
+            if (!seen[i]) c4fLog("probe: scePadVirtualDeviceGetRemoteSetting is not exported\n");
+            seen[i] = 1;
+            continue;
+        }
+        memset(current, 0, sizeof(current));
+        ret = scePadVirtualDeviceGetRemoteSetting(p->device.handle, current);
+        first = !seen[i];
+        seen[i] = 1;
+        if (first || ret != lastRet[i]) {
+            c4fLog("probe: controller %d GetRemoteSetting = 0x%08x\n", i + 1, (uint32_t)ret);
+            lastRet[i] = ret;
+        }
+        if (ret != 0) continue;
+        for (int b = 0; b < (int)sizeof(current); b++)
+            if (first || current[b] != previous[i][b]) { if (from < 0) from = b; to = b; }
+        if (from >= 0) {
+            char hex[3 * 256 + 1];
+            int used = 0;
+            for (int b = from; b <= to && used + 3 < (int)sizeof(hex); b++)
+                used += snprintf(hex + used, sizeof(hex) - (size_t)used, "%02x ", current[b]);
+            c4fLog("probe: controller %d bytes %d-%d: %s\n", i + 1, from, to, hex);
+            memcpy(previous[i], current, sizeof(current));
+        }
+    }
+}
+#endif
+
 /* One kernel-log line. Our own mirrored output is skipped: c4fLog writes to klog
  * too, so a line that reacted to a line would feed itself for ever. The marker
  * c4fKlogMark writes carries no [c4f], which is how it gets through. */
@@ -594,6 +650,9 @@ int c4fWebRun(int klogFd)
         }
         long klogBytes = c4fReadKlog(app);
         c4fReportPads(app);
+#ifdef C4F_PROBE_SETTING
+        c4fProbeSetting(app, now);
+#endif
         c4fAdvanceAdd(app, now, klogBytes);
         for (int i = 0; i < C4F_MAX_PADS; i++) {
             C4fWebPad *p = &app->pads[i];

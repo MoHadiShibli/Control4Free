@@ -1,7 +1,8 @@
 # Control4Free -- system-wide virtual controllers for the PS4 (GoldHEN payload).
 #
 # Build:
-#   make            # build/control4free.elf
+#   make                 # build/control4free.elf
+#   make C4F_PROBE=1     # plus the rumble/light-bar research probe (dev only)
 #   make clean
 #
 # A build needs the ps4-payload-sdk; docker/Dockerfile has it, and
@@ -19,11 +20,20 @@ NAME    := control4free
 ELF     := build/$(NAME).elf
 OBJDIR  := build/payload
 SOURCES := src/main.c src/log.c src/vda.c src/klog_line.c src/web.c src/net.c
+
+# Research build: logs what scePadVirtualDeviceGetRemoteSetting returns. Its ELF
+# gets its own name, so it can never be mistaken for a release.
+ifdef C4F_PROBE
+    EXTRA_CFLAGS := -DC4F_PROBE_SETTING
+    ELF    := build/$(NAME)-probe.elf
+    OBJDIR := build/probe
+endif
+
 OBJECTS := $(SOURCES:src/%.c=$(OBJDIR)/%.o) $(OBJDIR)/client.o $(OBJDIR)/assets.o
 
 CFLAGS  += -std=gnu11 -Wall -Wextra -Wpointer-arith -g -O2
 CFLAGS  += -MMD -MP
-CFLAGS  += -Iinclude -Ivendor/jsmn -DC4F_VERSION='"$(VERSION)"'
+CFLAGS  += -Iinclude -Ivendor/jsmn -DC4F_VERSION='"$(VERSION)"' $(EXTRA_CFLAGS)
 LDFLAGS += -lScePad -lSceUserService -ldl -lpthread
 
 .PHONY: all clean
