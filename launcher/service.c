@@ -23,6 +23,7 @@
 
 static char c4fHost[16];
 static char c4fProblem[128];
+static int c4fReached;
 
 uint64_t c4fLauncherTimeMs(void)
 {
@@ -167,10 +168,13 @@ static int c4fHttp(const char *method, const char *path, char *body, size_t capa
             continue;
         }
         connected++;
-        if (c4fExchange(fd, targets[i], method, path, body, capacity) == 1) return 1;
+        if (c4fExchange(fd, targets[i], method, path, body, capacity) == 1) { c4fReached = 1; return 1; }
     }
+    c4fReached = connected > 0;
     return !connected && refused ? 0 : -1;
 }
+
+int c4fLauncherReached(void) { return c4fReached; }
 
 static int c4fEquals(const char *json, const jsmntok_t *token, const char *value)
 {
@@ -210,32 +214,25 @@ int c4fLauncherProbe(C4fServiceStatus *status)
     return 1;
 }
 
-int c4fLauncherStart(const char *payload, char *message, size_t size)
+int c4fLauncherStart(const unsigned char *payload, size_t payloadSize, char *message, size_t size)
 {
     C4fServiceStatus status;
     int probe = c4fLauncherProbe(&status);
     if (probe == 1) { snprintf(message, size, "Already running. Open the address on your phone or PC."); return 0; }
+    if (probe != 0 && !c4fReached) { snprintf(message, size, "The app cannot check whether Control4Free is running (%s).", c4fProblem); return -1; }
     if (probe != 0) { snprintf(message, size, "Another copy may be running (%s). Stop it on its controller page, or restart the PS4.", c4fProblem); return -1; }
-    FILE *file = fopen(payload, "rb");
-    if (!file) { snprintf(message, size, "The payload is missing. Reinstall the Control4Free package."); return -1; }
-    unsigned char buffer[16384];
-    size_t first = fread(buffer, 1, sizeof(buffer), file);
-    if (first < 64 || memcmp(buffer, "\177ELF", 4) || buffer[4] != 2 || buffer[5] != 1) {
-        fclose(file); snprintf(message, size, "The bundled payload is damaged. Reinstall the Control4Free package."); return -1;
+    if (!payload) { snprintf(message, size, "The payload is missing. Reinstall the Control4Free package."); return -1; }
+    if (payloadSize < 64 || memcmp(payload, "\177ELF", 4) || payload[4] != 2 || payload[5] != 1) {
+        snprintf(message, size, "The bundled payload is damaged. Reinstall the Control4Free package."); return -1;
     }
     const char *targets[2];
     int count = c4fTargets(targets), fd = -1;
     for (int i = 0; i < count && fd < 0; i++) fd = c4fConnect(targets[i], C4F_PAYLOADER_PORT);
-    if (fd < 0) { fclose(file); snprintf(message, size, "PayLoader did not answer. Turn it on in GoldHEN, then press Cross again."); return -1; }
-    uint64_t deadline = c4fLauncherTimeMs() + 10000;
-    int failed = c4fSendAll(fd, buffer, first, deadline);
-    while (!failed) {
-        size_t count = fread(buffer, 1, sizeof(buffer), file);
-        if (!count) { failed = ferror(file); break; }
-        failed = c4fSendAll(fd, buffer, count, deadline);
-    }
-    fclose(file); shutdown(fd, SHUT_WR); close(fd);
+    if (fd < 0) { snprintf(message, size, "PayLoader did not answer (errno %d). Turn it on in GoldHEN, then press Cross again.", errno); return -1; }
+    int failed = c4fSendAll(fd, payload, payloadSize, c4fLauncherTimeMs() + 10000);
+    shutdown(fd, SHUT_WR); close(fd);
     if (failed) { snprintf(message, size, "The transfer to PayLoader broke off. Restart the PS4 before you try again."); return -2; }
+    uint64_t deadline;
     deadline = c4fLauncherTimeMs() + 20000;
     while (c4fLauncherTimeMs() < deadline) {
         if (c4fLauncherProbe(&status) == 1 && !status.stopping) {
@@ -252,6 +249,7 @@ int c4fLauncherStop(char *message, size_t size)
     C4fServiceStatus status;
     int probe = c4fLauncherProbe(&status);
     if (probe == 0) { snprintf(message, size, "Stopped. Press Cross to start it again."); return 0; }
+    if (probe != 1 && !c4fReached) { snprintf(message, size, "The app cannot reach Control4Free (%s). Stop it on its controller page.", c4fProblem); return -1; }
     if (probe != 1) { snprintf(message, size, "This copy does not answer the app (%s). Stop it on its controller page.", c4fProblem); return -1; }
     char reply[256];
     int ret = c4fHttp("POST", "/api/stop", reply, sizeof(reply));

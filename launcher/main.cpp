@@ -1,4 +1,5 @@
 /* Native PS4 launcher. The controller service runs outside this application. */
+#include <errno.h>
 #include <signal.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -12,6 +13,7 @@
 #include <orbis/UserService.h>
 #include <orbis/VideoOut.h>
 #include "autorun.h"
+#include "sandbox.h"
 #include "screen.h"
 #include "service.h"
 
@@ -30,7 +32,9 @@ static int c4fSetUp(char *message, size_t size)
     int result = c4fAutorunEnable(message, size);
     if (result) return result;
     char started[160];
-    result = c4fLauncherStart(C4F_BUNDLED_PAYLOAD, started, sizeof(started));
+    size_t payloadSize;
+    const unsigned char *payload = c4fAutorunBundled(&payloadSize);
+    result = c4fLauncherStart(payload, payloadSize, started, sizeof(started));
     if (result == 0) snprintf(message, size, "Set up and running. GoldHEN will also start it after each restart.");
     else if (result == -2) snprintf(message, size, "%s", started);
     else snprintf(message, size, "Auto-start is on: Control4Free starts the next time GoldHEN loads. %s", started);
@@ -62,7 +66,11 @@ static void *c4fWorker(void *)
             } else {
                 c4fLauncherSetHost(NULL);
             }
-            if (command == C4F_DO_START) result = c4fLauncherStart(C4F_BUNDLED_PAYLOAD, message, sizeof(message));
+            if (command == C4F_DO_START) {
+                size_t payloadSize;
+                const unsigned char *payload = c4fAutorunBundled(&payloadSize);
+                result = c4fLauncherStart(payload, payloadSize, message, sizeof(message));
+            }
             if (command == C4F_DO_STOP) result = c4fLauncherStop(message, sizeof(message));
             if (command == C4F_DO_SET_UP) result = c4fSetUp(message, sizeof(message));
             if (command == C4F_DO_AUTORUN_ON) result = c4fAutorunEnable(message, sizeof(message));
@@ -79,6 +87,7 @@ static void *c4fWorker(void *)
                        (first || running != c4fScreen.running || (running < 0 && strcmp(problem, shownProblem)))) {
                 if (running == 1) snprintf(c4fScreen.message, sizeof(c4fScreen.message), "Ready. Open the address on your phone or PC.");
                 else if (running == 0) snprintf(c4fScreen.message, sizeof(c4fScreen.message), "Not running.");
+                else if (!c4fLauncherReached()) snprintf(c4fScreen.message, sizeof(c4fScreen.message), "The app cannot reach Control4Free: %s", problem);
                 else snprintf(c4fScreen.message, sizeof(c4fScreen.message), "No answer the app understands: %s", problem);
                 snprintf(shownProblem, sizeof(shownProblem), "%s", problem);
             }
@@ -162,8 +171,11 @@ int main(void)
         pad = scePadOpen(user, ORBIS_PAD_PORT_TYPE_STANDARD, 0, NULL);
     c4fScreen.running = -1; c4fScreen.busy = 1; c4fScreen.autorun = C4F_AUTORUN_UNKNOWN;
     snprintf(c4fScreen.message, sizeof(c4fScreen.message), "Checking Control4Free...");
-    /* Read before any sandbox change: /app0 is only visible from inside it. */
+    /* Read before leaving the sandbox: /app0 is only visible from inside it. */
     if (c4fAutorunLoadBundled(C4F_BUNDLED_PAYLOAD)) printf("[c4f-launcher] bundled payload unreadable\n");
+    /* The sandbox refuses connections to the console itself (EACCES), so the
+     * app could reach neither Control4Free nor PayLoader from inside it. */
+    if (c4fSandboxLeave()) printf("[c4f-launcher] could not leave the sandbox, errno %d\n", errno);
     pthread_t worker;
     int workerStarted = pthread_create(&worker, NULL, c4fWorker, NULL) == 0;
     if (!workerStarted || pad < 0) {

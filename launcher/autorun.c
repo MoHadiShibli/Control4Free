@@ -1,5 +1,6 @@
 /* GoldHEN AutoRun for the bundled payload. */
 #include "autorun.h"
+#include "sandbox.h"
 #include <errno.h>
 #include <fcntl.h>
 #include <signal.h>
@@ -19,47 +20,7 @@ static size_t c4fBundledSize;
 
 void c4fAutorunSetRoot(const char *root) { snprintf(c4fRoot, sizeof(c4fRoot), "%s", root); }
 
-#ifdef __FreeBSD__
-/* GoldHEN's SDK call (syscall 500). Command 2 takes this process out of its
- * sandbox, command 3 puts it back; the layout is the GoldHEN Plugins SDK's
- * struct jailbreak_backup (MIT). */
-typedef struct {
-    uint32_t cr_uid, cr_ruid, cr_rgid, cr_groups;
-    uint64_t cr_paid, cr_caps[2];
-    void *cr_prison, *fd_cdir, *fd_jdir, *fd_rdir;
-} C4fJailbreak;
-
-static long c4fGoldHen(uint64_t command, void *data)
-{
-    long ret = 500;
-    int failed;
-    __asm__ volatile("syscall" : "+a"(ret), "=@ccc"(failed) : "D"(command), "S"(data)
-                     : "rcx", "rdx", "r8", "r9", "r10", "r11", "memory");
-    return failed ? -ret : ret;
-}
-
-static int c4fEnter(C4fJailbreak *backup)
-{
-    /* Without GoldHEN the call does not exist: get an error, not SIGSYS. */
-    signal(SIGSYS, SIG_IGN);
-    memset(backup, 0, sizeof(*backup));
-    long ret = c4fGoldHen(2, backup);
-    if (ret != 0) errno = ret < 0 ? (int)-ret : EPERM;
-    return ret == 0 ? 0 : -1;
-}
-
-static void c4fLeave(C4fJailbreak *backup) { (void)c4fGoldHen(3, backup); }
-#else
-/* Host tests: no sandbox to leave. */
-typedef struct { int unused; } C4fJailbreak;
-static int c4fEnter(C4fJailbreak *backup)
-{
-    (void)backup;
-    if (getenv("C4F_TEST_NO_GOLDHEN")) { errno = ENOSYS; return -1; }
-    return 0;
-}
-static void c4fLeave(C4fJailbreak *backup) { (void)backup; }
-#endif
+const unsigned char *c4fAutorunBundled(size_t *size) { *size = c4fBundledSize; return c4fBundled; }
 
 static int c4fPath(char *out, size_t size, const char *relative)
 {
@@ -206,12 +167,11 @@ static char *c4fIniEdited(const char *text, int enable)
 
 int c4fAutorunCheck(char *problem, size_t size)
 {
-    C4fJailbreak jailbreak;
     char path[300];
     size_t length = 0;
     problem[0] = 0;
     if (!c4fBundled) { snprintf(problem, size, "the bundled payload could not be read"); return C4F_AUTORUN_UNKNOWN; }
-    if (c4fEnter(&jailbreak)) { snprintf(problem, size, "GoldHEN did not let the app check (errno %d)", errno); return C4F_AUTORUN_UNKNOWN; }
+    if (c4fSandboxLeave()) { snprintf(problem, size, "GoldHEN did not let the app check (errno %d)", errno); return C4F_AUTORUN_UNKNOWN; }
     int state = C4F_AUTORUN_OFF;
     char *ini = c4fPath(path, sizeof(path), "GoldHEN/payloads.ini") ? NULL : (char *)c4fReadFile(path, &length, 1u << 20);
     if (ini && c4fIniEnabled(ini) && !c4fPath(path, sizeof(path), "payloads/control4free.elf")) {
@@ -222,23 +182,20 @@ int c4fAutorunCheck(char *problem, size_t size)
         free(installed);
     }
     free(ini);
-    c4fLeave(&jailbreak);
     return state;
 }
 
 int c4fAutorunEnable(char *message, size_t size)
 {
-    C4fJailbreak jailbreak;
     char directory[300], path[300];
     size_t length = 0;
     if (!c4fBundled) { snprintf(message, size, "The bundled payload could not be read. Reinstall the Control4Free package."); return -1; }
-    if (c4fEnter(&jailbreak)) { snprintf(message, size, "GoldHEN did not let the app set up auto-start (errno %d).", errno); return -1; }
+    if (c4fSandboxLeave()) { snprintf(message, size, "GoldHEN did not let the app set up auto-start (errno %d).", errno); return -1; }
     int failed = c4fPath(directory, sizeof(directory), "payloads") || c4fPath(path, sizeof(path), "payloads/control4free.elf");
     if (!failed && mkdir(directory, 0777) && errno != EEXIST) failed = 1;
     if (!failed && c4fWriteFile(path, c4fBundled, c4fBundledSize)) failed = 1;
     if (failed) {
         snprintf(message, size, "Could not copy Control4Free to /data/payloads (errno %d).", errno);
-        c4fLeave(&jailbreak);
         return -1;
     }
     failed = c4fPath(directory, sizeof(directory), "GoldHEN") || c4fPath(path, sizeof(path), "GoldHEN/payloads.ini");
@@ -251,16 +208,14 @@ int c4fAutorunEnable(char *message, size_t size)
     else snprintf(message, size, "Auto-start is on. GoldHEN starts Control4Free each time it loads.");
     free(old);
     free(edited);
-    c4fLeave(&jailbreak);
     return failed ? -1 : 0;
 }
 
 int c4fAutorunDisable(char *message, size_t size)
 {
-    C4fJailbreak jailbreak;
     char path[300];
     size_t length = 0;
-    if (c4fEnter(&jailbreak)) { snprintf(message, size, "GoldHEN did not let the app change auto-start (errno %d).", errno); return -1; }
+    if (c4fSandboxLeave()) { snprintf(message, size, "GoldHEN did not let the app change auto-start (errno %d).", errno); return -1; }
     int failed = c4fPath(path, sizeof(path), "GoldHEN/payloads.ini");
     char *old = failed ? NULL : (char *)c4fReadFile(path, &length, 1u << 20);
     char *edited = old ? c4fIniEdited(old, 0) : NULL;
@@ -270,6 +225,5 @@ int c4fAutorunDisable(char *message, size_t size)
     else snprintf(message, size, "Auto-start is off. Start Control4Free here with Cross, or from GoldHEN's Payloader LaunchPad.");
     free(old);
     free(edited);
-    c4fLeave(&jailbreak);
     return failed ? -1 : 0;
 }

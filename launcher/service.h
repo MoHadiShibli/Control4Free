@@ -18,7 +18,10 @@ const char *c4fLauncherProblem(void);
  * Ambiguous answers must not allow starting another copy in the shared
  * payload host. */
 int c4fLauncherProbe(C4fServiceStatus *status);
-int c4fLauncherStart(const char *payload, char *message, size_t size);
+/* Whether the last probe connected anywhere, so "no answer" can be told apart
+ * from "cannot reach". */
+int c4fLauncherReached(void);
+int c4fLauncherStart(const unsigned char *payload, size_t payloadSize, char *message, size_t size);
 int c4fLauncherStop(char *message, size_t size);
 #ifdef __cplusplus
 }
