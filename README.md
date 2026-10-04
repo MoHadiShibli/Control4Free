@@ -5,10 +5,10 @@ keyboard, or an Xbox/other controller exposed by the browser's Gamepad API.
 Virtual controllers use the PS4's native user-selection screen, so they work on
 the home screen, at sign-in and in games.
 
-**Status: browser control, native user sign-in, gameplay, the launcher and
-GoldHEN AutoRun have been confirmed on the development console.** Version 0.2.1
-adds network recovery and changes klog ownership; these changes pass local tests
-and still need a console rest/wake test. Four virtual slots are exposed; the
+**Status: browser control, native user sign-in, gameplay, the launcher,
+GoldHEN AutoRun and recovery after rest mode have been confirmed on the
+development console.** Version 0.2.2 reads the kernel log directly again for
+sign-in; it still needs its console check. Four virtual slots are exposed; the
 console's device limits apply.
 
 ## Requirements
@@ -25,7 +25,7 @@ console's device limits apply.
 
 ## Install
 
-1. Copy `build/Control4Free-0.2.1.pkg` to a USB drive (or to `/data/pkg/` over
+1. Copy `build/Control4Free-0.2.2.pkg` to a USB drive (or to `/data/pkg/` over
    GoldHEN's FTP server) and install it with GoldHEN's Package Installer.
 2. Open **Control4Free** from the home screen and press **Cross** once. The app
    adds Control4Free to GoldHEN's AutoRun (GoldHEN 2.4b18.10 or later), so GoldHEN
@@ -63,7 +63,7 @@ When you update Control4Free this way, replace `/data/payloads/control4free.elf`
 controller page's menu, or restart the PS4. That old version has no launcher API,
 so the app will not start a second copy over it.
 
-**Rest mode (0.2.1):** the service now closes stale connections and rebuilds its
+**Rest mode (since 0.2.1):** the service closes stale connections and rebuilds its
 listener after socket failures or a long pause. Queued input is discarded, and
 disconnected controllers report neutral input. Reopen the controller page and
 select your controller after waking; an unused controller is removed after the
@@ -71,12 +71,13 @@ reconnect grace period. This can recover a surviving payload's network service;
 it cannot revive a host process that the console terminated or stopped running.
 When upgrading a stuck older instance, restart the PS4 and load GoldHEN again.
 
-**Kernel logs:** Control4Free requests a verified stream from GoldHEN first,
-falling back to `/dev/klog`. It only keeps the reader while controllers are
-awaiting native sign-in, and releases it once sign-in finishes or those
-controllers are removed. Close other klog viewers when adding a controller:
-GoldHEN versions that serve one reader cannot share that capture window. A busy
-reader now produces a retryable error before a virtual device is created.
+**Kernel logs:** controller sign-in is detected in the PS4's kernel log, which
+has a single reader. Control4Free opens `/dev/klog` only while a controller is
+waiting for sign-in and releases it afterwards, so GoldHEN's klog server works
+the rest of the time. It does not use GoldHEN's klog stream: GoldHEN serves one
+client at a time and, after one leaves, can go minutes without serving the next.
+If a klog viewer is connected to GoldHEN when you add a controller, the page
+says so; close the viewer and try again.
 
 Diagnostics are saved at `/data/control4free/spike.log`, with elapsed timestamps
 such as `[c4f] [+00:01:23.456]`; the PS4's calendar setting is not used. Starting
@@ -150,7 +151,7 @@ docker build -t control4free-launcher-build -f docker/Dockerfile.launcher docker
 docker run --rm -v "$PWD:/src" -w /src control4free-launcher-build bash -lc 'make && make -C launcher'
 ```
 
-Output: `build/Control4Free-0.2.1.pkg` (title ID `CFRE00001`). On Windows,
+Output: `build/Control4Free-0.2.2.pkg` (title ID `CFRE00001`). On Windows,
 `tools/build-launcher.ps1` runs both image builds and the package build. It does
 not send anything to a console. Packaging uses OpenOrbis and LibOrbisPkg. The
 launcher draws its screen and its icon in software, in the controller page's style.

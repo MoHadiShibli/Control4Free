@@ -15,7 +15,7 @@
 #include "c4f_vda.h"
 #include "c4f_web.h"
 
-#define C4F_VERSION "0.2.1"
+#define C4F_VERSION "0.2.2"
 #define C4F_INPUT_MASK 0x0011ffffu
 #define C4F_REPORT_MS 16
 #ifndef C4F_STALE_MS
@@ -257,8 +257,8 @@ static void c4fClaim(C4fWeb *app, C4fNetClient *c, C4fRequest *r)
             c4fReadKlog(app);
             if (app->klogFd >= 0 && c4fKlogSelfTest(app->klogFd)) c4fReleaseKlog(app);
         }
-        if (app->klogFd < 0) app->klogFd = c4fKlogOpen();
-        if (app->klogFd < 0 && needsDevice) { c4fError(c, r, 503, "Cannot read controller sign-in events. Close other klog viewers and try again."); return; }
+        if (app->klogFd < 0) app->klogFd = c4fKlogOpenDevice();
+        if (app->klogFd < 0 && needsDevice) { c4fError(c, r, 503, "Cannot read the PS4's kernel log, which sign-in needs. If a klog viewer is connected to GoldHEN, close it and try again."); return; }
     }
     for (int i = 0; i < C4F_MAX_PADS; i++) if ((wanted & (1u << i)) && !app->pads[i].active) {
         C4fWebPad *p = &app->pads[i];

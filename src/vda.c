@@ -238,28 +238,42 @@ fail:
     return -1;
 }
 
+/* Drained and proven by a marker that comes back, or closed. */
+static int c4fKlogVerified(int fd, const char *what)
+{
+    c4fKlogDrain(fd);
+    if (c4fKlogSelfTest(fd) == 0) {
+        c4fLog("reading klog through %s\n", what);
+        return fd;
+    }
+    close(fd);
+    return -1;
+}
+
+/* GoldHEN's klog server opens /dev/klog only while it has a client and serves
+ * one client at a time. After a client leaves it can go minutes without
+ * serving the next one: on the console (2026-10-04) every reconnect after a
+ * release read 0 bytes for 4-5 minutes. So the browser service never uses the
+ * stream; it reads the device itself, only while a controller signs in. */
+int c4fKlogOpenDevice(void)
+{
+    int fd = open("/dev/klog", O_RDONLY | O_NONBLOCK);
+    if (fd < 0) {
+        c4fLog("open(/dev/klog) failed errno=%d (16: GoldHEN's klog server has a client)\n", errno);
+        return -1;
+    }
+    return c4fKlogVerified(fd, "/dev/klog");
+}
+
 int c4fKlogOpen(void)
 {
-    int fd = c4fKlogConnectLocal();
-    if (fd >= 0) {
-        c4fKlogDrain(fd);
-        if (c4fKlogSelfTest(fd) == 0) {
-            c4fLog("reading klog through 127.0.0.1:%d\n", C4F_KLOG_PORT);
-            return fd;
-        }
-        close(fd);
-        c4fLog("klog socket has no live stream; another log client may own it\n");
-    }
-    fd = open("/dev/klog", O_RDONLY | O_NONBLOCK);
-    if (fd >= 0) {
-        c4fKlogDrain(fd);
-        if (c4fKlogSelfTest(fd) == 0) {
-            c4fLog("temporarily reading /dev/klog for controller sign-in\n");
-            return fd;
-        }
-        close(fd);
-    }
-    c4fLog("no verified klog source; close other log viewers before adding a controller\n");
+    int fd = c4fKlogOpenDevice();
+    if (fd >= 0) return fd;
+    /* The diagnostic stages run once, usually with the PC's klog viewer
+     * attached, which holds the device: then the stream is the only way. */
+    fd = c4fKlogConnectLocal();
+    if (fd >= 0 && (fd = c4fKlogVerified(fd, "127.0.0.1:3232")) >= 0) return fd;
+    c4fLog("no verified klog source\n");
     return -1;
 }
 

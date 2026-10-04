@@ -9,7 +9,7 @@ try {
     if ($LASTEXITCODE -ne 0) { throw 'Launcher toolchain build failed.' }
     docker run --rm --network none -v "${projectRoot}:/src" -w /src control4free-launcher-build bash -lc 'make && make -C launcher'
     if ($LASTEXITCODE -ne 0) { throw 'Launcher package build failed.' }
-    Get-Item -LiteralPath (Join-Path $projectRoot 'build/Control4Free-0.2.1.pkg') | Select-Object FullName,Length
+    Get-Item -LiteralPath (Join-Path $projectRoot 'build/Control4Free-0.2.2.pkg') | Select-Object FullName,Length
 } finally {
     Pop-Location
 }
