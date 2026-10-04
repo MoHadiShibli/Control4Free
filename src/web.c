@@ -17,7 +17,12 @@
 #include "c4f_web.h"
 
 #define C4F_INPUT_MASK 0x0011ffffu
+/* A real DualShock 4 reports every 4 ms (250 Hz). Ours matches that while the
+ * player is doing something, and falls back to a keepalive rate when they are
+ * not, so an idle controller costs the console almost nothing. */
 #define C4F_REPORT_MS 16
+#define C4F_REPORT_FAST_MS 4
+#define C4F_ACTIVE_MS 500
 #ifndef C4F_STALE_MS
 #define C4F_STALE_MS 3000
 #endif
@@ -31,7 +36,7 @@ typedef struct {
     C4fNetClient *owner;
     ScePadData current, queue[C4F_QUEUE_SIZE];
     unsigned head, count;
-    uint64_t lastInput, nextReport, detachedAt, reports;
+    uint64_t lastInput, lastReport, nextReport, detachedAt, reports;
     int active, stale, error, assigned;
     uint32_t userId;
 } C4fWebPad;
@@ -175,6 +180,23 @@ static void c4fRemove(C4fWeb *app, C4fWebPad *p)
     memset(p, 0, sizeof(*p)); app->changed = 1;
 }
 
+/* One report for one controller, taking the next queued sample if there is one. */
+static void c4fReportPad(C4fWeb *app, C4fWebPad *p, int index, uint64_t now)
+{
+    int ret;
+    if (p->count) {
+        p->current = p->queue[p->head]; p->head = (p->head+1) % C4F_QUEUE_SIZE; p->count--;
+    }
+    ret = c4fVirtualPadInsert(&p->device, &p->current);
+    p->reports++; p->lastReport = now;
+    p->nextReport = now + (now - p->lastInput < C4F_ACTIVE_MS ? C4F_REPORT_FAST_MS : C4F_REPORT_MS);
+    if (ret < 0 && !p->error) {
+        p->error = ret; app->changed = 1;
+        c4fNeutralize(p);
+        c4fLog("web controller %d InsertData = 0x%08x\n", index+1, (uint32_t)ret);
+    }
+}
+
 static void c4fReportPads(C4fWeb *app)
 {
     uint64_t now = c4fTimeMs();
@@ -185,16 +207,7 @@ static void c4fReportPads(C4fWeb *app)
             c4fNeutralize(p); p->stale = 1; app->changed = 1;
         }
         if (now < p->nextReport) continue;
-        if (p->count) {
-            p->current = p->queue[p->head]; p->head = (p->head+1) % C4F_QUEUE_SIZE; p->count--;
-        }
-        int ret = c4fVirtualPadInsert(&p->device, &p->current);
-        p->reports++; p->nextReport = now + C4F_REPORT_MS;
-        if (ret < 0 && !p->error) {
-            p->error = ret; app->changed = 1;
-            c4fNeutralize(p);
-            c4fLog("web controller %d InsertData = 0x%08x\n", i+1, (uint32_t)ret);
-        }
+        c4fReportPad(app, p, i, now);
     }
 }
 
@@ -473,7 +486,11 @@ static void c4fUpdate(C4fWeb *app, C4fNetClient *c, C4fRequest *r)
         data.touchData.touch[i].finger = t[0]; data.touchData.touch[i].x = t[1]; data.touchData.touch[i].y = t[2];
     }
     if (p->stale) { p->stale = 0; app->changed = 1; }
-    p->lastInput = c4fTimeMs(); c4fEnqueue(p, &data);
+    uint64_t now = c4fTimeMs();
+    p->lastInput = now; c4fEnqueue(p, &data);
+    /* Out at once, unless a report has only just gone. Holding a new sample back
+     * for the next tick would add lag for nothing. */
+    if (now - p->lastReport >= C4F_REPORT_FAST_MS) c4fReportPad(app, p, (int)r->args[0], now);
 }
 
 static void c4fWebEvent(C4fNetClient *c, int event, const char *text, size_t len, void *context)
@@ -509,6 +526,9 @@ static void c4fWebEvent(C4fNetClient *c, int event, const char *text, size_t len
     if (!strcmp(r.method, "info")) {
         char reply[160];
         if (r.hasId) { snprintf(reply, sizeof(reply), "{\"id\":%lld,\"result\":{\"version\":\"%s\",\"protocol\":2,\"pads\":%d}}", (long long)r.id, C4F_VERSION, C4F_MAX_PADS); c4fNetText(c, reply); }
+    } else if (!strcmp(r.method, "ping")) {
+        char reply[64];
+        if (r.hasId) { snprintf(reply, sizeof(reply), "{\"id\":%lld,\"result\":{}}", (long long)r.id); c4fNetText(c, reply); }
     } else if (!strcmp(r.method, "status")) c4fStatus(app, c, &r);
     else if (!strcmp(r.method, "claim")) c4fClaim(app, c, &r);
     else if (!strcmp(r.method, "u")) c4fUpdate(app, c, &r);
@@ -589,9 +609,19 @@ int c4fWebRun(int klogFd)
             }
             app->changed = 0; app->broadcastAt = now+1000;
         }
+        /* Wake often enough to keep a moving controller at its report rate, and
+         * rarely when there is nothing to report. */
+        int moving = 0, anyActive = 0;
+        for (int i = 0; i < C4F_MAX_PADS; i++) {
+            C4fWebPad *p = &app->pads[i];
+            if (!p->active) continue;
+            anyActive = 1;
+            if (now - p->lastInput < C4F_ACTIVE_MS) moving = 1;
+        }
+        int wait = moving ? 2 : anyActive || app->add.state ? 8 : 50;
         if (app->net.fd < 0) usleep(8000);
         else {
-            int result = c4fNetPoll(&app->net, 8);
+            int result = c4fNetPoll(&app->net, wait);
             if (result) {
                 if (result == -2) c4fLog("service resumed after a gap in select; resetting connections\n");
                 else c4fLog("network failed errno=%d; resetting connections\n", errno);

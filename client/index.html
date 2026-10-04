@@ -1271,7 +1271,7 @@
         $('#addressHint').classList.remove('error');
         call('info', []).then(info => {
           conn.version = info.version || '';
-          $('#version').textContent = 'Control4Free' + (conn.version ? ' ' + conn.version : '');
+          showVersion();
           sendClaim(true);
         }).catch(() => {});
         resendAll();
@@ -1351,9 +1351,9 @@
 
     function applyStatus(s) {
       if (!s || !Array.isArray(s.pads)) return;
-      if (s.version) {
+      if (s.version && s.version !== conn.version) {
         conn.version = s.version;
-        $('#version').textContent = 'Control4Free ' + s.version;
+        showVersion();
       }
       for (const p of s.pads) {
         const st = status[p.pad];
@@ -1459,6 +1459,24 @@
       });
     }
 
+    // Round trip to the console, shown with the version so a laggy network is
+    // visible rather than guessed at.
+    let pingMs = 0, pingAt = 0;
+    function measurePing(t) {
+      if (conn.state !== 'open' || t - pingAt < 2000) return;
+      pingAt = t;
+      const started = now();
+      call('ping', []).then(() => {
+        pingMs = Math.round(now() - started);
+        showVersion();
+      }).catch(() => {});
+    }
+
+    function showVersion() {
+      $('#version').textContent = 'Control4Free' + (conn.version ? ' ' + conn.version : '') +
+                                  (pingMs ? ' · ' + pingMs + ' ms' : '');
+    }
+
     const lastSent = Array(PADS).fill('');
     const lastSentAt = Array(PADS).fill(0);
 
@@ -1506,6 +1524,7 @@
       clearTimeout(holdTimers.get(key));
       holdTimers.delete(key);
       if (settings.haptics && src === screenSource) haptic(8);
+      flush(now());
     }
 
     function release(src, bit) {
@@ -1513,9 +1532,12 @@
       const left = MIN_HOLD_MS - (now() - at);
       const key = (src === screenSource ? 's' : 'k') + bit;
       if (left > 0) {
-        holdTimers.set(key, setTimeout(() => { src.buttons &= ~bit; holdTimers.delete(key); }, left));
+        holdTimers.set(key, setTimeout(() => {
+          src.buttons &= ~bit; holdTimers.delete(key); flush(now());
+        }, left));
       } else {
         src.buttons &= ~bit;
+        flush(now());
       }
     }
 
@@ -1951,6 +1973,7 @@
       dot.className = 'finger';
       const touch = { id, x: 0, y: 0 };
       screenSource.touches.push(touch);
+      flush(now());
       const startX = e.clientX, startY = e.clientY, startAt = now();
       let moved = false, held = false;
       const update = ev => {
@@ -1971,6 +1994,7 @@
         dot.remove();
         const i = screenSource.touches.indexOf(touch);
         if (i >= 0) screenSource.touches.splice(i, 1);
+        flush(now());
       };
       return {
         move: update,
@@ -2661,6 +2685,7 @@
     function frame(t) {
       pollGamepads(t);
       flush(t);
+      measurePing(t);
       driveRumble(t);
       renderPressed();
       requestAnimationFrame(frame);

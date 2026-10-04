@@ -242,7 +242,8 @@ def main():
         os.write(server.log, b'C4F-TEST-CLOSE-KLOG\n')
         end = time.monotonic() + 3
         while not any('klog source closed' in r for r in server.rows()):
-            assert time.monotonic() < end, server.rows()
+            assert time.monotonic() < end, [r for r in server.rows() if not r.startswith('FRAME')]
+            server.c.input(0)   # keep the controller, so only the dead log can free the reader
             time.sleep(.02)
         assert server.c.request('claim', [0, 1])['result']['pads'][1]['mine']
         assert len([r for r in server.rows() if r.startswith('KLOG ') and r != 'KLOG none']) == 2
@@ -273,6 +274,36 @@ def main():
         assert result and result[0]['result']['pads'][1]['mine']
         second.close()
         print('PASS a controller being created does not block the other players', flush=True)
+    finally:
+        server.close()
+
+    # Input goes out when it arrives, and an idle controller costs almost nothing.
+    server = Server()
+    try:
+        c = server.c
+        assert c.request('claim', [0])['result']['pads'][0]['mine']
+        assert 'result' in c.request('ping')
+        time.sleep(.6)                       # settle into the keepalive rate
+        before = len([r for r in server.rows() if r.startswith('FRAME')])
+        c.input(0, 0x4000)
+        time.sleep(.02)
+        frames = [r.split() for r in server.rows() if r.startswith('FRAME')]
+        pressed = next((i for i, r in enumerate(frames) if i >= before and r[3] == '16384'), None)
+        assert pressed is not None, 'the press never reported'
+        assert pressed - before <= 1, f'the press waited for {pressed - before} keepalive reports'
+        # While input is moving: about 250 Hz. Idle: the keepalive rate.
+        start = len([r for r in server.rows() if r.startswith('FRAME')])
+        for _ in range(10):
+            c.input(0, 0x4000)
+            time.sleep(.02)
+        moving = len([r for r in server.rows() if r.startswith('FRAME')]) - start
+        time.sleep(.8)
+        start = len([r for r in server.rows() if r.startswith('FRAME')])
+        time.sleep(.4)
+        idle = len([r for r in server.rows() if r.startswith('FRAME')]) - start
+        assert moving >= 30, f'only {moving} reports in 200ms of input'
+        assert idle <= 40, f'{idle} reports in 400ms of idling'
+        print('PASS input reports on arrival, fast while it moves and slow while it does not', flush=True)
     finally:
         server.close()
 
