@@ -1,0 +1,14 @@
+# Reuse the pinned OpenOrbis release from the existing plugin toolchain image.
+ARG OPENORBIS_IMAGE=xfangfang/goldhen_plugin@sha256:e3d2acad69a1905472bd9d73e373d1d0fb6d3ca293d9f9a6ba957b9b2f49fffc
+FROM ${OPENORBIS_IMAGE} AS openorbis
+FROM ubuntu:20.04 AS pkgcompat
+RUN apt-get update && apt-get install -y --no-install-recommends libssl1.1 \
+    && rm -rf /var/lib/apt/lists/*
+FROM control4free-build:latest
+COPY --from=openorbis /opt/OpenOrbis/PS4Toolchain /opt/OpenOrbis/PS4Toolchain
+# The SDK's self-contained LibOrbisPkg runtime expects OpenSSL 1.1.
+COPY --from=pkgcompat /usr/lib/x86_64-linux-gnu/libssl.so.1.1 /usr/lib/x86_64-linux-gnu/
+COPY --from=pkgcompat /usr/lib/x86_64-linux-gnu/libcrypto.so.1.1 /usr/lib/x86_64-linux-gnu/
+ENV OO_PS4_TOOLCHAIN=/opt/OpenOrbis/PS4Toolchain
+ENV DOTNET_SYSTEM_GLOBALIZATION_INVARIANT=1
+WORKDIR /src
