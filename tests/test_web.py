@@ -9,6 +9,7 @@ import socket
 import struct
 import subprocess
 import tempfile
+import threading
 import time
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -19,7 +20,8 @@ def build():
     subprocess.run(['python3', 'tools/embed_client.py', 'client/index.html', 'build/client.c'], check=True)
     subprocess.run(['clang-18', '-std=gnu11', '-Wall', '-Wextra', '-Werror', '-g',
                     '-Iinclude', '-Ivendor/jsmn', '-DC4F_STALE_MS=400', '-DC4F_RELEASE_MS=1800',
-                    'src/net.c', 'src/web.c', 'tests/web_stub.c', 'build/client.c', '-o', str(BINARY)], check=True)
+                    'src/net.c', 'src/web.c', 'src/klog_line.c', 'tests/web_stub.c', 'build/client.c',
+                    '-pthread', '-o', str(BINARY)], check=True)
 
 
 class Client:
@@ -218,29 +220,77 @@ def main():
         server.close()
 
     # AutoRun can start the payload before GoldHEN's klog server listens.
-    server = Server(C4F_TEST_KLOG_FD='-1')
+    server = Server(C4F_TEST_KLOG_BUSY='1')
     try:
         assert server.c.request('claim', [0])['error']['code'] == 503
         assert 'KLOG none' in server.rows() and not any(r.startswith('ADD') for r in server.rows())
     finally:
         server.close()
-    server = Server(C4F_TEST_KLOG_FD='-1', C4F_TEST_KLOG_LATE='1')
+    # A reader that opens but delivers nothing is dropped before AddDevice runs.
+    server = Server(C4F_TEST_KLOG_DEAD='1')
     try:
-        assert server.c.request('claim', [0])['result']['pads'][0]['mine']
-        assert any(r.startswith('KLOG ') and r != 'KLOG none' for r in server.rows())
-        assert any(r.startswith('ADD') for r in server.rows())
+        assert server.c.request('claim', [0])['error']['code'] == 503
+        assert not any(r.startswith('ADD') for r in server.rows())
+        assert 'released klog reader' in server.rows()
+        assert server.c.request('info')['result']['pads'] == 4
     finally:
         server.close()
-    # A klog source that closes is reopened for the next new controller.
-    server = Server(C4F_TEST_KLOG_LATE='1')
+    # A klog source that dies is reopened for the next new controller.
+    server = Server()
     try:
-        os.close(server.log)
-        server.log = None
-        time.sleep(.1)
-        assert server.c.request('claim', [1])['result']['pads'][1]['mine']
-        rows = server.rows()
-        assert any(r.startswith('KLOG ') and r != 'KLOG none' for r in rows) and any(r.startswith('ADD') for r in rows)
-        print('PASS klog missing at start or closed later: reconnected on the next controller request', flush=True)
+        assert server.c.request('claim', [0])['result']['pads'][0]['mine']
+        os.write(server.log, b'C4F-TEST-CLOSE-KLOG\n')
+        end = time.monotonic() + 3
+        while not any('klog source closed' in r for r in server.rows()):
+            assert time.monotonic() < end, server.rows()
+            time.sleep(.02)
+        assert server.c.request('claim', [0, 1])['result']['pads'][1]['mine']
+        assert len([r for r in server.rows() if r.startswith('KLOG ') and r != 'KLOG none']) == 2
+        print('PASS klog unavailable, silent or closed: refused safely, then reopened for the next controller', flush=True)
+    finally:
+        server.close()
+
+    # A creation in progress must not stop anyone else being served.
+    server = Server(C4F_TEST_ADD_DELAY='900')
+    try:
+        first = server.c
+        assert first.request('claim', [0])['result']['pads'][0]['mine']
+        second = Client()
+        result = []
+        thread = threading.Thread(target=lambda: result.append(second.request('claim', [1])))
+        thread.start()
+        time.sleep(.3)
+        started = time.monotonic()
+        state = first.request('status')['result']['pads']
+        elapsed = time.monotonic() - started
+        assert elapsed < .1, f'status waited {elapsed:.2f}s for the other player'
+        assert state[1]['state'] == 'connecting'
+        first.input(0, 0x4000)
+        time.sleep(.05)
+        frames = [r.split() for r in server.rows() if r.startswith('FRAME')]
+        assert any(r[2] == '11030d' and r[3] == '16384' for r in frames), 'input stopped during creation'
+        thread.join(timeout=5)
+        assert result and result[0]['result']['pads'][1]['mine']
+        second.close()
+        print('PASS a controller being created does not block the other players', flush=True)
+    finally:
+        server.close()
+
+    # Two claims cannot create at once: the second is refused, not queued.
+    server = Server(C4F_TEST_ADD_DELAY='600')
+    try:
+        first = server.c
+        result = []
+        thread = threading.Thread(target=lambda: result.append(first.request('claim', [0])))
+        thread.start()
+        time.sleep(.3)
+        second = Client()
+        assert second.request('claim', [1])['error']['code'] == 409
+        thread.join(timeout=5)
+        assert result and result[0]['result']['pads'][0]['mine']
+        assert second.request('claim', [1])['result']['pads'][1]['mine']
+        second.close()
+        print('PASS one controller is created at a time, and the next request works', flush=True)
     finally:
         server.close()
 

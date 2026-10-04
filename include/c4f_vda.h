@@ -2,6 +2,9 @@
  *
  * One C4fVirtualPad is one virtual DualShock 4 as the system sees it. The call
  * order and its reasons came from the spike (tag spike-final, dev notes).
+ *
+ * No function here blocks or waits, so the service can keep answering everyone
+ * else while a controller is being created.
  */
 
 #ifndef C4F_VDA_H
@@ -28,13 +31,32 @@ int c4fMbusInit(void);
  * NOT_INITIALIZED the other way round). Returns 0 if scePadInit succeeded. */
 int c4fPadInit(void);
 
-/* AddDevice for `vdaUser`, then capture the DeviceId from klogFd (a verified
- * /dev/klog reader). Returns 0 and fills *out on success. */
-int c4fVirtualPadAddAs(C4fVirtualPad *out, int32_t userId, int32_t vdaUser, int klogFd);
+/* ---- the kernel log ----
+ * /dev/klog has a single reader. GoldHEN's klog server opens it only while it
+ * has a client and serves one client at a time; after a client leaves it can
+ * go minutes without serving the next one (console, 2026-10-04). So the
+ * service reads the device itself, only while a controller signs in, and it
+ * owns the reader: these are the pieces it needs to make sense of a line. */
 
-/* Keep existing pads reporting during the bounded klog waits for a new pad.
- * The callback must not read klog, create devices, or run the network loop. */
-void c4fVdaSetWaitCallback(void (*callback)(void *), void *context);
+/* /dev/klog, non-blocking; -1 if another reader has it or it cannot be opened. */
+int c4fKlogOpenDevice(void);
+/* Writes one line into the kernel log, with no [c4f] prefix, so the reader can
+ * prove to itself that it really receives what the kernel logs. */
+void c4fKlogMark(const char *marker);
+/* 1 if this is the login manager's "a virtual pad was added" event. */
+int c4fKlogIsVirtualAdd(const char *line);
+/* The DeviceId named in this line, or 0. */
+uint64_t c4fKlogDeviceId(const char *line);
+
+/* ---- devices ---- */
+
+/* AddDevice for `vdaUser`. The handle is not known yet: it is the DeviceId the
+ * kernel logs a moment later. Returns AddDevice's own value, which is non-zero
+ * even when the device is created, so the caller waits for the log either way. */
+int32_t c4fVirtualPadAdd(int32_t vdaUser);
+
+/* Completes a pad from the DeviceId that came out of the log. */
+void c4fVirtualPadAdopt(C4fVirtualPad *out, int32_t userId, int32_t vdaUser, uint64_t deviceId);
 
 /* A neutral sample: sticks centred, identity quaternion, connected. */
 void c4fPadDataNeutral(ScePadData *data);
@@ -44,21 +66,5 @@ int32_t c4fVirtualPadInsert(const C4fVirtualPad *pad, const ScePadData *data);
 
 /* DeleteDevice, if we own the handle. */
 void c4fVirtualPadRemove(C4fVirtualPad *pad);
-
-#define C4F_FRAME_MS 33
-
-/* ---- klog capture ----
- * /dev/klog has a single reader. GoldHEN's klog server opens it only while it
- * has a client and serves one client at a time; after a client leaves it can
- * go minutes without serving the next one (console, 2026-10-04). So the
- * service reads the device itself, only while a controller signs in. */
-
-/* /dev/klog, verified by a fresh marker; -1 if busy or silent. */
-int  c4fKlogOpenDevice(void);
-void c4fKlogDrain(int fd);
-/* Writes a marker to klog and reads it back. 0 = the capture path works. */
-int  c4fKlogSelfTest(int fd);
-/* Scans for the MBus "device added" line and returns its DeviceId. */
-int  c4fKlogFindDeviceId(int fd, uint64_t *outDeviceId, int timeoutMs);
 
 #endif /* C4F_VDA_H */

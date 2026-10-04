@@ -1440,9 +1440,22 @@
       call('claim', pads).then(applyStatus).catch(e => {
         lastClaim = '';
         toast(e.message || 'Could not connect the controller');
-        closePad();
-        for (const src of gamepadSources.values()) src.pad = -1;
-        renderGamepads();
+        call('status', []).then(s => {
+          applyStatus(s);
+          let dropped = false;
+          const taken = pad => pad >= 0 && status[pad].known && !status[pad].mine && status[pad].open;
+          if (taken(primaryPad)) { closePad(); dropped = true; }
+          for (const src of gamepadSources.values()) if (taken(src.pad)) { src.pad = -1; dropped = true; }
+          renderGamepads();
+          // Only ask again when something was actually given up, so a refusal
+          // for any other reason cannot turn into a loop.
+          if (dropped && claimedPads().length) sendClaim(true);
+        }).catch(() => {
+          // No answer at all: assume nothing is ours.
+          closePad();
+          for (const src of gamepadSources.values()) src.pad = -1;
+          renderGamepads();
+        });
       });
     }
 
@@ -2117,7 +2130,12 @@
     function pollGamepads(t) {
       if (!gamepadsAvailable) return;
       let list;
-      try { list = navigator.getGamepads(); } catch (e) { return; }
+      try {
+        list = navigator.getGamepads();
+      } catch (e) {
+        for (const src of gamepadSources.values()) Object.assign(src, blankSource(src.pad));
+        return;
+      }
       const seen = new Set();
       for (const gp of list) {
         if (!gp || !gp.connected) continue;
@@ -2240,6 +2258,7 @@
     }
 
     function padMeta(s) {
+      if (s.state === 'connecting') return 'Connecting to the PS4';
       if (s.state === 'select') return 'Choose a user on the PS4';
       if (s.state === 'ready') return 'Signed in on the PS4';
       if (s.state === 'paused') return 'Input paused';
@@ -2275,6 +2294,7 @@
         tile.appendChild(body);
         const states = el('span', 'tile-state');
         if (state === 'ready') states.appendChild(stateItem('live', 'Connected'));
+        else if (state === 'connecting') states.appendChild(stateItem('wait', 'Connecting'));
         else if (state === 'select') states.appendChild(stateItem('wait', 'Choose user on TV'));
         else if (state === 'paused') states.appendChild(stateItem('wait', 'Paused'));
         else if (state === 'error') states.appendChild(stateItem('', 'Error'));
@@ -2353,6 +2373,7 @@
       const state = padState(s);
       const extra = conn.state !== 'open' ? $('#connText').textContent
         : state === 'ready' ? 'Signed in on the PS4'
+        : state === 'connecting' ? 'Connecting to the PS4'
         : state === 'select' ? 'Choose your user on TV with D-pad and Cross'
         : state === 'noslot' ? 'No free player slot'
         : state === 'disabled' ? 'Turned off' : '';

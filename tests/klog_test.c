@@ -1,5 +1,5 @@
-/* The real VDA capture functions, with only /dev/klog and the klog writer
- * stubbed. Modes: direct (the device is free), busy (another reader has it).
+/* The real kernel-log opener, with only /dev/klog and the klog writer stubbed.
+ * Modes: direct (the device is free), busy (another reader has it).
  *
  * GoldHEN's klog server on port 3232 serves one client at a time and can go
  * minutes without serving the next one, so the service must never reach for it.
@@ -19,27 +19,26 @@
 #include "c4f_vda.h"
 
 static atomic_int peer = -1;
-static int direct[2] = {-1, -1}, enabled = 1, deviceBusy, directOpens, waits;
-static void waitCallback(void *unused) { (void)unused; waits++; }
+static int device[2] = {-1, -1}, deviceBusy, deviceOpens;
 void c4fLog(const char *fmt, ...) { (void)fmt; }
-int c4fLogKlogEnabled(void) { return enabled; }
-void c4fLogSetKlog(int value) { enabled = value; }
+
+/* Stands in for the kernel log's writer: what we write comes back to a reader. */
 int klog_printf(const char *fmt, ...)
 {
     char line[1024]; va_list ap;
     va_start(ap, fmt); int n = vsnprintf(line, sizeof(line), fmt, ap); va_end(ap);
-    if (direct[1] >= 0) { assert(write(direct[1], line, n) == n); return n; }
+    if (device[1] >= 0) assert(write(device[1], line, (size_t)n) == n);
     return n;
 }
 int __real_open(const char *, int, ...);
 int __wrap_open(const char *path, int flags, ...)
 {
     if (strcmp(path, "/dev/klog")) return __real_open(path, flags);
-    directOpens++;
+    deviceOpens++;
     if (deviceBusy) { errno = EBUSY; return -1; }
-    assert(pipe(direct) == 0);
-    assert(fcntl(direct[0], F_SETFL, O_NONBLOCK) == 0);
-    return direct[0];
+    assert(pipe(device) == 0);
+    assert(fcntl(device[0], F_SETFL, O_NONBLOCK) == 0);
+    return device[0];
 }
 static void *serve(void *arg)
 {
@@ -60,20 +59,22 @@ int main(int argc, char **argv)
     assert(bind(listener, (struct sockaddr *)&addr, sizeof(addr)) == 0);
     assert(listen(listener, 1) == 0);
     assert(pthread_create(&thread, NULL, serve, &listener) == 0);
-    c4fVdaSetWaitCallback(waitCallback, NULL);
 
     fd = c4fKlogOpenDevice();
     if (!deviceBusy) {
-        /* Non-blocking, opened once, and verified by a marker read back, which
-         * the wait callback keeps existing controllers reporting through. */
-        assert(fd >= 0 && (fcntl(fd, F_GETFL) & O_NONBLOCK) && directOpens == 1 && waits > 0);
+        char buf[256] = {0};
+        assert(fd >= 0 && (fcntl(fd, F_GETFL) & O_NONBLOCK) && deviceOpens == 1);
+        /* A marker written through klog comes back to the reader, and carries no
+         * [c4f] prefix, which is how the service tells it from its own output. */
+        c4fKlogMark("c4f-klog-mark-1");
+        assert(read(fd, buf, sizeof(buf) - 1) > 0);
+        assert(strstr(buf, "c4f-klog-mark-1") && !strstr(buf, "[c4f]"));
         close(fd);
     } else {
-        assert(fd == -1 && directOpens == 1);
+        assert(fd == -1 && deviceOpens == 1);
     }
     usleep(50000);
     assert(peer < 0); /* GoldHEN's klog stream was never touched */
-    assert(enabled == 1);
 
     pthread_cancel(thread);
     pthread_join(thread, NULL);

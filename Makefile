@@ -18,7 +18,7 @@ VERSION := $(shell cat VERSION)
 NAME    := control4free
 ELF     := build/$(NAME).elf
 OBJDIR  := build/payload
-SOURCES := src/main.c src/log.c src/vda.c src/web.c src/net.c
+SOURCES := src/main.c src/log.c src/vda.c src/klog_line.c src/web.c src/net.c
 OBJECTS := $(SOURCES:src/%.c=$(OBJDIR)/%.o) $(OBJDIR)/client.o
 
 CFLAGS  += -std=gnu11 -Wall -Wextra -Wpointer-arith -g -O2

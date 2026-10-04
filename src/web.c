@@ -36,12 +36,41 @@ typedef struct {
     uint32_t userId;
 } C4fWebPad;
 
+/* Creating a controller means issuing AddDevice and then finding its DeviceId in
+ * the kernel log, which takes a moment. None of that may stop the service from
+ * answering the other players, so it runs as a state machine driven from the main
+ * loop. One creation at a time: two AddDevice calls at once would produce two log
+ * lines with no way to tell which device belongs to which request. */
+typedef enum {
+    C4F_ADD_IDLE = 0,
+    C4F_ADD_DRAIN,    /* reading off the log's backlog, so no old line is reused */
+    C4F_ADD_VERIFY,   /* a marker was written; waiting for it to come back */
+    C4F_ADD_DEVICE,   /* AddDevice issued; waiting for the device-added line */
+} C4fAddState;
+
+typedef struct {
+    C4fAddState   state;
+    unsigned      wanted;    /* the whole claim this request asked for */
+    unsigned      pending;   /* the slots still to create */
+    unsigned      created;   /* the slots created so far, to undo on failure */
+    C4fNetClient *client;    /* who asked, or NULL once they left */
+    int64_t       id;
+    int           hasId;
+    int           slot;      /* the slot AddDevice was issued for, or -1 */
+    uint64_t      deadline;
+    uint64_t      quietAt;   /* when the log last had something to read */
+    uint64_t      deviceId;  /* the DeviceId the reader picked up */
+    char          marker[64];
+    int           markerSeen;
+} C4fAdd;
+
 typedef struct {
     C4fNet net;
     C4fWebPad pads[C4F_MAX_PADS];
     int klogFd, stop, changed, creationBlocked;
     char klogLine[1024];
     size_t klogUsed;
+    C4fAdd add;
     uint64_t broadcastAt, stopAt, heartbeatAt;
 } C4fWeb;
 
@@ -118,7 +147,8 @@ static void c4fStatus(C4fWeb *app, C4fNetClient *c, const C4fRequest *request)
     pos += (size_t)snprintf(json+pos, sizeof(json)-pos, "{\"version\":\"%s\",\"protocol\":2,\"pads\":[", C4F_VERSION);
     for (int i = 0; i < C4F_MAX_PADS; i++) {
         C4fWebPad *p = &app->pads[i];
-        const char *state = p->error ? "error" : !p->active ? "free" : !p->owner || p->stale ? "paused" : p->assigned ? "ready" : "select";
+        const char *state = p->error ? "error" : app->add.state && (app->add.pending & (1u << i)) ? "connecting"
+                          : !p->active ? "free" : !p->owner || p->stale ? "paused" : p->assigned ? "ready" : "select";
         unsigned colors[4][3] = {{32,96,255},{255,48,64},{48,200,96},{255,80,180}};
         pos += (size_t)snprintf(json+pos, sizeof(json)-pos,
             "%s{\"pad\":%d,\"name\":\"Controller %d\",\"enabled\":true,\"open\":%s,\"connected\":%s,\"clients\":%d,\"mine\":%s,\"state\":\"%s\",\"uid\":\"%s%08x\",\"color\":[%u,%u,%u],\"reports\":%llu,\"error\":%d}",
@@ -145,10 +175,8 @@ static void c4fRemove(C4fWeb *app, C4fWebPad *p)
     memset(p, 0, sizeof(*p)); app->changed = 1;
 }
 
-/* Also called during VDA creation waits; never re-enter the network or klog. */
-static void c4fReportPads(void *context)
+static void c4fReportPads(C4fWeb *app)
 {
-    C4fWeb *app = context;
     uint64_t now = c4fTimeMs();
     for (int i = 0; i < C4F_MAX_PADS; i++) {
         C4fWebPad *p = &app->pads[i];
@@ -184,39 +212,62 @@ static void c4fEnqueue(C4fWebPad *p, const ScePadData *data)
     p->queue[(p->head+p->count)%C4F_QUEUE_SIZE] = *data; p->count++;
 }
 
-static void c4fReadKlog(C4fWeb *app)
+/* One kernel-log line. Our own mirrored output is skipped: c4fLog writes to klog
+ * too, so a line that reacted to a line would feed itself for ever. The marker
+ * c4fKlogMark writes carries no [c4f], which is how it gets through. */
+static void c4fKlogLine(C4fWeb *app, const char *line)
+{
+    unsigned long long device;
+    unsigned user;
+    const char *event;
+
+    if (strstr(line, "[c4f]")) return;
+
+    if (app->add.state == C4F_ADD_VERIFY && !app->add.markerSeen &&
+        app->add.marker[0] && strstr(line, app->add.marker))
+        app->add.markerSeen = 1;
+
+    if (app->add.state == C4F_ADD_DEVICE && !app->add.deviceId && c4fKlogIsVirtualAdd(line))
+        app->add.deviceId = c4fKlogDeviceId(line);
+
+    event = strstr(line, "DEVICE_OWNER_CHANGED [DeviceId:");
+    if (event && sscanf(event, "DEVICE_OWNER_CHANGED [DeviceId:0x%llx][UserId:0x%x]", &device, &user) == 2) {
+        for (int i = 0; i < C4F_MAX_PADS; i++) {
+            C4fWebPad *p = &app->pads[i];
+            if (p->active && p->device.deviceId == device) {
+                p->assigned = user != 0xffffffffu; p->userId = user; app->changed = 1;
+                c4fLog("web controller %d assignment confirmed=%d\n", i+1, p->assigned);
+            }
+        }
+    }
+}
+
+/* Reads whatever the log has right now and never waits. Returns the number of
+ * bytes taken, so the caller can tell a quiet log from a busy one. */
+static long c4fReadKlog(C4fWeb *app)
 {
     char buf[2048];
-    if (app->klogFd < 0) return;
+    long total = 0;
+    if (app->klogFd < 0) return 0;
     for (int batch = 0; batch < 8; batch++) {
         ssize_t n = read(app->klogFd, buf, sizeof(buf));
         if (n < 0 && errno == EINTR) continue;
-        if (n < 0 && (errno == EAGAIN || errno == EWOULDBLOCK)) return;
+        if (n < 0 && (errno == EAGAIN || errno == EWOULDBLOCK)) return total;
         if (n <= 0) {
             close(app->klogFd); app->klogFd = -1;
             c4fLog("klog source closed; reconnecting at the next controller request\n");
-            return;
+            return total;
         }
+        total += (long)n;
         for (ssize_t j = 0; j < n; j++) {
             if (buf[j] == '\n') {
-                unsigned long long device;
-                unsigned user;
-                char *event;
                 app->klogLine[app->klogUsed] = 0;
-                event = strstr(app->klogLine, "DEVICE_OWNER_CHANGED [DeviceId:");
-                if (event && sscanf(event, "DEVICE_OWNER_CHANGED [DeviceId:0x%llx][UserId:0x%x]", &device, &user) == 2) {
-                    for (int i = 0; i < C4F_MAX_PADS; i++) {
-                        C4fWebPad *p = &app->pads[i];
-                        if (p->active && p->device.deviceId == device) {
-                            p->assigned = user != 0xffffffffu; p->userId = user; app->changed = 1;
-                            c4fLog("web controller %d assignment confirmed=%d\n", i+1, p->assigned);
-                        }
-                    }
-                }
+                c4fKlogLine(app, app->klogLine);
                 app->klogUsed = 0;
             } else if (buf[j] != '\r' && app->klogUsed+1 < sizeof(app->klogLine)) app->klogLine[app->klogUsed++] = buf[j];
         }
     }
+    return total;
 }
 
 static void c4fReleaseKlog(C4fWeb *app)
@@ -234,10 +285,141 @@ static void c4fReleaseIdleKlog(C4fWeb *app)
     c4fReleaseKlog(app);
 }
 
+/* Hands the claim its slots once every device it needed exists. */
+static void c4fApplyClaim(C4fWeb *app, C4fNetClient *c, unsigned wanted, C4fRequest *r)
+{
+    for (int i = 0; i < C4F_MAX_PADS; i++) {
+        C4fWebPad *p = &app->pads[i];
+        if (wanted & (1u << i)) {
+            if (p->owner != c) c4fNeutralize(p);
+            p->owner = c; p->detachedAt = 0; p->lastInput = c4fTimeMs(); p->stale = 0;
+        } else if (p->owner == c) c4fRemove(app, p);
+    }
+    app->changed = 1; c4fStatus(app, c, r);
+}
+
+static void c4fAddReset(C4fWeb *app)
+{
+    memset(&app->add, 0, sizeof(app->add));
+    app->add.slot = -1;
+}
+
+/* Gives up on the creation in progress. `blocked` means AddDevice had already
+ * run, so a device we can no longer address may exist. */
+static void c4fAddFail(C4fWeb *app, int code, const char *message, int blocked)
+{
+    C4fNetClient *client = app->add.client;
+    C4fRequest reply;
+
+    if (blocked) app->creationBlocked = 1;
+    for (int i = 0; i < C4F_MAX_PADS; i++)
+        if (app->add.created & (1u << i)) c4fRemove(app, &app->pads[i]);
+
+    memset(&reply, 0, sizeof(reply));
+    reply.id = app->add.id; reply.hasId = app->add.hasId;
+    c4fAddReset(app);
+    app->changed = 1;
+    if (client) c4fError(client, reply.hasId ? &reply : NULL, code, message);
+}
+
+/* Issues AddDevice for the lowest slot still waiting. */
+static void c4fAddNextDevice(C4fWeb *app, uint64_t now)
+{
+    for (int i = 0; i < C4F_MAX_PADS; i++) if (app->add.pending & (1u << i)) {
+        app->add.slot = i;
+        app->add.deviceId = 0;
+        app->add.state = C4F_ADD_DEVICE;
+        app->add.deadline = now + 2500;
+        (void)c4fVirtualPadAdd(C4F_VDA_USER_SELECT);
+        return;
+    }
+    app->add.slot = -1;
+}
+
+/* One step of the creation in progress, from the main loop. */
+static void c4fAdvanceAdd(C4fWeb *app, uint64_t now, long klogBytes)
+{
+    if (!app->add.state) return;
+
+    if (app->klogFd < 0) {
+        c4fAddFail(app, 503, "Lost the PS4's kernel log while connecting the controller; try again",
+                   app->add.state == C4F_ADD_DEVICE);
+        return;
+    }
+    if (klogBytes) app->add.quietAt = now;
+
+    switch (app->add.state) {
+    case C4F_ADD_DRAIN:
+        /* A fresh reader can replay a backlog, and an old device-added line in it
+         * would hand us a DeviceId that is not ours. Wait for the log to go quiet
+         * first, but not for ever: a busy console is still a usable one. */
+        if (now - app->add.quietAt < 150 && now < app->add.deadline) return;
+        snprintf(app->add.marker, sizeof(app->add.marker), "c4f-klog-mark-%llu",
+                 (unsigned long long)now);
+        app->add.markerSeen = 0;
+        app->add.state = C4F_ADD_VERIFY;
+        app->add.deadline = now + 2000;
+        c4fKlogMark(app->add.marker);
+        return;
+
+    case C4F_ADD_VERIFY:
+        if (app->add.markerSeen) { c4fAddNextDevice(app, now); return; }
+        if (now < app->add.deadline) return;
+        /* The reader was opened but delivers nothing. Nothing was created yet, so
+         * drop it and let the next attempt open a fresh one. */
+        c4fReleaseKlog(app);
+        c4fAddFail(app, 503, "Cannot read the PS4's kernel log, which sign-in needs. If a klog viewer is connected to GoldHEN, close it and try again.", 0);
+        return;
+
+    case C4F_ADD_DEVICE:
+        if (app->add.deviceId) {
+            C4fWebPad *p = &app->pads[app->add.slot];
+            c4fVirtualPadAdopt(&p->device, C4F_USER_ID_INVALID, C4F_VDA_USER_SELECT, app->add.deviceId);
+            p->active = 1; p->userId = 0xffffffffu; p->lastInput = now;
+            /* It has no owner until the whole claim is answered. Start its idle
+             * clock now so the reaper does not take it in the meantime. */
+            p->detachedAt = now;
+            c4fNeutralize(p);
+            app->add.created |= 1u << app->add.slot;
+            app->add.pending &= ~(1u << app->add.slot);
+            app->changed = 1;
+            if (app->add.pending) { c4fAddNextDevice(app, now); return; }
+            /* Done. If the player left while we worked, the devices have nobody
+             * to drive them. */
+            if (!app->add.client) {
+                for (int i = 0; i < C4F_MAX_PADS; i++)
+                    if (app->add.created & (1u << i)) c4fRemove(app, &app->pads[i]);
+                c4fAddReset(app);
+                return;
+            }
+            {
+                C4fNetClient *client = app->add.client;
+                unsigned wanted = app->add.wanted;
+                C4fRequest reply;
+                memset(&reply, 0, sizeof(reply));
+                reply.id = app->add.id; reply.hasId = app->add.hasId;
+                c4fAddReset(app);
+                c4fApplyClaim(app, client, wanted, reply.hasId ? &reply : NULL);
+            }
+            return;
+        }
+        if (now < app->add.deadline) return;
+        /* AddDevice ran and no handle came back: there may be a device out there
+         * we cannot address. Stop creating until the payload is restarted rather
+         * than collect more of them. */
+        c4fLog("no virtual device line for controller %d within the wait\n", app->add.slot + 1);
+        c4fAddFail(app, 503, "Could not create controller; restart Control4Free before retrying", 1);
+        return;
+
+    default:
+        return;
+    }
+}
+
 static void c4fClaim(C4fWeb *app, C4fNetClient *c, C4fRequest *r)
 {
-    unsigned wanted = 0, created = 0;
-    int needsDevice = 0, needsAssignment = 0;
+    unsigned wanted = 0, needed = 0;
+    int needsAssignment = 0;
     for (unsigned i = 0; i < r->argc; i++) {
         if (r->args[i] < 0 || r->args[i] >= C4F_MAX_PADS) { c4fError(c, r, 400, "Invalid controller"); return; }
         wanted |= 1u << r->args[i];
@@ -247,41 +429,30 @@ static void c4fClaim(C4fWeb *app, C4fNetClient *c, C4fRequest *r)
         C4fWebPad *p = &app->pads[i];
         if (p->owner && p->owner != c) { c4fError(c, r, 409, "Controller is in use on another device"); return; }
         if (!p->active && app->creationBlocked) { c4fError(c, r, 503, "Controller creation unavailable; restart Control4Free"); return; }
-        if (!p->active) needsDevice = 1;
+        if (!p->active) needed |= 1u << i;
         if (p->active && !p->assigned) needsAssignment = 1;
     }
-    /* Recheck the stream before every creation. An accepted but unserved klog
-     * socket must never lead to AddDevice and an orphan with no known handle. */
-    if (needsDevice || (needsAssignment && app->klogFd < 0)) {
-        if (app->klogFd >= 0) {
-            c4fReadKlog(app);
-            if (app->klogFd >= 0 && c4fKlogSelfTest(app->klogFd)) c4fReleaseKlog(app);
-        }
-        if (app->klogFd < 0) app->klogFd = c4fKlogOpenDevice();
-        if (app->klogFd < 0 && needsDevice) { c4fError(c, r, 503, "Cannot read the PS4's kernel log, which sign-in needs. If a klog viewer is connected to GoldHEN, close it and try again."); return; }
+    if (needed && app->add.state) {
+        c4fError(c, r, 409, "Another controller is being connected; try again in a moment"); return;
     }
-    for (int i = 0; i < C4F_MAX_PADS; i++) if ((wanted & (1u << i)) && !app->pads[i].active) {
-        C4fWebPad *p = &app->pads[i];
-        c4fKlogDrain(app->klogFd); app->klogUsed = 0;
-        if (c4fVirtualPadAddAs(&p->device, C4F_USER_ID_INVALID, 1, app->klogFd)) {
-            /* AddDevice may have created an orphan whose handle was lost. Do
-             * not accumulate more devices through automatic retries. */
-            app->creationBlocked = 1;
-            for (int k = 0; k < C4F_MAX_PADS; k++) if (created & (1u << k)) c4fRemove(app, &app->pads[k]);
-            c4fError(c, r, 503, "Could not create controller; restart payload before retrying"); return;
-        }
-        p->active = 1; p->userId = 0xffffffffu; p->lastInput = c4fTimeMs();
-        c4fNeutralize(p); created |= 1u << i;
-        c4fReportPads(app);
+    if ((needed || needsAssignment) && app->klogFd < 0) {
+        app->klogFd = c4fKlogOpenDevice();
+        if (app->klogFd < 0 && needed) { c4fError(c, r, 503, "Cannot read the PS4's kernel log, which sign-in needs. If a klog viewer is connected to GoldHEN, close it and try again."); return; }
     }
-    for (int i = 0; i < C4F_MAX_PADS; i++) {
-        C4fWebPad *p = &app->pads[i];
-        if (wanted & (1u << i)) {
-            if (p->owner != c) c4fNeutralize(p);
-            p->owner = c; p->detachedAt = 0; p->lastInput = c4fTimeMs(); p->stale = 0;
-        } else if (p->owner == c) c4fRemove(app, p);
-    }
-    app->changed = 1; c4fStatus(app, c, r);
+    if (!needed) { c4fApplyClaim(app, c, wanted, r); return; }
+
+    /* The devices are created from the main loop, which answers this request when
+     * it is finished. Everyone else keeps being served in the meantime. */
+    c4fAddReset(app);
+    app->add.state = C4F_ADD_DRAIN;
+    app->add.wanted = wanted;
+    app->add.pending = needed;
+    app->add.client = c;
+    app->add.id = r->id;
+    app->add.hasId = r->hasId;
+    app->add.quietAt = c4fTimeMs();
+    app->add.deadline = app->add.quietAt + 3000;
+    app->changed = 1;
 }
 
 static void c4fUpdate(C4fWeb *app, C4fNetClient *c, C4fRequest *r)
@@ -316,6 +487,7 @@ static void c4fWebEvent(C4fNetClient *c, int event, const char *text, size_t len
         c4fNetHttpJson(c, reply); return;
     }
     if (event == C4F_NET_HTTP_STOP) {
+        if (app->add.state) c4fAddFail(app, 503, "Control4Free is stopping", 0);
         for (int i = 0; i < C4F_MAX_PADS; i++) c4fRemove(app, &app->pads[i]);
         c4fNetHttpJson(c, "{\"application\":\"Control4Free\",\"stopping\":true}");
         if (!app->stopAt) app->stopAt = c4fTimeMs() + 250;
@@ -323,6 +495,8 @@ static void c4fWebEvent(C4fNetClient *c, int event, const char *text, size_t len
     }
     if (event == C4F_NET_OPEN) { c4fStatus(app, c, NULL); return; }
     if (event == C4F_NET_CLOSE) {
+        /* Before the slot can be reused by someone else. */
+        if (app->add.client == c) app->add.client = NULL;
         for (int i = 0; i < C4F_MAX_PADS; i++) if (app->pads[i].owner == c) {
             C4fWebPad *p = &app->pads[i];
             c4fNeutralize(p); p->owner = NULL; p->detachedAt = c4fTimeMs(); app->changed = 1;
@@ -360,7 +534,6 @@ int c4fWebRun(int klogFd)
         if (klogFd >= 0) close(klogFd);
         free(app); return -1;
     }
-    c4fVdaSetWaitCallback(c4fReportPads, app);
     c4fLog("Control4Free %s: browser controller on port %d\n", C4F_VERSION, C4F_WEB_PORT);
     c4fNotify("Control4Free: open PS4 IP:%d in your browser", C4F_WEB_PORT);
     uint64_t previous = c4fTimeMs(), retryAt = 0;
@@ -376,6 +549,8 @@ int c4fWebRun(int klogFd)
                    (long long)now - (long long)previous, (long long)wall - (long long)previousWall);
             c4fNetClose(&app->net); /* close events neutralize and discard queued input */
             c4fReleaseKlog(app);
+            if (app->add.state) c4fAddFail(app, 503, "Control4Free paused while connecting the controller; try again",
+                                           app->add.state == C4F_ADD_DEVICE);
             for (int i = 0; i < C4F_MAX_PADS; i++) if (app->pads[i].active)
                 app->pads[i].nextReport = now;
             app->broadcastAt = app->heartbeatAt = now;
@@ -387,20 +562,24 @@ int c4fWebRun(int klogFd)
                 retryAt = now + 1000;
             } else c4fLog("listener recovered on port %d\n", C4F_WEB_PORT);
         }
-        c4fReadKlog(app); c4fReportPads(app);
+        long klogBytes = c4fReadKlog(app);
+        c4fReportPads(app);
+        c4fAdvanceAdd(app, now, klogBytes);
         for (int i = 0; i < C4F_MAX_PADS; i++) {
             C4fWebPad *p = &app->pads[i];
+            if (app->add.created & (1u << i)) continue;   /* mid-claim, not abandoned */
             if (p->active && ((!p->owner && now-p->detachedAt > C4F_RELEASE_MS) || (p->owner && now-p->lastInput > C4F_RELEASE_MS))) {
                 C4fNetClient *owner = p->owner;
                 c4fRemove(app, p);
                 if (owner) c4fError(owner, NULL, 408, "Controller disconnected after inactivity; select it again");
             }
         }
-        c4fReleaseIdleKlog(app);
+        if (!app->add.state) c4fReleaseIdleKlog(app);
         if (now >= app->heartbeatAt) {
             int active = 0;
             for (int i = 0; i < C4F_MAX_PADS; i++) active += app->pads[i].active;
-            c4fLog("heartbeat: listener=%d controllers=%d klog=%d\n", app->net.fd >= 0, active, app->klogFd >= 0);
+            c4fLog("heartbeat: listener=%d controllers=%d klog=%d connecting=%d\n",
+                   app->net.fd >= 0, active, app->klogFd >= 0, app->add.state);
             app->heartbeatAt = now + 60000;
         }
         if (app->changed || now >= app->broadcastAt) {
@@ -418,6 +597,8 @@ int c4fWebRun(int klogFd)
                 else c4fLog("network failed errno=%d; resetting connections\n", errno);
                 c4fNetClose(&app->net);
                 c4fReleaseKlog(app);
+                if (app->add.state) c4fAddFail(app, 503, "Control4Free lost the connection while connecting the controller; try again",
+                                               app->add.state == C4F_ADD_DEVICE);
                 for (int i = 0; i < C4F_MAX_PADS; i++) if (app->pads[i].active)
                     app->pads[i].nextReport = c4fTimeMs();
                 retryAt = c4fTimeMs() + (result == -2 ? 0 : 1000);
@@ -427,7 +608,6 @@ int c4fWebRun(int klogFd)
          * creation waits from the gap between iterations. */
         previous = c4fTimeMs(); previousWall = time(NULL);
     }
-    c4fVdaSetWaitCallback(NULL, NULL);
     for (int i = 0; i < C4F_MAX_PADS; i++) c4fRemove(app, &app->pads[i]);
     c4fNetClose(&app->net);
     if (app->klogFd >= 0) close(app->klogFd);

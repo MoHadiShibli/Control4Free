@@ -10,7 +10,7 @@ import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-SUITES = ['test_logging', 'test_web', 'test_recovery', 'test_launcher']
+SUITES = ['test_logging', 'test_frontend', 'test_web', 'test_recovery', 'test_launcher']
 
 
 def main():

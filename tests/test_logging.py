@@ -11,6 +11,9 @@ def main():
     subprocess.run(flags + ['src/log.c', 'tests/log_test.c',
                            '-Wl,--wrap=clock_gettime', '-o', 'build/log-host-test'], check=True)
     subprocess.run(['build/log-host-test'], check=True, timeout=5)
+    subprocess.run(flags + ['src/klog_line.c', 'tests/device_id_test.c',
+                           '-o', 'build/device-id-host-test'], check=True)
+    subprocess.run(['build/device-id-host-test'], check=True, timeout=5)
 
 
 if __name__ == '__main__':

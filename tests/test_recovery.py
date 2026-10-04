@@ -21,8 +21,8 @@ def connect_again():
 
 def main():
     subprocess.run(['clang-18', '-std=gnu11', '-Wall', '-Wextra', '-Werror', '-g',
-                    '-Iinclude', '-Ivendor/jsmn', 'src/net.c', 'src/web.c',
-                    'tests/web_stub.c', 'tests/recovery_faults.c', 'build/client.c',
+                    '-Iinclude', '-Ivendor/jsmn', 'src/net.c', 'src/web.c', 'src/klog_line.c',
+                    'tests/web_stub.c', 'tests/recovery_faults.c', 'build/client.c', '-pthread',
                     '-Wl,--wrap=select,--wrap=accept,--wrap=getsockopt', '-o', str(web.BINARY)], check=True)
     with tempfile.TemporaryDirectory() as directory:
         fault = Path(directory) / 'fault'
