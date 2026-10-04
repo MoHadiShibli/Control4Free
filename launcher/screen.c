@@ -6,6 +6,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include "autorun.h"
 #include "draw.h"
 #include "qrcodegen.h"
 
@@ -40,6 +41,7 @@
 #define C4F_CIRCLE_KEY   C4F_RGBA(255, 102, 128, 1)
 #define C4F_CROSS_KEY    C4F_RGBA(134, 182, 255, 1)
 #define C4F_SQUARE_KEY   C4F_RGBA(255, 146, 220, 1)
+#define C4F_TRIANGLE_KEY C4F_RGBA(63, 224, 184, 1)
 #define C4F_WHITE        C4F_RGBA(255, 255, 255, 1)
 
 static uint32_t *c4fBackdrop;
@@ -342,7 +344,7 @@ static void c4fDot(C4fCanvas *c, float cx, float cy, C4fColor color, int glow)
 }
 
 /* Button guide in the PS4's manner, with the page's face-button colours. */
-enum { C4F_KEY_CROSS, C4F_KEY_CIRCLE, C4F_KEY_SQUARE };
+enum { C4F_KEY_CROSS, C4F_KEY_CIRCLE, C4F_KEY_SQUARE, C4F_KEY_TRIANGLE };
 typedef struct { int key; const char *label; } C4fHint;
 #define C4F_HINT_RADIUS 22.0f
 #define C4F_HINT_GAP 14.0f
@@ -364,6 +366,8 @@ static void c4fHints(C4fCanvas *c, float right, float cy, const C4fHint *hints, 
             c4fSegment(c, cx - 8.5f, cy + 8.5f, cx + 8.5f, cy - 8.5f, 3.6f, C4F_CROSS_KEY);
         } else if (hints[i].key == C4F_KEY_CIRCLE) {
             c4fRing(c, cx, cy, 10.5f, 3.6f, C4F_CIRCLE_KEY);
+        } else if (hints[i].key == C4F_KEY_TRIANGLE) {
+            c4fTriangleOutline(c, cx, cy + 1.5f, 11.5f, 3.4f, C4F_TRIANGLE_KEY);
         } else {
             c4fSquareOutline(c, cx, cy, 8.5f, 3.4f, C4F_SQUARE_KEY);
         }
@@ -406,8 +410,8 @@ typedef struct {
 static C4fLook c4fLookFor(const C4fLauncherScreen *s, char *meta, size_t metaSize)
 {
     C4fLook look = { "Not responding", "Check Control4Free",
-                     "Another program answers on port 4264, or nothing replied in time. Stop the old copy from "
-                     "its phone page, or restart the PS4.",
+                     "Something answers on port 4264 but not the way this app expects. If an older Control4Free "
+                     "is running, stop it on its controller page or restart the PS4.",
                      "Not responding", C4F_BAD, C4F_BAD, 0 };
     if (s->locked) {
         look.pill = look.meta = "Restart needed";
@@ -423,10 +427,15 @@ static C4fLook c4fLookFor(const C4fLauncherScreen *s, char *meta, size_t metaSiz
                           "Open the address or scan the code on your phone or PC. Pick a controller there, then "
                           "choose its user on the PS4.",
                           meta, C4F_OK, C4F_ACCENT, 1 };
-    } else if (s->running == 0) {
+    } else if (s->running == 0 && s->autorun == C4F_AUTORUN_ON) {
         look = (C4fLook){ "Stopped", "Start Control4Free",
-                          "Press Cross with GoldHEN's PayLoader turned on, or start it from GoldHEN's Payloader "
-                          "LaunchPad. Add it to AutoRun there and it starts with GoldHEN.",
+                          "It starts with GoldHEN after each restart. To start it now, turn on GoldHEN's PayLoader "
+                          "and press Cross.",
+                          "Not running", C4F_FAINT, C4F_FAINT, 0 };
+    } else if (s->running == 0) {
+        look = (C4fLook){ "Stopped", "Set up Control4Free",
+                          "Press Cross once. GoldHEN will start Control4Free each time it loads, and it starts "
+                          "right away if GoldHEN's PayLoader is on.",
                           "Not running", C4F_FAINT, C4F_FAINT, 0 };
     }
     return look;
@@ -498,23 +507,51 @@ void c4fDrawLauncher(uint32_t *pixels, const C4fLauncherScreen *s)
                         "The code appears once it runs");
     }
 
-    /* .panel with the one thing worth knowing. */
+    /* .panel: whether GoldHEN starts it by itself. */
+    const char *panelTitle, *panelText;
+    C4fColor panelDot = C4F_FAINT;
+    if (s->autorun == C4F_AUTORUN_ON) {
+        panelTitle = "Starts by itself with GoldHEN";
+        panelText = "GoldHEN starts Control4Free each time it loads. Closing this app leaves your controllers "
+                    "running. Turn off other controller plugins in your games.";
+        panelDot = C4F_OK;
+    } else if (s->autorun == C4F_AUTORUN_OUTDATED) {
+        panelTitle = "Auto-start uses an older Control4Free";
+        panelText = "Press Triangle to switch GoldHEN's auto-start to this version. It takes effect after the "
+                    "next restart.";
+        panelDot = C4F_WARN;
+    } else if (s->autorun == C4F_AUTORUN_OFF) {
+        panelTitle = "Auto-start is off";
+        panelText = "Press Triangle and GoldHEN starts Control4Free each time it loads, with no PC needed.";
+    } else {
+        panelTitle = "Auto-start status unknown";
+        panelText = s->autorunNote[0] ? s->autorunNote : "Checking with GoldHEN...";
+        panelDot = s->autorunNote[0] ? C4F_BAD : C4F_WARN;
+    }
     float panelY = C4F_PANEL_TOP;
     c4fPanel(&c, left, panelY, right - left, C4F_PANEL_HEIGHT, C4F_PANEL, C4F_LINE_SOFT);
-    c4fText(&c, C4F_FONT_LIGHT, 19 * C4F_S, left + 20 * C4F_S, panelY + 52, C4F_TEXT,
-            "Closing this app leaves your controllers running");
+    c4fDot(&c, left + 20 * C4F_S + 4 * C4F_S, panelY + 43, panelDot, s->autorun == C4F_AUTORUN_ON);
+    c4fText(&c, C4F_FONT_LIGHT, 19 * C4F_S, left + 20 * C4F_S + 24, panelY + 52, C4F_TEXT, panelTitle);
     c4fTextWrapped(&c, C4F_FONT_LIGHT, 23, left + 20 * C4F_S, panelY + 94, right - left - 40 * C4F_S, 34, 1, C4F_MUTED,
-                   "Open it again any time to see the address or to stop Control4Free. Turn off other "
-                   "controller plugins in your games.");
+                   panelText);
 
     /* .home-foot and the button guide. */
     c4fText(&c, C4F_FONT_LIGHT, 20, left, 1030, C4F_FAINT, "Control4Free " C4F_LAUNCHER_VERSION);
     if (!s->confirmStop && !s->busy) {
-        C4fHint hints[2];
+        C4fHint hints[4];
         int n = 0;
-        if (!s->locked) {
-            hints[n].key = live ? C4F_KEY_SQUARE : C4F_KEY_CROSS;
-            hints[n++].label = live ? "Stop" : "Start";
+        if (!s->locked && !live) {
+            hints[n].key = C4F_KEY_CROSS;
+            hints[n++].label = s->autorun == C4F_AUTORUN_ON ? "Start" : "Set up";
+        }
+        if (s->autorun != C4F_AUTORUN_UNKNOWN) {
+            hints[n].key = C4F_KEY_TRIANGLE;
+            hints[n++].label = s->autorun == C4F_AUTORUN_ON ? "Turn off auto-start" :
+                               s->autorun == C4F_AUTORUN_OUTDATED ? "Update auto-start" : "Turn on auto-start";
+        }
+        if (live) {
+            hints[n].key = C4F_KEY_SQUARE;
+            hints[n++].label = "Stop";
         }
         hints[n].key = C4F_KEY_CIRCLE;
         hints[n++].label = "Close";

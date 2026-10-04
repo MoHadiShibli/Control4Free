@@ -6,7 +6,8 @@
 #define C4F_SCREEN_HEIGHT 1080
 typedef struct {
     int running, busy, controllers, confirmStop, locked;
-    char address[64], message[160];
+    int autorun; /* C4F_AUTORUN_* from autorun.h */
+    char address[64], message[160], autorunNote[96];
 } C4fLauncherScreen;
 #ifdef __cplusplus
 extern "C" {

@@ -40,6 +40,7 @@ void c4fGlowCircle(C4fCanvas *c, float cx, float cy, float r, float blur, float 
 /* A line with round caps. */
 void c4fSegment(C4fCanvas *c, float x0, float y0, float x1, float y1, float width, C4fColor color);
 void c4fSquareOutline(C4fCanvas *c, float cx, float cy, float half, float width, C4fColor color);
+void c4fTriangleOutline(C4fCanvas *c, float cx, float cy, float radius, float width, C4fColor color);
 
 /* Text on a baseline. Sizes are CSS font-size in pixels. ASCII only. */
 float c4fText(C4fCanvas *c, int font, float size, float x, float y, C4fColor color, const char *text);

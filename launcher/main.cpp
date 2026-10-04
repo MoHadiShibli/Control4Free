@@ -1,4 +1,5 @@
 /* Native PS4 launcher. The controller service runs outside this application. */
+#include <signal.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -10,46 +11,81 @@
 #include <orbis/SystemService.h>
 #include <orbis/UserService.h>
 #include <orbis/VideoOut.h>
+#include "autorun.h"
 #include "screen.h"
 #include "service.h"
+
+#define C4F_BUNDLED_PAYLOAD "/app0/assets/control4free.elf"
+
+/* Worker commands. */
+enum { C4F_DO_NOTHING, C4F_DO_START, C4F_DO_STOP, C4F_DO_SET_UP, C4F_DO_AUTORUN_ON, C4F_DO_AUTORUN_OFF };
 
 static pthread_mutex_t c4fMutex = PTHREAD_MUTEX_INITIALIZER;
 static C4fLauncherScreen c4fScreen;
 static int c4fCommand, c4fQuit;
 
+/* Set up: auto-start on, then start it now if PayLoader takes it. */
+static int c4fSetUp(char *message, size_t size)
+{
+    int result = c4fAutorunEnable(message, size);
+    if (result) return result;
+    char started[160];
+    result = c4fLauncherStart(C4F_BUNDLED_PAYLOAD, started, sizeof(started));
+    if (result == 0) snprintf(message, size, "Set up and running. GoldHEN will also start it after each restart.");
+    else if (result == -2) snprintf(message, size, "%s", started);
+    else snprintf(message, size, "Auto-start is on: Control4Free starts the next time GoldHEN loads. %s", started);
+    return result == -2 ? -2 : 0;
+}
+
 static void *c4fWorker(void *)
 {
     uint64_t nextCheck = 0;
-    int first = 1;
+    int first = 1, autorun = C4F_AUTORUN_UNKNOWN;
+    char autorunNote[96] = {0}, shownProblem[128] = {0};
     for (;;) {
         pthread_mutex_lock(&c4fMutex);
         int command = c4fCommand, quit = c4fQuit;
-        c4fCommand = 0;
+        c4fCommand = C4F_DO_NOTHING;
         pthread_mutex_unlock(&c4fMutex);
         if (quit) return NULL;
         if (command || c4fLauncherTimeMs() >= nextCheck) {
             char message[160] = {0}, address[64] = {0};
             int result = 0;
-            if (command == 1) result = c4fLauncherStart("/app0/assets/control4free.elf", message, sizeof(message));
-            if (command == 2) result = c4fLauncherStop(message, sizeof(message));
-            C4fServiceStatus status;
-            int running = c4fLauncherProbe(&status);
+            /* The console's own address: shown for the phone or PC, and the
+             * app's second way to reach Control4Free from its sandbox. */
             OrbisNetCtlInfo info;
             memset(&info, 0, sizeof(info));
             if (sceNetCtlGetInfo(ORBIS_NET_CTL_INFO_IP_ADDRESS, &info) == 0 &&
-                info.ip_address[0] && strcmp(info.ip_address, "0.0.0.0"))
+                info.ip_address[0] && strcmp(info.ip_address, "0.0.0.0")) {
                 snprintf(address, sizeof(address), "http://%.15s:4264", info.ip_address);
+                c4fLauncherSetHost(info.ip_address);
+            } else {
+                c4fLauncherSetHost(NULL);
+            }
+            if (command == C4F_DO_START) result = c4fLauncherStart(C4F_BUNDLED_PAYLOAD, message, sizeof(message));
+            if (command == C4F_DO_STOP) result = c4fLauncherStop(message, sizeof(message));
+            if (command == C4F_DO_SET_UP) result = c4fSetUp(message, sizeof(message));
+            if (command == C4F_DO_AUTORUN_ON) result = c4fAutorunEnable(message, sizeof(message));
+            if (command == C4F_DO_AUTORUN_OFF) result = c4fAutorunDisable(message, sizeof(message));
+            if (first || command >= C4F_DO_SET_UP) autorun = c4fAutorunCheck(autorunNote, sizeof(autorunNote));
+            C4fServiceStatus status;
+            int running = c4fLauncherProbe(&status);
+            const char *problem = c4fLauncherProblem();
             pthread_mutex_lock(&c4fMutex);
             if (result == -2) c4fScreen.locked = 1;
-            if (command) snprintf(c4fScreen.message, sizeof(c4fScreen.message), "%s", message);
-            else if (!c4fScreen.locked && (first || running != c4fScreen.running)) {
-                snprintf(c4fScreen.message, sizeof(c4fScreen.message), "%s",
-                    running == 1 ? "Ready. Scan the code or open the address on your phone." :
-                    running == 0 ? "Not running. Press Cross to start it." :
-                    "Something else answers on port 4264. Stop the old copy from its phone page.");
+            if (command) {
+                snprintf(c4fScreen.message, sizeof(c4fScreen.message), "%s", message);
+            } else if (!c4fScreen.locked &&
+                       (first || running != c4fScreen.running || (running < 0 && strcmp(problem, shownProblem)))) {
+                if (running == 1) snprintf(c4fScreen.message, sizeof(c4fScreen.message), "Ready. Open the address on your phone or PC.");
+                else if (running == 0) snprintf(c4fScreen.message, sizeof(c4fScreen.message), "Not running.");
+                else snprintf(c4fScreen.message, sizeof(c4fScreen.message), "No answer the app understands: %s", problem);
+                snprintf(shownProblem, sizeof(shownProblem), "%s", problem);
             }
             c4fScreen.running = running;
             c4fScreen.controllers = status.controllers;
+            c4fScreen.autorun = autorun;
+            snprintf(c4fScreen.autorunNote, sizeof(c4fScreen.autorunNote), "%s", autorunNote);
             snprintf(c4fScreen.address, sizeof(c4fScreen.address), "%s", address);
             /* A queued click while a periodic probe was in flight remains busy. */
             if (!c4fCommand) c4fScreen.busy = 0;
@@ -108,6 +144,8 @@ int main(void)
     const size_t frameBytes = (size_t)C4F_SCREEN_WIDTH * C4F_SCREEN_HEIGHT * sizeof(uint32_t);
     setvbuf(stdout, NULL, _IONBF, 0);
     printf("[c4f-launcher] start " C4F_LAUNCHER_VERSION "\n");
+    /* A peer closing mid-send must be an error, not the end of the app. */
+    signal(SIGPIPE, SIG_IGN);
     /* Frames are composed in cached memory: blending reads pixels back, which
      * is very slow from the write-combined framebuffers. */
     uint32_t *canvas = (uint32_t *)malloc(frameBytes);
@@ -122,8 +160,10 @@ int main(void)
     int32_t user = -1, pad = -1;
     if (scePadInit() == 0 && sceUserServiceGetInitialUser(&user) == 0)
         pad = scePadOpen(user, ORBIS_PAD_PORT_TYPE_STANDARD, 0, NULL);
-    c4fScreen.running = -1; c4fScreen.busy = 1;
+    c4fScreen.running = -1; c4fScreen.busy = 1; c4fScreen.autorun = C4F_AUTORUN_UNKNOWN;
     snprintf(c4fScreen.message, sizeof(c4fScreen.message), "Checking Control4Free...");
+    /* Read before any sandbox change: /app0 is only visible from inside it. */
+    if (c4fAutorunLoadBundled(C4F_BUNDLED_PAYLOAD)) printf("[c4f-launcher] bundled payload unreadable\n");
     pthread_t worker;
     int workerStarted = pthread_create(&worker, NULL, c4fWorker, NULL) == 0;
     if (!workerStarted || pad < 0) {
@@ -151,12 +191,21 @@ int main(void)
                 else done = 1;
             } else if (pressed & ORBIS_PAD_BUTTON_CROSS) {
                 if (c4fScreen.confirmStop) {
-                    c4fCommand = 2; c4fScreen.confirmStop = 0; c4fScreen.busy = 1;
+                    c4fCommand = C4F_DO_STOP; c4fScreen.confirmStop = 0; c4fScreen.busy = 1;
                     snprintf(c4fScreen.message, sizeof(c4fScreen.message), "Stopping and releasing controllers...");
                 } else if (!c4fScreen.locked && c4fScreen.running != 1) {
-                    c4fCommand = 1; c4fScreen.busy = 1;
-                    snprintf(c4fScreen.message, sizeof(c4fScreen.message), "Starting Control4Free. Please wait...");
+                    /* Until auto-start is on, Cross sets it up and starts it. */
+                    int setUp = c4fScreen.autorun != C4F_AUTORUN_ON;
+                    c4fCommand = setUp ? C4F_DO_SET_UP : C4F_DO_START; c4fScreen.busy = 1;
+                    snprintf(c4fScreen.message, sizeof(c4fScreen.message), "%s",
+                             setUp ? "Setting up Control4Free. Please wait..." : "Starting Control4Free. Please wait...");
                 }
+            } else if ((pressed & ORBIS_PAD_BUTTON_TRIANGLE) && !c4fScreen.confirmStop &&
+                       c4fScreen.autorun != C4F_AUTORUN_UNKNOWN) {
+                int off = c4fScreen.autorun == C4F_AUTORUN_ON;
+                c4fCommand = off ? C4F_DO_AUTORUN_OFF : C4F_DO_AUTORUN_ON; c4fScreen.busy = 1;
+                snprintf(c4fScreen.message, sizeof(c4fScreen.message), "%s",
+                         off ? "Turning auto-start off..." : "Turning auto-start on...");
             } else if ((pressed & ORBIS_PAD_BUTTON_SQUARE) && c4fScreen.running == 1) c4fScreen.confirmStop = 1;
         }
         C4fLauncherScreen snapshot = c4fScreen;

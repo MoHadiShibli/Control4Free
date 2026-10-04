@@ -22,45 +22,45 @@ virtual slots are exposed; the console's device limits apply.
   plugin that takes over a signed-in user's controller can stop games from reading
   the virtual controllers.
 
-## Start it with GoldHEN (AutoRun)
+## Install
 
-GoldHEN 2.4b18.10 can run payloads on its own, from its **Payloader LaunchPad**, and
-automatically each time GoldHEN starts (**AutoRun**). Set this up once and no PC or
-PayLoader is needed to start Control4Free.
+1. Copy `build/Control4Free-0.2.0.pkg` to a USB drive (or to `/data/pkg/` over
+   GoldHEN's FTP server) and install it with GoldHEN's Package Installer.
+2. Open **Control4Free** from the home screen and press **Cross** once. The app
+   adds Control4Free to GoldHEN's AutoRun (GoldHEN 2.4b18.10 or later), so GoldHEN
+   starts it every time it loads. It also starts it right away if GoldHEN's
+   PayLoader is on; otherwise restart the PS4 and run the jailbreak again.
+3. Scan the QR code or enter the address on your phone or PC. Select a controller
+   there and sign in through the PS4 screen.
+
+The app stays useful afterwards: it shows whether Control4Free is running, its
+address and QR code, and how many controllers are connected.
+
+- **Cross** starts Control4Free when it is not running (PayLoader must be on).
+- **Triangle** turns GoldHEN's auto-start on or off, or updates it after you
+  install a newer package.
+- **Square**, then **Cross**, stops Control4Free and disconnects its controllers.
+- **Circle** closes the app. Control4Free keeps running without it.
+
+### Without the app
+
+GoldHEN's own **Payloader LaunchPad** (under **Utilities**) does the same job:
 
 1. Put `control4free.elf` in `/data/payloads/` on the PS4, for example through
-   GoldHEN's FTP server (port 2121). GoldHEN also lists payloads in a `Payloads`
-   folder on a USB drive, but keep the AutoRun copy on the console.
-2. In GoldHEN, open **Payloads > Payloader LaunchPad** and select
-   `control4free.elf` to start it now.
-3. Press **Square** on it to add it to the AutoRun queue. GoldHEN then starts it
-   every time GoldHEN loads.
+   GoldHEN's FTP server (port 2121).
+2. In the LaunchPad, select `control4free.elf` to start it, or press **Square** on
+   it to add it to the AutoRun queue. The queue is `/data/GoldHEN/payloads.ini`:
 
-When you update Control4Free, replace `/data/payloads/control4free.elf` as well.
+   ```ini
+   [AutoRun]
+   /user/data/payloads/control4free.elf = 1
+   ```
 
-## Install the launcher app
+When you update Control4Free this way, replace `/data/payloads/control4free.elf`.
 
-The launcher is a home-screen app that shows whether Control4Free is running, its
-address and a QR code for your phone, and can start or stop it.
-
-1. Copy `build/Control4Free-0.2.0.pkg` to a USB drive and install it using the
-   PS4's Package Installer with GoldHEN active.
-2. Open **Control4Free** from the home screen. If AutoRun already started it, the
-   app shows **Running**. Otherwise turn on GoldHEN's PayLoader and press
-   **Cross**.
-3. Scan the QR code or enter the address on your phone. Select a controller there
-   and sign in through the PS4 screen.
-4. Press **Circle** to close the app. Control4Free keeps running on its own. Reopen
-   the app to see the address again, or press **Square**, then **Cross**, to stop it
-   and disconnect all its controllers.
-
-The app does not turn on GoldHEN or PayLoader, and does not start after a reboot by
-itself; AutoRun does that.
-
-**Upgrading from the original test payload:** disconnect controllers and use
-**Stop Control4Free** in the phone menu before starting from the launcher. The
-old payload has no launcher-management API, so the app refuses to start a second
-copy over it. Rebooting the console also clears that old instance.
+**Upgrading from the original test payload:** use **Stop Control4Free** in the
+controller page's menu, or restart the PS4. That old version has no launcher API,
+so the app will not start a second copy over it.
 
 ## Use
 
@@ -102,7 +102,7 @@ files varies. Keep the controller page in the foreground while playing.
 - Explicit disconnect removes the controller immediately. Stopping the payload
   removes all controllers and restores the saved host credentials. Browser Stop
   refuses while another browser owns a controller. The launcher's confirmed Stop
-  can disconnect all controllers through its loopback-only API.
+  can disconnect all controllers through its launcher API, which websites cannot use.
 - If the kernel log is not available yet when Control4Free starts (AutoRun can
   start it early), it connects to it when the first controller is created.
 - There is no time limit. Rebooting the console ends it; AutoRun, the launcher or

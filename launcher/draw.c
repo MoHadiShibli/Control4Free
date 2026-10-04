@@ -237,6 +237,27 @@ void c4fSquareOutline(C4fCanvas *c, float cx, float cy, float half, float width,
         }
 }
 
+void c4fTriangleOutline(C4fCanvas *c, float cx, float cy, float radius, float width, C4fColor color)
+{
+    /* An upward equilateral triangle through three corners at `radius`. */
+    const float k = 1.7320508f;
+    float reach = radius + width;
+    C4fBox b;
+    if (!c4fClip(c, cx - reach - 1, cy - reach - 1, cx + reach + 1, cy + reach + 1, &b)) return;
+    for (int py = b.y0; py < b.y1; py++)
+        for (int px = b.x0; px < b.x1; px++) {
+            /* Signed distance to an equilateral triangle (Inigo Quilez). */
+            float x = fabsf(px + 0.5f - cx), y = -(py + 0.5f - cy) * 1.0f, r = radius * 0.866025f;
+            x = x - r;
+            y = y + r / k;
+            if (x + k * y > 0) { float nx = (x - k * y) / 2, ny = (-k * x - y) / 2; x = nx; y = ny; }
+            x -= fminf(fmaxf(x, -2 * r), 0);
+            float d = -hypotf(x, y) * (y < 0 ? -1 : 1);
+            float cov = c4fClamp01(0.5f - (fabsf(d) - width / 2));
+            if (cov > 0) c4fBlend(c, px, py, color, cov);
+        }
+}
+
 /* ---- text ---- */
 
 static C4fFace *c4fFace(int font, float size)

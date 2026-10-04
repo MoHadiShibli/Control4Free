@@ -7,7 +7,7 @@
 #define C4F_NET_CLIENTS 8
 #define C4F_NET_MESSAGE 4096
 typedef struct C4fNetClient {
-    int fd, websocket, closing, fragmented, loopback;
+    int fd, websocket, closing, fragmented;
     uint64_t openedMs;
     unsigned char rx[8192], tx[8192];
     size_t rxUsed, txUsed, txSent, messageUsed;

@@ -169,13 +169,17 @@ static void c4fHttp(C4fNet *net, C4fNetClient *c)
     }
     if (statusRequest || stopRequest) {
         char launcher[8], length[16], transfer[32];
-        /* Management is local to the console. Reject browser-origin requests
-         * and require a custom header, so a website cannot trigger shutdown. */
-        if (!c->loopback || origin[0] || upgrade[0] ||
+        /* For the launcher app. A website cannot reach this: it would need the
+         * custom header, which a browser only sends cross-origin after a CORS
+         * preflight that is never answered, and every browser request carrying
+         * an Origin is refused. The source address is not checked, because the
+         * app's sandbox may not appear as 127.0.0.1; devices on the network can
+         * already stop Control4Free from the page. */
+        if (origin[0] || upgrade[0] ||
             c4fHeader(request, "X-Control4Free-Launcher", launcher, sizeof(launcher)) != 1 || strcmp(launcher, "1") ||
             c4fHeader(request, "Content-Length", length, sizeof(length)) < 0 || (length[0] && strcmp(length, "0")) ||
             c4fHeader(request, "Transfer-Encoding", transfer, sizeof(transfer)) != 0) {
-            c4fHttpError(c, 403, "Local launcher only"); return;
+            c4fHttpError(c, 403, "Launcher only"); return;
         }
         c->rxUsed = 0;
         net->handler(c, stopRequest ? C4F_NET_HTTP_STOP : C4F_NET_HTTP_STATUS, NULL, 0, net->context);
@@ -296,7 +300,6 @@ void c4fNetPoll(C4fNet *net, int timeoutMs)
                 setsockopt(fd, SOL_SOCKET, SO_NOSIGPIPE, &one, sizeof(one));
 #endif
                 net->clients[index].fd = fd; net->clients[index].openedMs = c4fTimeMs();
-                net->clients[index].loopback = (ntohl(peer.sin_addr.s_addr) >> 24) == 127;
             }
         }
     }

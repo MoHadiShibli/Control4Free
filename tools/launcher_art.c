@@ -1,10 +1,11 @@
 /* Renders launcher artwork on the build machine with the launcher's own drawing
  * code: the package icon, and screen states for review. Writes raw RGBA.
  *   launcher_art icon <size> <out.rgba>
- *   launcher_art screen <running|stopped|busy|confirm|locked|unknown> <out.rgba> */
+ *   launcher_art screen <setup|running|stopped|outdated|confirm|busy|locked|unknown> <out.rgba> */
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include "autorun.h"
 #include "screen.h"
 
 static int c4fWrite(const char *path, const uint32_t *pixels, size_t count)
@@ -34,17 +35,24 @@ int main(int argc, char **argv)
     memset(&s, 0, sizeof(s));
     snprintf(s.address, sizeof(s.address), "http://192.168.1.20:4264");
     const char *state = argv[2], *message = "";
-    if (!strcmp(state, "running") || !strcmp(state, "confirm")) {
+    s.autorun = C4F_AUTORUN_ON;
+    if (!strcmp(state, "running") || !strcmp(state, "confirm") || !strcmp(state, "outdated")) {
         s.running = 1; s.controllers = 2; s.confirmStop = !strcmp(state, "confirm");
-        message = "Ready. Scan the code or open the address on your phone.";
+        if (!strcmp(state, "outdated")) s.autorun = C4F_AUTORUN_OUTDATED;
+        message = "Ready. Open the address on your phone or PC.";
+    } else if (!strcmp(state, "setup")) {
+        s.autorun = C4F_AUTORUN_OFF; message = "Not running.";
     } else if (!strcmp(state, "stopped")) {
-        message = "Not running. Press Cross to start it.";
+        message = "Stopped. Press Cross to start it again.";
     } else if (!strcmp(state, "busy")) {
-        s.running = -1; s.busy = 1; message = "Starting Control4Free. Please wait...";
+        s.running = -1; s.busy = 1; s.autorun = C4F_AUTORUN_UNKNOWN; message = "Setting up Control4Free. Please wait...";
     } else if (!strcmp(state, "locked")) {
-        s.running = -1; s.locked = 1; message = "Sent, but no reply. Restart the PS4 before retrying.";
+        s.running = -1; s.locked = 1;
+        message = "Sent, but Control4Free never answered (127.0.0.1 no reply). Restart the PS4 before you try again.";
     } else if (!strcmp(state, "unknown")) {
-        s.running = -1; message = "Existing service detected. Stop it from the phone first.";
+        s.running = -1; s.autorun = C4F_AUTORUN_UNKNOWN;
+        snprintf(s.autorunNote, sizeof(s.autorunNote), "GoldHEN did not let the app check (errno 78)");
+        message = "No answer the app understands: 127.0.0.1 refused; 192.168.1.20 HTTP 404";
     } else {
         return 2;
     }
