@@ -3,7 +3,7 @@
  * Everything goes to klog (GoldHEN's klog server, port 3232) and is mirrored to a
  * file on the console, so a run can be read back over FTP even if the klog
  * connection dropped. Every line has [c4f] and elapsed HH:MM:SS.mmm, independent
- * of the console's calendar. The previous run is kept in spike.log.previous.
+ * of the console's calendar. The previous run is kept in control4free.log.previous.
  *
  * c4fLogSetKlog(0) turns the klog half off. The /dev/klog scanner needs that:
  * while it is reading, its own writes would come back round and bury the kernel
@@ -14,7 +14,7 @@
 #define C4F_LOG_H
 
 #define C4F_LOG_DIR  "/data/control4free"
-#define C4F_LOG_PATH C4F_LOG_DIR "/spike.log"
+#define C4F_LOG_PATH C4F_LOG_DIR "/control4free.log"
 
 void c4fLogOpen(void);
 void c4fLogClose(void);

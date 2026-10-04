@@ -1,7 +1,10 @@
 #ifndef C4F_LAUNCHER_SCREEN_H
 #define C4F_LAUNCHER_SCREEN_H
 #include <stdint.h>
-#define C4F_LAUNCHER_VERSION "0.2.2"
+/* Set by the Makefile from the VERSION file. */
+#ifndef C4F_LAUNCHER_VERSION
+#define C4F_LAUNCHER_VERSION "dev"
+#endif
 #define C4F_SCREEN_WIDTH 1920
 #define C4F_SCREEN_HEIGHT 1080
 typedef struct {

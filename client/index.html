@@ -957,7 +957,7 @@
     <div class="sparkles"></div>
   </div>
 
-  <!-- Home: pick a pad -->
+  <!-- Home: pick a controller -->
   <div class="home" id="home">
     <header class="topbar">
       <div class="tb-group">
@@ -992,7 +992,7 @@
       </section>
 
       <section class="panel" aria-labelledby="gpTitle" id="gamepadSection">
-        <h2 id="gpTitle">Controllers on this device</h2>
+        <h2 id="gpTitle">Gamepads on this device</h2>
         <p class="hint" id="gamepadHint"></p>
         <ul class="gp-list" id="gamepadList"></ul>
       </section>
@@ -1006,7 +1006,7 @@
 
   <!-- Controller: DualShock 4 buttons, each placed from DEFAULT_LAYOUT in the script -->
   <div class="pad-view" id="padView" data-conn="connecting" hidden>
-    <button class="corner-btn left" id="backBtn" type="button" aria-label="Back to the pads">
+    <button class="corner-btn left" id="backBtn" type="button" aria-label="Back to the controllers">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg>
     </button>
     <button class="corner-btn right" id="fsBtn" type="button" aria-label="Full screen">
@@ -1107,7 +1107,7 @@
 
         <section data-page="keyboard" hidden>
           <h2 class="page-title">Keyboard</h2>
-          <p class="hint">Click a key to change it, then press the new key. Keys drive the pad opened on this page.</p>
+          <p class="hint">Click a key to change it, then press the new key. Keys drive the controller opened on this page.</p>
           <div class="rows" id="keyRows"></div>
           <div class="actions" style="margin-top:14px"><button class="btn" type="button" id="resetKeys">Reset keys</button></div>
         </section>
@@ -1174,7 +1174,7 @@
 
     // Settings of this device (the console's settings live on the console)
     const DEVICE_SETTINGS = [
-      ['keepAwake', 'Keep the screen on', 'While this page controls a pad, the screen doesn\'t turn off.', true],
+      ['keepAwake', 'Keep the screen on', 'While this page drives a controller, the screen doesn\'t turn off.', true],
       ['haptics', 'Vibration', 'Buzz this device when you press a button or the game rumbles (Android).', 'vibrate' in navigator],
       ['floating', 'Floating sticks', 'A stick starts wherever your thumb lands inside its area.', false],
       ['tapClick', 'Tap the touchpad to click', 'A quick tap presses the touchpad button. Hold still to keep it pressed.', true],
@@ -1213,13 +1213,13 @@
     // ---------------------------------------------------------------- connection
 
     const conn = {
-      ws: null, state: 'connecting', address: '', protocol: 1, version: '', nextId: 1,
+      ws: null, state: 'connecting', address: '', version: '', nextId: 1,
       pending: new Map(), retry: 0, retryTimer: 0, everOpened: false,
     };
 
     const status = Array.from({ length: PADS }, (_, i) => ({
       pad: i, open: false, enabled: true, real: false, logged: false, joined: false, connected: false,
-      full: false, shared: false, player: 0, uid: '', cfg: '', name: 'Pad ' + (i + 1),
+      full: false, shared: false, player: 0, uid: '', cfg: '', name: 'Controller ' + (i + 1),
       color: FALLBACK_COLORS[i], clients: 0, known: false,
     }));
 
@@ -1270,10 +1270,9 @@
         $('#addressForm').hidden = servedByConsole;
         $('#addressHint').classList.remove('error');
         call('info', []).then(info => {
-          conn.protocol = info.protocol || 1;
           conn.version = info.version || '';
           $('#version').textContent = 'Control4Free' + (conn.version ? ' ' + conn.version : '');
-          if (conn.protocol >= 2) sendClaim(true); else renderPads();
+          sendClaim(true);
         }).catch(() => {});
         resendAll();
       };
@@ -1433,7 +1432,7 @@
     let lastClaim = '';
     function sendClaim(force) {
       keepAwake.update();
-      if (conn.protocol < 2 || conn.state !== 'open') return;
+      if (conn.state !== 'open') return;
       const pads = claimedPads();
       const key = pads.join(',');
       if (!force && key === lastClaim) return;
@@ -1475,11 +1474,10 @@
       lastSent.fill('');
     }
 
-    // Leaving a pad: protocol 2 consoles release it when the claim changes (input would claim it again),
-    // protocol 1 consoles need a neutral state
+    // The console releases a controller when the claim changes; sending input
+    // here would only claim it again. Just forget what was last sent.
     function releasePad(pad) {
       if (pad < 0) return;
-      if (conn.protocol < 2) send({ method: 'u', params: [pad, 0, 128, 128, 128, 128, 0, 0, 0] });
       lastSent[pad] = '';
     }
 
@@ -2126,16 +2124,16 @@
         seen.add(gp.index);
         let src = gamepadSources.get(gp.index);
         if (!src) {
-          const saved = undefined;
-          // A new controller drives the pad opened on this page; elsewhere it waits until you pick a pad
-          const pad = saved !== undefined ? saved : (primaryPad >= 0 && ![...gamepadSources.values()].some(s => s.pad === primaryPad) ? primaryPad : -1);
+          // A new gamepad drives the controller opened on this page; elsewhere
+          // it waits until one is picked for it.
+          const pad = primaryPad >= 0 && ![...gamepadSources.values()].some(s => s.pad === primaryPad) ? primaryPad : -1;
           src = blankSource(pad);
           src.gp = gp;
           src.activeAt = 0;
           gamepadSources.set(gp.index, src);
           renderGamepads();
           sendClaim();
-          toast(pad >= 0 ? 'Controller ' + (gp.index + 1) + ' plays as Pad ' + (pad + 1) : 'Controller ' + (gp.index + 1) + ' connected. Pick its pad on the home screen.');
+          toast(pad >= 0 ? 'Gamepad ' + (gp.index + 1) + ' plays as Controller ' + (pad + 1) : 'Gamepad ' + (gp.index + 1) + ' connected. Pick its controller on the home screen.');
         }
         src.gp = gp;
         let buttons = 0;
@@ -2272,8 +2270,8 @@
         head.appendChild(el('span', 'activity'));
         tile.appendChild(head);
         const body = el('span');
-        body.appendChild(el('div', 'tile-name', s.known ? s.name : 'Pad ' + (i + 1)));
-        body.appendChild(el('div', 'tile-meta', padMeta(s) || (s.known ? '' : conn.protocol < 2 && conn.version ? 'Waiting for controller status' : '')));
+        body.appendChild(el('div', 'tile-name', s.known ? s.name : 'Controller ' + (i + 1)));
+        body.appendChild(el('div', 'tile-meta', padMeta(s) || ''));
         tile.appendChild(body);
         const states = el('span', 'tile-state');
         if (state === 'ready') states.appendChild(stateItem('live', 'Connected'));
@@ -2297,26 +2295,26 @@
       list.textContent = '';
       if (!gamepadsAvailable) {
         $('#gamepadHint').textContent = window.isSecureContext
-          ? 'This browser does not support controllers.'
-          : 'This browser only allows controllers on secure pages. Save this page to your device, open the saved file, and enter the console address.';
+          ? 'This browser does not support gamepads.'
+          : 'This browser only allows gamepads on secure pages. Save this page to your device, open the saved file, and enter the console address.';
         return;
       }
       $('#gamepadHint').textContent = gamepadSources.size
-        ? 'Pick the pad each controller plays as. A row lights up while you use its controller. Keep this window in front: browsers only read controllers on the active window.'
-        : 'Connect controllers to this device and press a button on each one. Each controller can play as a different pad.';
+        ? 'Pick the controller each gamepad plays as. A row lights up while you use it. Keep this window in front: browsers only read gamepads on the active window.'
+        : 'Connect gamepads to this device and press a button on each one. Each one can play as a different controller.';
       for (const [index, src] of gamepadSources) {
         const row = el('li', 'gp-row');
         row.dataset.index = index;
         row.insertAdjacentHTML('afterbegin', '<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M7 7h10a5 5 0 0 1 4.8 6.4l-1 3.4a2.6 2.6 0 0 1-4.4 1.2L14.4 16H9.6l-2 2a2.6 2.6 0 0 1-4.4-1.2l-1-3.4A5 5 0 0 1 7 7z"/></svg>');
         const text = el('div');
-        const name = (src.gp && src.gp.id || 'Controller').replace(/\s*\(.*?\)\s*/g, ' ').trim();
-        text.appendChild(el('div', 'gp-name', name || 'Controller'));
+        const name = (src.gp && src.gp.id || 'Gamepad').replace(/\s*\(.*?\)\s*/g, ' ').trim();
+        text.appendChild(el('div', 'gp-name', name || 'Gamepad'));
         const mapped = src.gp && src.gp.mapping === 'standard';
-        text.appendChild(el('div', 'gp-sub', 'Controller ' + (index + 1) + (mapped ? '' : ' · buttons may be mixed up')));
+        text.appendChild(el('div', 'gp-sub', 'Gamepad ' + (index + 1) + (mapped ? '' : ' · buttons may be mixed up')));
         row.appendChild(text);
         const seg = el('div', 'seg');
         seg.setAttribute('role', 'radiogroup');
-        seg.setAttribute('aria-label', 'Pad for controller ' + (index + 1));
+        seg.setAttribute('aria-label', 'Controller for gamepad ' + (index + 1));
         for (let pad = -1; pad < PADS; pad++) {
           const b = el('button', '', pad < 0 ? 'Off' : String(pad + 1));
           b.type = 'button';
@@ -2324,7 +2322,7 @@
           b.setAttribute('aria-checked', String(src.pad === pad));
           if (pad >= 0) {
             b.style.setProperty('--pc', css(status[pad].color));
-            b.title = 'Pad ' + (pad + 1) + ' · ' + status[pad].name;
+            b.title = 'Controller ' + (pad + 1) + ' · ' + status[pad].name;
           }
           b.addEventListener('click', () => setGamepadPad(index, pad));
           seg.appendChild(b);
@@ -2351,7 +2349,7 @@
       const s = status[primaryPad];
       document.documentElement.style.setProperty('--accent', css(s.color));
       const label = $('#padLabel');
-      label.textContent = 'Pad ' + (primaryPad + 1) + (s.known && s.name ? ' · ' + s.name : '');
+      label.textContent = 'Controller ' + (primaryPad + 1) + (s.known && s.name ? ' · ' + s.name : '');
       const state = padState(s);
       const extra = conn.state !== 'open' ? $('#connText').textContent
         : state === 'ready' ? 'Signed in on the PS4'
@@ -2396,7 +2394,7 @@
     function openPad(pad) {
       const s = status[pad];
       if (s.known && !s.enabled) {
-        toast('Pad ' + (pad + 1) + ' is turned off in Settings');
+        toast('Controller ' + (pad + 1) + ' is turned off in Settings');
         return;
       }
       const others = s.clients - (claimedPads().includes(pad) ? 1 : 0);
@@ -2419,7 +2417,7 @@
       $('#settingsView').hidden = true;
       padView.hidden = false;
       document.body.classList.add('in-pad');
-      document.title = 'Pad ' + (pad + 1) + ' · Control4Free';
+      document.title = 'Controller ' + (pad + 1) + ' · Control4Free';
       history.replaceState(null, '', updateQuery('pad', String(pad + 1)));
       shownButtons = -1;
       shownStick.L = shownStick.R = '';

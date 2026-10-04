@@ -7,17 +7,17 @@ the home screen, at sign-in and in games.
 
 **Status: browser control, native user sign-in, gameplay, the launcher,
 GoldHEN AutoRun and recovery after rest mode have been confirmed on the
-development console.** Version 0.2.2 reads the kernel log directly again for
-sign-in; it still needs its console check. Four virtual slots are exposed; the
-console's device limits apply.
+development console.** Four virtual slots are exposed; the console's device
+limits apply.
 
 ## Requirements
 
 - A PS4 running GoldHEN. Development console: firmware 10.01, GoldHEN 2.4b18.10.
   Starting Control4Free from GoldHEN itself (LaunchPad or AutoRun) needs 2.4b18.10
   or later; the launcher app and PC sending need PayLoader.
-- GoldHEN's klog server, which 2.4b18 always runs. Device creation relies on
-  kernel-log events to recover the virtual device's handle.
+- Nothing connected to GoldHEN's klog viewer while you add a controller.
+  Control4Free reads the kernel log itself to recover a new device's handle, and
+  the log has a single reader.
 - A phone or PC on the same network.
 - Turn off other GoldHEN controller plugins in games you play with Control4Free. A
   plugin that takes over a signed-in user's controller can stop games from reading
@@ -25,7 +25,7 @@ console's device limits apply.
 
 ## Install
 
-1. Copy `build/Control4Free-0.2.2.pkg` to a USB drive (or to `/data/pkg/` over
+1. Copy `build/Control4Free-<version>.pkg` to a USB drive (or to `/data/pkg/` over
    GoldHEN's FTP server) and install it with GoldHEN's Package Installer.
 2. Open **Control4Free** from the home screen and press **Cross** once. The app
    adds Control4Free to GoldHEN's AutoRun (GoldHEN 2.4b18.10 or later), so GoldHEN
@@ -63,7 +63,7 @@ When you update Control4Free this way, replace `/data/payloads/control4free.elf`
 controller page's menu, or restart the PS4. That old version has no launcher API,
 so the app will not start a second copy over it.
 
-**Rest mode (since 0.2.1):** the service closes stale connections and rebuilds its
+**Rest mode:** the service closes stale connections and rebuilds its
 listener after socket failures or a long pause. Queued input is discarded, and
 disconnected controllers report neutral input. Reopen the controller page and
 select your controller after waking; an unused controller is removed after the
@@ -79,9 +79,9 @@ client at a time and, after one leaves, can go minutes without serving the next.
 If a klog viewer is connected to GoldHEN when you add a controller, the page
 says so; close the viewer and try again.
 
-Diagnostics are saved at `/data/control4free/spike.log`, with elapsed timestamps
+Diagnostics are saved at `/data/control4free/control4free.log`, with elapsed timestamps
 such as `[c4f] [+00:01:23.456]`; the PS4's calendar setting is not used. Starting
-a new instance preserves the last run in `spike.log.previous`. A heartbeat every
+a new instance preserves the last run in `control4free.log.previous`. A heartbeat every
 minute and explicit network recovery messages help locate any remaining hang.
 
 ## Use
@@ -105,7 +105,7 @@ controllers one at a time. Touch and keyboard can also operate the selected slot
 
 The corner menu provides local layout/keyboard preferences, **Disconnect
 controller**, and **Stop Control4Free**. PS and Share send actual controller
-buttons. The PS4 assigns users; there are no pad or user settings on the page.
+buttons. The PS4 assigns users; there are no user settings on the page.
 
 Some browsers restrict Gamepad API access on an HTTP page. If the page reports
 that restriction, try opening a saved copy of `client/index.html` locally and
@@ -140,9 +140,8 @@ docker build -t control4free-build docker/
 docker run --rm -v "$PWD:/src" -w /src control4free-build make
 ```
 
-Output: `build/control4free.elf`, with the compressed page embedded. `C4F_STAGE=0`
-is the default browser build. Stages 1-8 remain available as diagnostics, with
-separate `control4free-stageN.elf` outputs.
+Output: `build/control4free.elf`, with the compressed page embedded. The version
+comes from the `VERSION` file at the top of the repository.
 
 To build the installable launcher after the payload image is available:
 
@@ -151,17 +150,24 @@ docker build -t control4free-launcher-build -f docker/Dockerfile.launcher docker
 docker run --rm -v "$PWD:/src" -w /src control4free-launcher-build bash -lc 'make && make -C launcher'
 ```
 
-Output: `build/Control4Free-0.2.2.pkg` (title ID `CFRE00001`). On Windows,
+The host test suites build the real sources with the PS4 calls stubbed, so they
+need no console:
+
+```sh
+docker run --rm --network none -v "$PWD:/src" -w /src control4free-launcher-build     python3 -B tests/run.py
+```
+
+Output: `build/Control4Free-<version>.pkg` (title ID `CFRE00001`). On Windows,
 `tools/build-launcher.ps1` runs both image builds and the package build. It does
 not send anything to a console. Packaging uses OpenOrbis and LibOrbisPkg. The
 launcher draws its screen and its icon in software, in the controller page's style.
 
 ## Current limits
 
-Rumble, lightbar feedback and motion input are not implemented. Rest-mode
-recovery and multiple native user sessions are unverified. User-assignment status
-comes from kernel-log events and may lag or miss an event; check the TV.
-Logs are written to `/data/control4free/spike.log` on the console.
+Rumble, lightbar feedback and motion input are not implemented. Multiple native
+user sessions are unverified. User-assignment status comes from kernel-log events
+and may lag or miss an event; check the TV.
+Logs are written to `/data/control4free/control4free.log` on the console.
 
 ## Credits and license
 

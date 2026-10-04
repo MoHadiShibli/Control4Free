@@ -13,9 +13,9 @@
 #include "c4f_log.h"
 #include "c4f_net.h"
 #include "c4f_vda.h"
+#include "c4f_version.h"
 #include "c4f_web.h"
 
-#define C4F_VERSION "0.2.2"
 #define C4F_INPUT_MASK 0x0011ffffu
 #define C4F_REPORT_MS 16
 #ifndef C4F_STALE_MS

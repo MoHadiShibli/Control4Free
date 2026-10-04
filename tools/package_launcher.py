@@ -16,6 +16,10 @@ FONTS = OUT / 'fonts.c'
 TITLE_ID = 'CFRE00001'  # 4 letters + 5 digits, the usual title ID format
 CONTENT_ID = f'IV0000-{TITLE_ID}_00-CONTROL4FREE0000'
 assert len(CONTENT_ID) == 36
+VERSION = (ROOT / 'VERSION').read_text().strip()
+# param.sfo wants MM.mm; the patch level is not part of an app version.
+major, minor = VERSION.split('.')[:2]
+SFO_VERSION = f'{int(major):02d}.{int(minor):02d}'
 
 
 def embed_fonts():
@@ -31,7 +35,8 @@ def build_art_tool():
     """Host build of the launcher's drawing code, for the icon and previews."""
     embed_fonts()
     flags = ['clang-18', '-std=gnu11', '-O2', '-D_DEFAULT_SOURCE', f'-I{ROOT}/launcher',
-             f'-I{ROOT}/vendor/stb', f'-I{ROOT}/vendor/qrcodegen']
+             f'-I{ROOT}/vendor/stb', f'-I{ROOT}/vendor/qrcodegen',
+             f'-DC4F_LAUNCHER_VERSION="{VERSION}"']
     stb = OUT / 'stb_truetype-host.o'
     subprocess.run([*flags, '-w', '-c', str(ROOT / 'launcher/stb_truetype.c'), '-o', str(stb)], check=True)
     subprocess.run([*flags, '-Wall', '-Wextra', '-Werror', str(ROOT / 'tools/launcher_art.c'),
@@ -93,11 +98,11 @@ def main():
     sfo = 'sce_sys/param.sfo'
     run(pkgtool, 'sfo_new', sfo)
     entries = {
-        'APP_TYPE': ('Integer', 4, '1'), 'APP_VER': ('Utf8', 8, '00.22'),
+        'APP_TYPE': ('Integer', 4, '1'), 'APP_VER': ('Utf8', 8, SFO_VERSION),
         'ATTRIBUTE': ('Integer', 4, '0'), 'CATEGORY': ('Utf8', 4, 'gd'),
         'CONTENT_ID': ('Utf8', 48, CONTENT_ID), 'DOWNLOAD_DATA_SIZE': ('Integer', 4, '0'),
         'SYSTEM_VER': ('Integer', 4, '0'), 'TITLE': ('Utf8', 128, 'Control4Free'),
-        'TITLE_ID': ('Utf8', 12, TITLE_ID), 'VERSION': ('Utf8', 8, '00.22'),
+        'TITLE_ID': ('Utf8', 12, TITLE_ID), 'VERSION': ('Utf8', 8, SFO_VERSION),
     }
     for key, (kind, size, value) in entries.items():
         run(pkgtool, 'sfo_setentry', sfo, key, '--type', kind, '--maxsize', size, '--value', value)
@@ -123,7 +128,7 @@ def main():
     shutil.copyfile(project, OUT / 'launcher.gp4')
     run(pkgtool, 'pkg_build', project, OUT)
     generated = OUT / (CONTENT_ID + '.pkg')
-    target = ROOT / 'build/Control4Free-0.2.2.pkg'
+    target = ROOT / f'build/Control4Free-{VERSION}.pkg'
     shutil.copyfile(generated, target)
     print(f'Built {target} ({target.stat().st_size:,} bytes)', flush=True)
 

@@ -2,12 +2,13 @@ ifndef OO_PS4_TOOLCHAIN
 $(error OO_PS4_TOOLCHAIN is undefined; use the launcher Docker image)
 endif
 SDK := $(OO_PS4_TOOLCHAIN)
+VERSION := $(shell cat ../VERSION)
 OUT := ../build/launcher
 PKGDIR := $(OUT)/pkg
 CC := clang-18
 CXX := clang++-18
 LD := ld.lld-18
-CFLAGS := --target=x86_64-pc-freebsd12-elf -fPIC -funwind-tables -O2 -Wall -Wextra -Werror -MMD -MP -D_DEFAULT_SOURCE -isysroot $(SDK) -isystem $(SDK)/include -I../vendor/jsmn -I../vendor/qrcodegen -I../vendor/stb
+CFLAGS := --target=x86_64-pc-freebsd12-elf -fPIC -funwind-tables -O2 -Wall -Wextra -Werror -MMD -MP -D_DEFAULT_SOURCE -isysroot $(SDK) -isystem $(SDK)/include -I../vendor/jsmn -I../vendor/qrcodegen -I../vendor/stb -DC4F_LAUNCHER_VERSION='"$(VERSION)"'
 OBJECTS := $(OUT)/main.o $(OUT)/screen.o $(OUT)/draw.o $(OUT)/service.o $(OUT)/autorun.o $(OUT)/sandbox.o $(OUT)/logo.o $(OUT)/qrcodegen.o $(OUT)/stb_truetype.o $(OUT)/fonts.o
 LIBS := -lc -lkernel -lSceVideoOut -lScePad -lSceUserService -lSceSystemService -lSceNetCtl
 FONTS := ../vendor/roboto/Roboto-Light.ttf ../vendor/roboto/Roboto-Regular.ttf

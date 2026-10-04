@@ -11,6 +11,7 @@
 
 #include "c4f_log.h"
 #include "c4f_sce.h"
+#include "c4f_version.h"
 
 static int g_logFd = -1;
 static int g_klogEnabled = 1;
@@ -36,7 +37,7 @@ void c4fLogOpen(void)
     else
         g_logFd = open(C4F_LOG_PATH, O_WRONLY | O_CREAT | O_TRUNC, 0666);
     g_startedMs = c4fLogNowMs();
-    c4fLog("---- Control4Free log (stage %d); timestamps are elapsed time ----\n", C4F_STAGE);
+    c4fLog("---- Control4Free %s; timestamps are elapsed time ----\n", C4F_VERSION);
 }
 
 void c4fLogClose(void)
