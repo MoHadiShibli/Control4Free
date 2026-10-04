@@ -11,9 +11,11 @@
 #include <errno.h>
 #include <fcntl.h>
 #include <netinet/in.h>
+#include <stdio.h>
 #include <string.h>
 #include <time.h>
 #include <sys/socket.h>
+#include <sys/select.h>
 #include <unistd.h>
 
 #include <ps4/kernel.h>
@@ -190,10 +192,8 @@ static int32_t c4fVdaUserId(int32_t userId)
  * while the device is being added. Ugly, but it is what works.
  */
 
-/* /dev/klog has a single reader, and on GoldHEN 2.4b18 its klog server already
- * holds it (open fails with EBUSY, confirmed 2026-10-04). That server has no off
- * switch, so the fallback is to be one of its clients: it rebroadcasts the same
- * kernel lines on port 3232. */
+/* Prefer GoldHEN's stream. Both connection and capture checks are bounded:
+ * a successful TCP connection alone does not mean this client gets any logs. */
 static int c4fKlogConnectLocal(void)
 {
     struct sockaddr_in addr;
@@ -205,37 +205,62 @@ static int c4fKlogConnectLocal(void)
     }
 
     (void)memset(&addr, 0, sizeof(addr));
+#ifdef __FreeBSD__
     addr.sin_len = sizeof(addr);
+#endif
     addr.sin_family = AF_INET;
     addr.sin_port = htons(C4F_KLOG_PORT);
     addr.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
 
+    if (s >= (int)FD_SETSIZE || fcntl(s, F_SETFL, O_NONBLOCK) < 0) goto fail;
     if (connect(s, (struct sockaddr *)&addr, sizeof(addr)) != 0) {
-        c4fLog("connect(127.0.0.1:%d) failed errno=%d\n", C4F_KLOG_PORT, errno);
-        close(s);
-        return -1;
+        if (errno != EINPROGRESS) goto fail;
+        uint64_t deadline = c4fVdaNowMs() + 700;
+        for (;;) {
+            if (g_waitCallback) g_waitCallback(g_waitContext);
+            fd_set wr; FD_ZERO(&wr); FD_SET(s, &wr);
+            struct timeval timeout = {0, 20000};
+            int ready = select(s + 1, NULL, &wr, NULL, &timeout);
+            if (ready > 0) {
+                int error = 0; socklen_t size = sizeof(error);
+                if (getsockopt(s, SOL_SOCKET, SO_ERROR, &error, &size)) goto fail;
+                if (error) { errno = error; goto fail; }
+                break;
+            }
+            if (ready < 0 && errno != EINTR) goto fail;
+            if (c4fVdaNowMs() >= deadline) { errno = ETIMEDOUT; goto fail; }
+        }
     }
-    if (fcntl(s, F_SETFL, fcntl(s, F_GETFL, 0) | O_NONBLOCK) != 0)
-        c4fLog("klog socket O_NONBLOCK failed errno=%d\n", errno);
     return s;
+fail:
+    c4fLog("klog socket unavailable errno=%d\n", errno);
+    close(s);
+    return -1;
 }
 
 int c4fKlogOpen(void)
 {
-    int fd = open("/dev/klog", O_RDONLY | O_NONBLOCK);
+    int fd = c4fKlogConnectLocal();
     if (fd >= 0) {
-        c4fLog("opened /dev/klog for DeviceId capture\n");
-        return fd;
+        c4fKlogDrain(fd);
+        if (c4fKlogSelfTest(fd) == 0) {
+            c4fLog("reading klog through 127.0.0.1:%d\n", C4F_KLOG_PORT);
+            return fd;
+        }
+        close(fd);
+        c4fLog("klog socket has no live stream; another log client may own it\n");
     }
-
-    c4fLog("open(/dev/klog) failed errno=%d (16: GoldHEN's klog server holds it); "
-           "trying 127.0.0.1:%d\n", errno, C4F_KLOG_PORT);
-    fd = c4fKlogConnectLocal();
-    if (fd >= 0)
-        c4fLog("reading klog through 127.0.0.1:%d\n", C4F_KLOG_PORT);
-    else
-        c4fLog("no klog source; DeviceId capture off\n");
-    return fd;
+    fd = open("/dev/klog", O_RDONLY | O_NONBLOCK);
+    if (fd >= 0) {
+        c4fKlogDrain(fd);
+        if (c4fKlogSelfTest(fd) == 0) {
+            c4fLog("temporarily reading /dev/klog for controller sign-in\n");
+            return fd;
+        }
+        close(fd);
+    }
+    c4fLog("no verified klog source; close other log viewers before adding a controller\n");
+    return -1;
 }
 
 /* Throws away whatever is already buffered so only new lines get scanned. A
@@ -260,6 +285,7 @@ void c4fKlogDrain(int fd)
             quietMs = 0;
             continue;
         }
+        if (n == 0 || (errno != EINTR && errno != EAGAIN && errno != EWOULDBLOCK)) break;
         usleep(20000);
         quietMs += 20;
         totalMs += 20;
@@ -271,13 +297,14 @@ void c4fKlogDrain(int fd)
  * fails, stage 3 cannot learn the virtual device's handle. */
 int c4fKlogSelfTest(int fd)
 {
-    static const char marker[] = "c4f-klog-selftest";
+    static unsigned sequence;
+    char marker[96];
     char buf[512];
     char window[sizeof(buf) + sizeof(marker)];
     size_t keep = 0;
     long bytes = 0;
     int found = 0;
-    int waited;
+    uint64_t started = c4fVdaNowMs();
     int savedKlog;
 
     if (fd < 0) {
@@ -287,21 +314,24 @@ int c4fKlogSelfTest(int fd)
 
     /* Straight to klog, not through c4fLog, so the mirror file only gets the
      * result line. */
+    snprintf(marker, sizeof(marker), "c4f-klog-selftest-%d-%llu-%u", getpid(),
+             (unsigned long long)started, ++sequence);
     klog_printf("[c4f] %s\n", marker);
 
     savedKlog = c4fLogKlogEnabled();
     c4fLogSetKlog(0);
-    for (waited = 0; waited < 2000 && !found; ) {
+    while (c4fVdaNowMs() - started < 2000 && !found) {
+        if (g_waitCallback) g_waitCallback(g_waitContext);
         ssize_t n = read(fd, window + keep, sizeof(buf));
         if (n <= 0) {
+            if (n == 0 || (errno != EINTR && errno != EAGAIN && errno != EWOULDBLOCK)) break;
             usleep(20000);
-            waited += 20;
             continue;
         }
         bytes += n;
         {
             size_t total = keep + (size_t)n;
-            size_t tail = sizeof(marker) - 1;
+            size_t tail = strlen(marker) - 1;
 
             window[total] = '\0';
             if (strstr(window, marker)) found = 1;
@@ -318,7 +348,7 @@ int c4fKlogSelfTest(int fd)
 
     c4fLog("klog self-test: %s (%ld bytes read in %d ms)\n",
            found ? "PASS, our own line came back" : "FAIL, marker never seen",
-           bytes, waited);
+           bytes, (int)(c4fVdaNowMs() - started));
     return found ? 0 : -1;
 }
 

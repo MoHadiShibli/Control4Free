@@ -270,11 +270,21 @@ int c4fNetOpen(C4fNet *net, int port, C4fNetHandler handler, void *context)
     return 0;
 }
 
-void c4fNetPoll(C4fNet *net, int timeoutMs)
+int c4fNetPoll(C4fNet *net, int timeoutMs)
 {
     fd_set rd, wr;
     struct timeval timeout = { .tv_sec = 0, .tv_usec = timeoutMs * 1000 };
     int maxFd = net->fd, ready;
+    uint64_t now = c4fTimeMs();
+    if (now >= net->checkedMs) {
+        int error = 0, listening = 0; socklen_t size = sizeof(error);
+        if (getsockopt(net->fd, SOL_SOCKET, SO_ERROR, &error, &size)) return -1;
+        if (error) { errno = error; return -1; }
+        size = sizeof(listening);
+        if (getsockopt(net->fd, SOL_SOCKET, SO_ACCEPTCONN, &listening, &size)) return -1;
+        if (!listening) { errno = ENOTCONN; return -1; }
+        net->checkedMs = now + 1000;
+    }
     FD_ZERO(&rd); FD_ZERO(&wr); FD_SET(net->fd, &rd);
     for (int i = 0; i < C4F_NET_CLIENTS; i++) {
         C4fNetClient *c = &net->clients[i];
@@ -284,12 +294,19 @@ void c4fNetPoll(C4fNet *net, int timeoutMs)
         if (c->txSent < c->txUsed || c->body) FD_SET(c->fd, &wr);
         if (c->fd > maxFd) maxFd = c->fd;
     }
+    uint64_t waitedFrom = c4fTimeMs();
+    time_t wallFrom = time(NULL);
     ready = select(maxFd+1, &rd, &wr, NULL, &timeout);
-    if (ready < 0) return;
+    uint64_t waitedTo = c4fTimeMs();
+    if (waitedTo < waitedFrom || waitedTo - waitedFrom > 5000 || time(NULL) - wallFrom > 5)
+        return -2;
+    if (ready < 0) return errno == EINTR ? 0 : -1;
     if (FD_ISSET(net->fd, &rd)) {
         struct sockaddr_in peer;
         socklen_t peerSize = sizeof(peer);
         int fd = accept(net->fd, (struct sockaddr *)&peer, &peerSize), index;
+        if (fd < 0 && errno != EAGAIN && errno != EWOULDBLOCK && errno != EINTR)
+            return -1;
         for (index = 0; index < C4F_NET_CLIENTS && net->clients[index].fd >= 0; index++) {}
         if (fd >= 0) {
             if (index == C4F_NET_CLIENTS || fd >= (int)FD_SETSIZE || fcntl(fd, F_SETFL, O_NONBLOCK)) close(fd);
@@ -336,6 +353,7 @@ void c4fNetPoll(C4fNet *net, int timeoutMs)
         if (!c->websocket && c4fTimeMs()-c->openedMs > 10000) c->closing = 1;
         if (c->closing == 1 || (c->closing == 2 && c->txSent == c->txUsed)) c4fDrop(net, c);
     }
+    return 0;
 }
 
 void c4fNetClose(C4fNet *net)

@@ -5,6 +5,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <time.h>
 #include <unistd.h>
 #define JSMN_STATIC
 #define JSMN_STRICT
@@ -14,7 +15,7 @@
 #include "c4f_vda.h"
 #include "c4f_web.h"
 
-#define C4F_VERSION "0.2.0"
+#define C4F_VERSION "0.2.1"
 #define C4F_INPUT_MASK 0x0011ffffu
 #define C4F_REPORT_MS 16
 #ifndef C4F_STALE_MS
@@ -41,7 +42,7 @@ typedef struct {
     int klogFd, stop, changed, creationBlocked;
     char klogLine[1024];
     size_t klogUsed;
-    uint64_t broadcastAt, stopAt;
+    uint64_t broadcastAt, stopAt, heartbeatAt;
 } C4fWeb;
 
 typedef struct {
@@ -218,23 +219,46 @@ static void c4fReadKlog(C4fWeb *app)
     }
 }
 
+static void c4fReleaseKlog(C4fWeb *app)
+{
+    if (app->klogFd < 0) return;
+    close(app->klogFd); app->klogFd = -1; app->klogUsed = 0;
+    c4fLog("released klog reader\n");
+}
+
+/* Assignment events are needed through native sign-in, not throughout play. */
+static void c4fReleaseIdleKlog(C4fWeb *app)
+{
+    for (int i = 0; i < C4F_MAX_PADS; i++)
+        if (app->pads[i].active && !app->pads[i].assigned) return;
+    c4fReleaseKlog(app);
+}
+
 static void c4fClaim(C4fWeb *app, C4fNetClient *c, C4fRequest *r)
 {
     unsigned wanted = 0, created = 0;
+    int needsDevice = 0, needsAssignment = 0;
     for (unsigned i = 0; i < r->argc; i++) {
         if (r->args[i] < 0 || r->args[i] >= C4F_MAX_PADS) { c4fError(c, r, 400, "Invalid controller"); return; }
         wanted |= 1u << r->args[i];
     }
-    /* GoldHEN's AutoRun can start us before its klog server listens, and the
-     * connection can drop later. Reconnect when a new device needs it. */
-    if (app->klogFd < 0 && !app->creationBlocked)
-        for (int i = 0; i < C4F_MAX_PADS; i++)
-            if ((wanted & (1u << i)) && !app->pads[i].active) { app->klogFd = c4fKlogOpen(); break; }
     /* Validate all claims before changing any ownership. */
     for (int i = 0; i < C4F_MAX_PADS; i++) if (wanted & (1u << i)) {
         C4fWebPad *p = &app->pads[i];
         if (p->owner && p->owner != c) { c4fError(c, r, 409, "Controller is in use on another device"); return; }
-        if (!p->active && (app->klogFd < 0 || app->creationBlocked)) { c4fError(c, r, 503, "Controller creation unavailable; restart payload and check klog"); return; }
+        if (!p->active && app->creationBlocked) { c4fError(c, r, 503, "Controller creation unavailable; restart Control4Free"); return; }
+        if (!p->active) needsDevice = 1;
+        if (p->active && !p->assigned) needsAssignment = 1;
+    }
+    /* Recheck the stream before every creation. An accepted but unserved klog
+     * socket must never lead to AddDevice and an orphan with no known handle. */
+    if (needsDevice || (needsAssignment && app->klogFd < 0)) {
+        if (app->klogFd >= 0) {
+            c4fReadKlog(app);
+            if (app->klogFd >= 0 && c4fKlogSelfTest(app->klogFd)) c4fReleaseKlog(app);
+        }
+        if (app->klogFd < 0) app->klogFd = c4fKlogOpen();
+        if (app->klogFd < 0 && needsDevice) { c4fError(c, r, 503, "Cannot read controller sign-in events. Close other klog viewers and try again."); return; }
     }
     for (int i = 0; i < C4F_MAX_PADS; i++) if ((wanted & (1u << i)) && !app->pads[i].active) {
         C4fWebPad *p = &app->pads[i];
@@ -339,9 +363,30 @@ int c4fWebRun(int klogFd)
     c4fVdaSetWaitCallback(c4fReportPads, app);
     c4fLog("Control4Free %s: browser controller on port %d\n", C4F_VERSION, C4F_WEB_PORT);
     c4fNotify("Control4Free: open PS4 IP:%d in your browser", C4F_WEB_PORT);
+    uint64_t previous = c4fTimeMs(), retryAt = 0;
+    time_t previousWall = time(NULL);
     while (!app->stop) {
         uint64_t now = c4fTimeMs();
+        time_t wall = time(NULL);
         if (app->stopAt && now >= app->stopAt) break;
+        /* Some clocks exclude suspension. Wall time is only a second signal
+         * for a gap, never an input deadline or a trusted calendar timestamp. */
+        if (now < previous || now - previous > 5000 || wall - previousWall > 5) {
+            c4fLog("service resumed after a gap (monotonic=%lldms wall=%llds); resetting connections\n",
+                   (long long)now - (long long)previous, (long long)wall - (long long)previousWall);
+            c4fNetClose(&app->net); /* close events neutralize and discard queued input */
+            c4fReleaseKlog(app);
+            for (int i = 0; i < C4F_MAX_PADS; i++) if (app->pads[i].active)
+                app->pads[i].nextReport = now;
+            app->broadcastAt = app->heartbeatAt = now;
+            retryAt = now;
+        }
+        if (app->net.fd < 0 && now >= retryAt) {
+            if (c4fNetOpen(&app->net, C4F_WEB_PORT, c4fWebEvent, app)) {
+                c4fLog("listener reopen failed errno=%d; retrying in 1s\n", errno);
+                retryAt = now + 1000;
+            } else c4fLog("listener recovered on port %d\n", C4F_WEB_PORT);
+        }
         c4fReadKlog(app); c4fReportPads(app);
         for (int i = 0; i < C4F_MAX_PADS; i++) {
             C4fWebPad *p = &app->pads[i];
@@ -351,6 +396,13 @@ int c4fWebRun(int klogFd)
                 if (owner) c4fError(owner, NULL, 408, "Controller disconnected after inactivity; select it again");
             }
         }
+        c4fReleaseIdleKlog(app);
+        if (now >= app->heartbeatAt) {
+            int active = 0;
+            for (int i = 0; i < C4F_MAX_PADS; i++) active += app->pads[i].active;
+            c4fLog("heartbeat: listener=%d controllers=%d klog=%d\n", app->net.fd >= 0, active, app->klogFd >= 0);
+            app->heartbeatAt = now + 60000;
+        }
         if (app->changed || now >= app->broadcastAt) {
             for (int i = 0; i < C4F_NET_CLIENTS; i++) {
                 C4fNetClient *c = &app->net.clients[i];
@@ -358,7 +410,22 @@ int c4fWebRun(int klogFd)
             }
             app->changed = 0; app->broadcastAt = now+1000;
         }
-        c4fNetPoll(&app->net, 8);
+        if (app->net.fd < 0) usleep(8000);
+        else {
+            int result = c4fNetPoll(&app->net, 8);
+            if (result) {
+                if (result == -2) c4fLog("service resumed after a gap in select; resetting connections\n");
+                else c4fLog("network failed errno=%d; resetting connections\n", errno);
+                c4fNetClose(&app->net);
+                c4fReleaseKlog(app);
+                for (int i = 0; i < C4F_MAX_PADS; i++) if (app->pads[i].active)
+                    app->pads[i].nextReport = c4fTimeMs();
+                retryAt = c4fTimeMs() + (result == -2 ? 0 : 1000);
+            }
+        }
+        /* NetPoll detects suspension inside select; exclude deliberate device
+         * creation waits from the gap between iterations. */
+        previous = c4fTimeMs(); previousWall = time(NULL);
     }
     c4fVdaSetWaitCallback(NULL, NULL);
     for (int i = 0; i < C4F_MAX_PADS; i++) c4fRemove(app, &app->pads[i]);

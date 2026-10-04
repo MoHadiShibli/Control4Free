@@ -220,7 +220,7 @@ int c4fLauncherStart(const unsigned char *payload, size_t payloadSize, char *mes
     int probe = c4fLauncherProbe(&status);
     if (probe == 1) { snprintf(message, size, "Already running. Open the address on your phone or PC."); return 0; }
     if (probe != 0 && !c4fReached) { snprintf(message, size, "The app cannot check whether Control4Free is running (%s).", c4fProblem); return -1; }
-    if (probe != 0) { snprintf(message, size, "Another copy may be running (%s). Stop it on its controller page, or restart the PS4.", c4fProblem); return -1; }
+    if (probe != 0) { snprintf(message, size, "Control4Free is not responding (%s). Wait a moment after waking. If it stays stuck, restart the PS4.", c4fProblem); return -1; }
     if (!payload) { snprintf(message, size, "The payload is missing. Reinstall the Control4Free package."); return -1; }
     if (payloadSize < 64 || memcmp(payload, "\177ELF", 4) || payload[4] != 2 || payload[5] != 1) {
         snprintf(message, size, "The bundled payload is damaged. Reinstall the Control4Free package."); return -1;

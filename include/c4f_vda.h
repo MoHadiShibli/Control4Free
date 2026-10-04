@@ -99,7 +99,8 @@ void c4fProbeButtonMap(const C4fVirtualPad *pad, int32_t readHandle);
  * already held by that server. */
 #define C4F_KLOG_PORT 3232
 
-/* /dev/klog if free, else a socket to the local klog server. -1 if neither. */
+/* Verified GoldHEN socket first, /dev/klog fallback; -1 if neither delivers
+ * a fresh marker. The caller must release it when sign-in capture finishes. */
 int  c4fKlogOpen(void);
 void c4fKlogDrain(int fd);
 /* Writes a marker to klog and reads it back. 0 = the capture path works. */

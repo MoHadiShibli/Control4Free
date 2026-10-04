@@ -33,6 +33,9 @@
 
 #include <stdint.h>
 #include <unistd.h>
+#include <fcntl.h>
+#include <sys/file.h>
+#include <sys/stat.h>
 
 #include <ps4/kernel.h>
 
@@ -132,6 +135,7 @@ static pid_t    g_pid;
 static uint64_t g_savedAuthid;
 static uint8_t  g_savedCaps[16];
 static int      g_credsSaved;
+static int      g_instanceFd = -1;
 
 static int c4fRaiseCredentials(pid_t pid)
 {
@@ -179,6 +183,7 @@ static int c4fFinish(int klogFd, int status)
     c4fRestoreCredentials();
     c4fLog("exiting with status %d\n", status);
     c4fLogClose();
+    if (g_instanceFd >= 0) close(g_instanceFd);
     return status;
 }
 
@@ -193,6 +198,16 @@ int main(void)
     C4fVirtualPad pad;
 #endif
 
+    /* Keep ownership while reopening the listener after wake. A second load
+     * must not change the shared host's credentials or truncate the first log.
+     * flock belongs to this open descriptor, even inside the same process. */
+    (void)mkdir(C4F_LOG_DIR, 0777);
+    g_instanceFd = open(C4F_LOG_DIR "/instance.lock", O_WRONLY | O_CREAT, 0666);
+    if (g_instanceFd < 0 || flock(g_instanceFd, LOCK_EX | LOCK_NB)) {
+        if (g_instanceFd >= 0) close(g_instanceFd);
+        c4fNotify("Control4Free: another instance owns the service, or its lock is unavailable");
+        return 1;
+    }
     c4fLogOpen();
 #if C4F_STAGE != 0
     c4fNotify("Control4Free: stage %d", C4F_STAGE);
@@ -205,11 +220,13 @@ int main(void)
     if (c4fRaiseCredentials(pid) != 0) return c4fFinish(klogFd, 1);
     c4fLogCredentials("after raise", pid);
 
-    /* Opened before anything creates a device, so the add shows up in the scan. */
+    /* The browser service acquires klog only when a controller needs it. */
+#if C4F_STAGE != 0
     klogFd = c4fKlogOpen();
     c4fKlogDrain(klogFd);
     /* Stage 3 depends on reading kernel lines back, so prove that works first. */
     c4fKlogSelfTest(klogFd);
+#endif
 
     ret = sceUserServiceInitialize(NULL);
     c4fLog("sceUserServiceInitialize = 0x%08x\n", (uint32_t)ret);

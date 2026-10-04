@@ -93,11 +93,11 @@ def main():
     sfo = 'sce_sys/param.sfo'
     run(pkgtool, 'sfo_new', sfo)
     entries = {
-        'APP_TYPE': ('Integer', 4, '1'), 'APP_VER': ('Utf8', 8, '00.20'),
+        'APP_TYPE': ('Integer', 4, '1'), 'APP_VER': ('Utf8', 8, '00.21'),
         'ATTRIBUTE': ('Integer', 4, '0'), 'CATEGORY': ('Utf8', 4, 'gd'),
         'CONTENT_ID': ('Utf8', 48, CONTENT_ID), 'DOWNLOAD_DATA_SIZE': ('Integer', 4, '0'),
         'SYSTEM_VER': ('Integer', 4, '0'), 'TITLE': ('Utf8', 128, 'Control4Free'),
-        'TITLE_ID': ('Utf8', 12, TITLE_ID), 'VERSION': ('Utf8', 8, '00.20'),
+        'TITLE_ID': ('Utf8', 12, TITLE_ID), 'VERSION': ('Utf8', 8, '00.21'),
     }
     for key, (kind, size, value) in entries.items():
         run(pkgtool, 'sfo_setentry', sfo, key, '--type', kind, '--maxsize', size, '--value', value)
@@ -123,7 +123,7 @@ def main():
     shutil.copyfile(project, OUT / 'launcher.gp4')
     run(pkgtool, 'pkg_build', project, OUT)
     generated = OUT / (CONTENT_ID + '.pkg')
-    target = ROOT / 'build/Control4Free-0.2.0.pkg'
+    target = ROOT / 'build/Control4Free-0.2.1.pkg'
     shutil.copyfile(generated, target)
     print(f'Built {target} ({target.stat().st_size:,} bytes)', flush=True)
 
