@@ -1,0 +1,14 @@
+{
+  "name": "Control4Free",
+  "short_name": "Control4Free",
+  "description": "Use this phone or PC as a PS4 controller.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#020b1f",
+  "theme_color": "#04143a",
+  "icons": [
+    { "src": "/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" }
+  ]
+}

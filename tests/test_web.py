@@ -18,10 +18,12 @@ BINARY = ROOT / 'build/web-host-test'
 
 def build():
     subprocess.run(['python3', 'tools/embed_client.py', 'client/index.html', 'build/client.c'], check=True)
+    subprocess.run(['python3', 'tools/embed_file.py', 'build/assets.c',
+                    'c4fManifest=client/manifest.webmanifest', 'c4fIcon=client/icon-192.png'], check=True)
     subprocess.run(['clang-18', '-std=gnu11', '-Wall', '-Wextra', '-Werror', '-g',
                     '-Iinclude', '-Ivendor/jsmn', '-DC4F_STALE_MS=400', '-DC4F_RELEASE_MS=1800',
                     'src/net.c', 'src/web.c', 'src/klog_line.c', 'tests/web_stub.c', 'build/client.c',
-                    '-pthread', '-o', str(BINARY)], check=True)
+                    'build/assets.c', '-pthread', '-o', str(BINARY)], check=True)
 
 
 class Client:
@@ -138,6 +140,20 @@ def main():
         assert b'403' in http(b'GET /ws HTTP/1.1\r\nHost: 127.0.0.1:4264\r\nOrigin: https://evil.example\r\nUpgrade: websocket\r\n\r\n')
         assert b'404' in http(b'GET /../README.md HTTP/1.1\r\nHost: 127.0.0.1:4264\r\n\r\n')
         print('PASS embedded page, RFC handshake, origin/host/path checks, no automatic creation', flush=True)
+
+        # Keeping the page on a phone's home screen needs these two files.
+        headers, body = http(b'GET /manifest.webmanifest HTTP/1.1\r\nHost: 127.0.0.1:4264\r\n\r\n').split(b'\r\n\r\n', 1)
+        assert b'200 OK' in headers and b'Content-Type: application/manifest+json' in headers
+        manifest = json.loads(body)
+        assert manifest['start_url'] == '/' and manifest['icons'][0]['src'] == '/icon-192.png'
+        assert body == Path('client/manifest.webmanifest').read_bytes()
+        headers, body = http(b'GET /icon-192.png HTTP/1.1\r\nHost: 127.0.0.1:4264\r\n\r\n').split(b'\r\n\r\n', 1)
+        assert b'200 OK' in headers and b'Content-Type: image/png' in headers
+        assert body == Path('client/icon-192.png').read_bytes() and body[:8] == b'\x89PNG\r\n\x1a\n'
+        page = Path('client/index.html').read_text()
+        assert 'href="/manifest.webmanifest"' in page and 'href="/icon-192.png"' in page
+        assert b'403' in http(b'GET /icon-192.png HTTP/1.1\r\nHost: evil.example:4264\r\n\r\n')
+        print('PASS manifest and icon served for a home-screen shortcut', flush=True)
 
         c = server.c
         assert c.request('info')['result']['pads'] == 4

@@ -355,7 +355,7 @@ static void c4fAdvanceAdd(C4fWeb *app, uint64_t now, long klogBytes)
     if (!app->add.state) return;
 
     if (app->klogFd < 0) {
-        c4fAddFail(app, 503, "Lost the PS4's kernel log while connecting the controller; try again",
+        c4fAddFail(app, 503, "The PS4's kernel log went away while the controller was being connected. Try again.",
                    app->add.state == C4F_ADD_DEVICE);
         return;
     }
@@ -381,7 +381,7 @@ static void c4fAdvanceAdd(C4fWeb *app, uint64_t now, long klogBytes)
         /* The reader was opened but delivers nothing. Nothing was created yet, so
          * drop it and let the next attempt open a fresh one. */
         c4fReleaseKlog(app);
-        c4fAddFail(app, 503, "Cannot read the PS4's kernel log, which sign-in needs. If a klog viewer is connected to GoldHEN, close it and try again.", 0);
+        c4fAddFail(app, 503, "Signing a controller in needs the PS4's kernel log, and something else has it. Close any klog viewer connected to GoldHEN, then try again.", 0);
         return;
 
     case C4F_ADD_DEVICE:
@@ -421,7 +421,7 @@ static void c4fAdvanceAdd(C4fWeb *app, uint64_t now, long klogBytes)
          * we cannot address. Stop creating until the payload is restarted rather
          * than collect more of them. */
         c4fLog("no virtual device line for controller %d within the wait\n", app->add.slot + 1);
-        c4fAddFail(app, 503, "Could not create controller; restart Control4Free before retrying", 1);
+        c4fAddFail(app, 503, "The PS4 did not report the new controller. Restart Control4Free from its app on the PS4 before trying again.", 1);
         return;
 
     default:
@@ -434,14 +434,14 @@ static void c4fClaim(C4fWeb *app, C4fNetClient *c, C4fRequest *r)
     unsigned wanted = 0, needed = 0;
     int needsAssignment = 0;
     for (unsigned i = 0; i < r->argc; i++) {
-        if (r->args[i] < 0 || r->args[i] >= C4F_MAX_PADS) { c4fError(c, r, 400, "Invalid controller"); return; }
+        if (r->args[i] < 0 || r->args[i] >= C4F_MAX_PADS) { c4fError(c, r, 400, "There is no controller with that number"); return; }
         wanted |= 1u << r->args[i];
     }
     /* Validate all claims before changing any ownership. */
     for (int i = 0; i < C4F_MAX_PADS; i++) if (wanted & (1u << i)) {
         C4fWebPad *p = &app->pads[i];
         if (p->owner && p->owner != c) { c4fError(c, r, 409, "Controller is in use on another device"); return; }
-        if (!p->active && app->creationBlocked) { c4fError(c, r, 503, "Controller creation unavailable; restart Control4Free"); return; }
+        if (!p->active && app->creationBlocked) { c4fError(c, r, 503, "Control4Free cannot add controllers until it is restarted. Restart it from the Control4Free app on the PS4."); return; }
         if (!p->active) needed |= 1u << i;
         if (p->active && !p->assigned) needsAssignment = 1;
     }
@@ -450,7 +450,7 @@ static void c4fClaim(C4fWeb *app, C4fNetClient *c, C4fRequest *r)
     }
     if ((needed || needsAssignment) && app->klogFd < 0) {
         app->klogFd = c4fKlogOpenDevice();
-        if (app->klogFd < 0 && needed) { c4fError(c, r, 503, "Cannot read the PS4's kernel log, which sign-in needs. If a klog viewer is connected to GoldHEN, close it and try again."); return; }
+        if (app->klogFd < 0 && needed) { c4fError(c, r, 503, "Signing a controller in needs the PS4's kernel log, and something else has it. Close any klog viewer connected to GoldHEN, then try again."); return; }
     }
     if (!needed) { c4fApplyClaim(app, c, wanted, r); return; }
 
@@ -470,19 +470,19 @@ static void c4fClaim(C4fWeb *app, C4fNetClient *c, C4fRequest *r)
 
 static void c4fUpdate(C4fWeb *app, C4fNetClient *c, C4fRequest *r)
 {
-    if (r->argc < 9 || r->args[0] < 0 || r->args[0] >= C4F_MAX_PADS) { c4fError(c, r, 400, "Invalid input"); return; }
+    if (r->argc < 9 || r->args[0] < 0 || r->args[0] >= C4F_MAX_PADS) { c4fError(c, r, 400, "That input was not in a form Control4Free understands"); return; }
     C4fWebPad *p = &app->pads[r->args[0]];
     if (p->owner != c || !p->active) return; /* input never implicitly claims a pad */
-    if (r->args[1] < 0 || r->args[1] > C4F_INPUT_MASK || (r->args[1] & ~C4F_INPUT_MASK)) { c4fError(c, r, 400, "Invalid buttons"); return; }
-    for (unsigned i = 2; i < 8; i++) if (r->args[i] < 0 || r->args[i] > 255) { c4fError(c, r, 400, "Invalid axis"); return; }
-    if (r->args[8] < 0 || r->args[8] > 2 || r->argc != 9+3*r->args[8]) { c4fError(c, r, 400, "Invalid touch data"); return; }
+    if (r->args[1] < 0 || r->args[1] > C4F_INPUT_MASK || (r->args[1] & ~C4F_INPUT_MASK)) { c4fError(c, r, 400, "Those are not buttons a DualShock 4 has"); return; }
+    for (unsigned i = 2; i < 8; i++) if (r->args[i] < 0 || r->args[i] > 255) { c4fError(c, r, 400, "A stick or trigger was outside its range"); return; }
+    if (r->args[8] < 0 || r->args[8] > 2 || r->argc != 9+3*r->args[8]) { c4fError(c, r, 400, "That touch was not in a form Control4Free understands"); return; }
     ScePadData data;
     c4fPadDataNeutral(&data); data.buttons = (uint32_t)r->args[1];
     data.lx = r->args[2]; data.ly = r->args[3]; data.rx = r->args[4]; data.ry = r->args[5]; data.l2 = r->args[6]; data.r2 = r->args[7];
     data.touchData.fingers = r->args[8];
     for (unsigned i = 0; i < data.touchData.fingers; i++) {
         int64_t *t = &r->args[9+3*i];
-        if (t[0] < 0 || t[0] > 127 || t[1] < 0 || t[1] > 1919 || t[2] < 0 || t[2] > 941) { c4fError(c, r, 400, "Invalid touch position"); return; }
+        if (t[0] < 0 || t[0] > 127 || t[1] < 0 || t[1] > 1919 || t[2] < 0 || t[2] > 941) { c4fError(c, r, 400, "A touch landed outside the touchpad"); return; }
         data.touchData.touch[i].finger = t[0]; data.touchData.touch[i].x = t[1]; data.touchData.touch[i].y = t[2];
     }
     if (p->stale) { p->stale = 0; app->changed = 1; }
@@ -504,7 +504,7 @@ static void c4fWebEvent(C4fNetClient *c, int event, const char *text, size_t len
         c4fNetHttpJson(c, reply); return;
     }
     if (event == C4F_NET_HTTP_STOP) {
-        if (app->add.state) c4fAddFail(app, 503, "Control4Free is stopping", 0);
+        if (app->add.state) c4fAddFail(app, 503, "Control4Free is shutting down", 0);
         for (int i = 0; i < C4F_MAX_PADS; i++) c4fRemove(app, &app->pads[i]);
         c4fNetHttpJson(c, "{\"application\":\"Control4Free\",\"stopping\":true}");
         if (!app->stopAt) app->stopAt = c4fTimeMs() + 250;
@@ -522,7 +522,7 @@ static void c4fWebEvent(C4fNetClient *c, int event, const char *text, size_t len
     }
     C4fRequest r;
     if (c4fParseRequest(text, len, &r)) { c4fError(c, NULL, 400, "Invalid request"); return; }
-    if (app->stopAt) { c4fError(c, &r, 503, "Control4Free is stopping"); return; }
+    if (app->stopAt) { c4fError(c, &r, 503, "Control4Free is shutting down"); return; }
     if (!strcmp(r.method, "info")) {
         char reply[160];
         if (r.hasId) { snprintf(reply, sizeof(reply), "{\"id\":%lld,\"result\":{\"version\":\"%s\",\"protocol\":2,\"pads\":%d}}", (long long)r.id, C4F_VERSION, C4F_MAX_PADS); c4fNetText(c, reply); }
@@ -533,14 +533,14 @@ static void c4fWebEvent(C4fNetClient *c, int event, const char *text, size_t len
     else if (!strcmp(r.method, "claim")) c4fClaim(app, c, &r);
     else if (!strcmp(r.method, "u")) c4fUpdate(app, c, &r);
     else if (!strcmp(r.method, "leave")) {
-        if (r.argc != 1 || r.args[0] < 0 || r.args[0] >= C4F_MAX_PADS || app->pads[r.args[0]].owner != c) { c4fError(c, &r, 409, "You do not control this controller"); return; }
+        if (r.argc != 1 || r.args[0] < 0 || r.args[0] >= C4F_MAX_PADS || app->pads[r.args[0]].owner != c) { c4fError(c, &r, 409, "That controller is not yours to disconnect"); return; }
         c4fRemove(app, &app->pads[r.args[0]]); c4fStatus(app, c, &r);
     } else if (!strcmp(r.method, "stop")) {
         int occupied = 0;
         for (int i = 0; i < C4F_MAX_PADS; i++) if (app->pads[i].owner && app->pads[i].owner != c) occupied = 1;
-        if (occupied) { c4fError(c, &r, 409, "Another device is using a controller"); return; }
+        if (occupied) { c4fError(c, &r, 409, "Someone else is still using a controller. Ask them to disconnect, or stop Control4Free from its app on the PS4."); return; }
         app->stop = 1;
-    } else c4fError(c, &r, 404, "Unknown method");
+    } else c4fError(c, &r, 404, "Control4Free on the PS4 is older than this page. Update the PS4 side.");
 }
 
 int c4fWebRun(int klogFd)
@@ -555,7 +555,17 @@ int c4fWebRun(int klogFd)
         free(app); return -1;
     }
     c4fLog("Control4Free %s: browser controller on port %d\n", C4F_VERSION, C4F_WEB_PORT);
-    c4fNotify("Control4Free: open PS4 IP:%d in your browser", C4F_WEB_PORT);
+    {
+        /* The address to type in, so nobody has to go and look it up. */
+        char address[64];
+        c4fNetLocalAddress(address, sizeof(address));
+        if (address[0]) {
+            c4fLog("reachable at http://%s:%d\n", address, C4F_WEB_PORT);
+            c4fNotify("Control4Free: open http://%s:%d on your phone or PC", address, C4F_WEB_PORT);
+        } else {
+            c4fNotify("Control4Free: open your PS4's IP address with :%d in a browser", C4F_WEB_PORT);
+        }
+    }
     uint64_t previous = c4fTimeMs(), retryAt = 0;
     time_t previousWall = time(NULL);
     while (!app->stop) {
@@ -569,7 +579,7 @@ int c4fWebRun(int klogFd)
                    (long long)now - (long long)previous, (long long)wall - (long long)previousWall);
             c4fNetClose(&app->net); /* close events neutralize and discard queued input */
             c4fReleaseKlog(app);
-            if (app->add.state) c4fAddFail(app, 503, "Control4Free paused while connecting the controller; try again",
+            if (app->add.state) c4fAddFail(app, 503, "The PS4 paused while the controller was being connected. Try again.",
                                            app->add.state == C4F_ADD_DEVICE);
             for (int i = 0; i < C4F_MAX_PADS; i++) if (app->pads[i].active)
                 app->pads[i].nextReport = now;
@@ -591,7 +601,7 @@ int c4fWebRun(int klogFd)
             if (p->active && ((!p->owner && now-p->detachedAt > C4F_RELEASE_MS) || (p->owner && now-p->lastInput > C4F_RELEASE_MS))) {
                 C4fNetClient *owner = p->owner;
                 c4fRemove(app, p);
-                if (owner) c4fError(owner, NULL, 408, "Controller disconnected after inactivity; select it again");
+                if (owner) c4fError(owner, NULL, 408, "That controller was disconnected after sitting unused. Select it again to play.");
             }
         }
         if (!app->add.state) c4fReleaseIdleKlog(app);
@@ -627,7 +637,7 @@ int c4fWebRun(int klogFd)
                 else c4fLog("network failed errno=%d; resetting connections\n", errno);
                 c4fNetClose(&app->net);
                 c4fReleaseKlog(app);
-                if (app->add.state) c4fAddFail(app, 503, "Control4Free lost the connection while connecting the controller; try again",
+                if (app->add.state) c4fAddFail(app, 503, "The connection dropped while the controller was being connected. Try again.",
                                                app->add.state == C4F_ADD_DEVICE);
                 for (int i = 0; i < C4F_MAX_PADS; i++) if (app->pads[i].active)
                     app->pads[i].nextReport = c4fTimeMs();

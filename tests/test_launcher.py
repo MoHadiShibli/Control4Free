@@ -169,6 +169,12 @@ def main():
         assert png.stat().st_size > 50000, png
     package.render(['icon', '512'], ROOT / 'build/launcher-icon.png', 512, 512)
     assert subprocess.run([str(package.ART), 'screen', 'nonsense', '/dev/null']).returncode != 0
+    # The icon the payload serves is committed, so the payload build needs no
+    # renderer. Catch it drifting away from the app's own icon.
+    fresh = ROOT / 'build/icon-192.png'
+    package.render(['icon', '192'], fresh, 192, 192)
+    shipped = ROOT / 'client/icon-192.png'
+    assert fresh.read_bytes() == shipped.read_bytes(),         f'{shipped} is out of date: run tools/make_icons.py'
     print('PASS native screen states and icon rendered from the shipped drawing code', flush=True)
 
 

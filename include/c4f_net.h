@@ -39,4 +39,13 @@ void c4fWebSocketAccept(const char *key, char out[29]);
 
 extern const unsigned char c4fPage[];
 extern const size_t c4fPageSize;
+/* The console's own address on the network it reaches the internet through, as
+ * "192.168.1.20", or an empty string if it cannot be worked out. Nothing is sent. */
+void c4fNetLocalAddress(char *out, size_t size);
+
+/* Served so the page can be kept on a phone's home screen (tools/embed_file.py). */
+extern const unsigned char c4fManifest[];
+extern const size_t c4fManifestSize;
+extern const unsigned char c4fIcon[];
+extern const size_t c4fIconSize;
 #endif

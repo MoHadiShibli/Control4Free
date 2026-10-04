@@ -46,14 +46,44 @@ def build_art_tool():
 
 
 def write_png(path, width, height, rgba, alpha=False):
+    """Writes a PNG, picking the filter that compresses each row best. The gradient
+    backgrounds these icons use come out several times larger without it."""
     def chunk(kind, data):
         return struct.pack('>I', len(data)) + kind + data + struct.pack('>I', binascii.crc32(kind + data) & 0xffffffff)
+
+    def paeth(a, b, c):
+        p = a + b - c
+        pa, pb, pc = abs(p - a), abs(p - b), abs(p - c)
+        return a if pa <= pb and pa <= pc else b if pb <= pc else c
+
+    step = 4 if alpha else 3
     pixels = rgba if alpha else bytes(b for i, b in enumerate(rgba) if i % 4 != 3)
-    stride = width * (4 if alpha else 3)
-    scanlines = b''.join(b'\0' + pixels[y * stride:(y + 1) * stride] for y in range(height))
+    stride = width * step
+    rows = []
+    previous = bytes(stride)
+    for y in range(height):
+        row = pixels[y * stride:(y + 1) * stride]
+        best = None
+        for kind in range(5):
+            out = bytearray(stride)
+            for i in range(stride):
+                left = row[i - step] if i >= step else 0
+                up = previous[i]
+                upleft = previous[i - step] if i >= step else 0
+                if kind == 0:   out[i] = row[i]
+                elif kind == 1: out[i] = (row[i] - left) & 0xff
+                elif kind == 2: out[i] = (row[i] - up) & 0xff
+                elif kind == 3: out[i] = (row[i] - ((left + up) >> 1)) & 0xff
+                else:           out[i] = (row[i] - paeth(left, up, upleft)) & 0xff
+            # The usual heuristic: keep the row whose bytes are closest to zero.
+            score = sum(b if b < 128 else 256 - b for b in out)
+            if best is None or score < best[0]:
+                best = (score, kind, bytes(out))
+        rows.append(bytes([best[1]]) + best[2])
+        previous = row
     header = struct.pack('>IIBBBBB', width, height, 8, 6 if alpha else 2, 0, 0, 0)
     Path(path).write_bytes(b'\x89PNG\r\n\x1a\n' + chunk(b'IHDR', header) +
-                           chunk(b'IDAT', zlib.compress(scanlines, 9)) + chunk(b'IEND', b''))
+                           chunk(b'IDAT', zlib.compress(b''.join(rows), 9)) + chunk(b'IEND', b''))
 
 
 def render(args, path, width, height):

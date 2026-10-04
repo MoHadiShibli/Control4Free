@@ -19,7 +19,7 @@ NAME    := control4free
 ELF     := build/$(NAME).elf
 OBJDIR  := build/payload
 SOURCES := src/main.c src/log.c src/vda.c src/klog_line.c src/web.c src/net.c
-OBJECTS := $(SOURCES:src/%.c=$(OBJDIR)/%.o) $(OBJDIR)/client.o
+OBJECTS := $(SOURCES:src/%.c=$(OBJDIR)/%.o) $(OBJDIR)/client.o $(OBJDIR)/assets.o
 
 CFLAGS  += -std=gnu11 -Wall -Wextra -Wpointer-arith -g -O2
 CFLAGS  += -MMD -MP
@@ -43,6 +43,13 @@ build/client.c: client/index.html tools/embed_client.py | build
 	python3 tools/embed_client.py $< $@
 
 $(OBJDIR)/client.o: build/client.c | $(OBJDIR)
+	$(CC) $(CFLAGS) -c $< -o $@
+
+# The manifest and icon the page points at, so it can live on a home screen.
+build/assets.c: client/manifest.webmanifest client/icon-192.png tools/embed_file.py | build
+	python3 tools/embed_file.py $@ c4fManifest=client/manifest.webmanifest c4fIcon=client/icon-192.png
+
+$(OBJDIR)/assets.o: build/assets.c | $(OBJDIR)
 	$(CC) $(CFLAGS) -c $< -o $@
 
 $(ELF): $(OBJECTS) | build

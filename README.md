@@ -91,7 +91,10 @@ minute and explicit network recovery messages help locate any remaining hang.
 2. Start Control4Free: from GoldHEN (above), from the launcher app, or by sending
    `build/control4free.elf` from a PC to GoldHEN's PayLoader on port 9090 with a
    payload sender. The payload serves its own page; no PC web server is needed.
-3. Open `http://YOUR-PS4-IP:4264` in the phone or PC browser.
+3. Open `http://YOUR-PS4-IP:4264` in the phone or PC browser. Control4Free shows
+   the exact address on the TV when it starts. On a phone you can add the page to
+   the home screen (**Share → Add to Home Screen** on iOS, the browser menu on
+   Android) and skip typing it next time.
 4. Select a free controller. This creates it and opens native PS4 user selection.
    Use Left/Right and Cross to select a user or follow the PS4's guest flow.
    **Do not press PS while the initial user-selection screen is open:** in the
@@ -111,6 +114,44 @@ Some browsers restrict Gamepad API access on an HTTP page. If the page reports
 that restriction, try opening a saved copy of `client/index.html` locally and
 entering `YOUR-PS4-IP:4264` in its connection settings. Browser support for local
 files varies. Keep the controller page in the foreground while playing.
+
+## Troubleshooting
+
+**"Signing a controller in needs the PS4's kernel log, and something else has
+it."** A klog viewer is connected to GoldHEN. Close it and select the controller
+again. Only controller sign-in needs the log, so this never interrupts play.
+
+**"Control4Free cannot add controllers until it is restarted."** The PS4 did not
+report a new device, so Control4Free stops adding more rather than leave devices
+behind that it can no longer address. Stop it in the app (Square, then Cross) and
+start it again with Cross, or restart the PS4.
+
+**"Another controller is being connected; try again in a moment."** Controllers
+are created one at a time. Wait a second and select yours again; everyone already
+playing is unaffected.
+
+**The page does not load.** Check the address on the TV, that the phone or PC is on
+the same network, and that `http://` is used rather than `https://`. If the browser
+corrects it to a search, type the address with `http://` in front.
+
+**The browser says it cannot use controllers on this page.** Some browsers only
+allow the Gamepad API on secure pages. Touch and keyboard still work. For a
+physical pad, save a copy of the controller page to the device, open the saved
+file, and enter the console address in its connection box.
+
+**A game ignores the virtual controller.** Turn off other GoldHEN controller
+plugins for that game. A plugin that takes over a signed-in user's controller can
+stop games from reading Control4Free's.
+
+**Nothing happens after waking the PS4 from rest mode.** Rest mode signs everyone
+out, so controllers have to be selected again. Reopen the page and pick yours. If
+the page will not connect at all, start Control4Free again from the app.
+
+**The app says Control4Free is not responding.** Wait a few seconds after waking,
+then press Cross again. If it stays stuck, restart the PS4 and run the jailbreak.
+
+The payload's own log is at `/data/control4free/control4free.log` on the console,
+readable over GoldHEN's FTP server, with the previous run kept beside it.
 
 ## Connection behavior
 

@@ -14,6 +14,26 @@
 #include <unistd.h>
 #include "c4f_net.h"
 
+/* Which interface would carry traffic out, without sending anything: a connected
+ * UDP socket picks the route, and getsockname then names the local end. */
+void c4fNetLocalAddress(char *out, size_t size)
+{
+    struct sockaddr_in remote = {0}, local = {0};
+    socklen_t length = sizeof(local);
+    int fd;
+
+    if (size) out[0] = 0;
+    fd = socket(AF_INET, SOCK_DGRAM, 0);
+    if (fd < 0) return;
+    remote.sin_family = AF_INET;
+    remote.sin_port = htons(53);
+    remote.sin_addr.s_addr = inet_addr("1.1.1.1");
+    if (!connect(fd, (struct sockaddr *)&remote, sizeof(remote)) &&
+        !getsockname(fd, (struct sockaddr *)&local, &length))
+        (void)inet_ntop(AF_INET, &local.sin_addr, out, size);
+    close(fd);
+}
+
 uint64_t c4fTimeMs(void)
 {
     struct timespec t;
@@ -147,7 +167,16 @@ static void c4fHttp(C4fNet *net, C4fNetClient *c)
     request[used] = 0;
     int statusRequest = !strncmp(request, "GET /api/status HTTP/1.1\r\n", 26);
     int stopRequest = !strncmp(request, "POST /api/stop HTTP/1.1\r\n", 25);
-    if (!statusRequest && !stopRequest && strncmp(request, "GET / HTTP/1.1\r\n", 16) &&
+    /* The two files a phone needs to keep this page on its home screen. */
+    const unsigned char *asset = NULL;
+    size_t assetSize = 0;
+    const char *assetType = NULL;
+    if (!strncmp(request, "GET /manifest.webmanifest HTTP/1.1\r\n", 36)) {
+        asset = c4fManifest; assetSize = c4fManifestSize; assetType = "application/manifest+json";
+    } else if (!strncmp(request, "GET /icon-192.png HTTP/1.1\r\n", 28)) {
+        asset = c4fIcon; assetSize = c4fIconSize; assetType = "image/png";
+    }
+    if (!statusRequest && !stopRequest && !asset && strncmp(request, "GET / HTTP/1.1\r\n", 16) &&
         strncmp(request, "GET /index.html HTTP/1.1\r\n", 26) &&
         strncmp(request, "GET /ws HTTP/1.1\r\n", 18) &&
         strncmp(request, "GET /?", 6)) {
@@ -205,9 +234,14 @@ static void c4fHttp(C4fNet *net, C4fNetClient *c)
         c4fQueue(c, reply, (size_t)n); c->websocket = 1;
         memmove(c->rx, c->rx+used, c->rxUsed-used); c->rxUsed -= used;
         net->handler(c, C4F_NET_OPEN, NULL, 0, net->context);
+    } else if (asset) {
+        char reply[256];
+        int n = snprintf(reply, sizeof(reply), "HTTP/1.1 200 OK\r\nContent-Type: %s\r\nContent-Length: %zu\r\nConnection: close\r\nCache-Control: max-age=86400\r\nX-Content-Type-Options: nosniff\r\n\r\n", assetType, assetSize);
+        c4fQueue(c, reply, (size_t)n);
+        c->body = asset; c->bodySize = assetSize; c->rxUsed = 0;
     } else {
         char reply[768];
-        int n = snprintf(reply, sizeof(reply), "HTTP/1.1 200 OK\r\nContent-Type: text/html; charset=utf-8\r\nContent-Encoding: gzip\r\nContent-Length: %zu\r\nConnection: close\r\nCache-Control: no-store\r\nX-Content-Type-Options: nosniff\r\nReferrer-Policy: no-referrer\r\nContent-Security-Policy: default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src data:; media-src data:; connect-src ws:; frame-ancestors 'none'; base-uri 'none'; form-action 'none'\r\n\r\n", c4fPageSize);
+        int n = snprintf(reply, sizeof(reply), "HTTP/1.1 200 OK\r\nContent-Type: text/html; charset=utf-8\r\nContent-Encoding: gzip\r\nContent-Length: %zu\r\nConnection: close\r\nCache-Control: no-store\r\nX-Content-Type-Options: nosniff\r\nReferrer-Policy: no-referrer\r\nContent-Security-Policy: default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src 'self' data:; media-src data:; connect-src ws:; manifest-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'none'\r\n\r\n", c4fPageSize);
         c4fQueue(c, reply, (size_t)n);
         c->body = c4fPage; c->bodySize = c4fPageSize; c->rxUsed = 0;
     }
