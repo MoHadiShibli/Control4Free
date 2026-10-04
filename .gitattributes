@@ -1,0 +1,5 @@
+# The builds run in Linux containers on a Windows checkout: keep LF everywhere,
+# whatever core.autocrlf says, or make and the shell scripts break.
+* text=auto eol=lf
+*.ttf binary
+*.png binary

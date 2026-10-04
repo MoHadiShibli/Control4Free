@@ -1,0 +1,2665 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+  <meta name="theme-color" content="#04143a">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="description" content="Use this device as a PS4 controller">
+  <title>Control4Free</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%230a3c96'/%3E%3Cpath d='M9 11h14a5 5 0 0 1 4.8 6.4l-1 3.4a3 3 0 0 1-5.2 1L19 19h-6l-2.6 2.8a3 3 0 0 1-5.2-1l-1-3.4A5 5 0 0 1 9 11z' fill='%23fff'/%3E%3C/svg%3E">
+  <style>
+    :root {
+      color-scheme: dark;
+      --deep: #020b1f;
+      --text: #f4f7ff;
+      --muted: rgba(226, 236, 255, .72);
+      --faint: rgba(226, 236, 255, .46);
+      --line: rgba(255, 255, 255, .16);
+      --line-soft: rgba(255, 255, 255, .09);
+      --panel: rgba(3, 16, 44, .55);
+      --panel-strong: rgba(2, 11, 31, .86);
+      --tile: rgba(12, 40, 98, .5);
+      --sky: #3a8cff;
+      --accent: #3a8cff;
+      --ok: #45e08a;
+      --warn: #ffd04d;
+      --bad: #ff6b7d;
+      --tri: #3fe0b8;
+      --cir: #ff6680;
+      --crs: #86b6ff;
+      --sqr: #ff92dc;
+      --glow: 0 0 0 2px #fff, 0 0 22px rgba(255, 255, 255, .5);
+      --font: "SST", "SST W55 Regular", "SST Light", "Helvetica Neue", "Segoe UI", Roboto, Arial, sans-serif;
+      --ease: cubic-bezier(.2, .8, .2, 1);
+    }
+
+    * { box-sizing: border-box; }
+
+    html, body {
+      margin: 0;
+      height: 100%;
+      background: var(--deep);
+      color: var(--text);
+      font-family: var(--font);
+      -webkit-font-smoothing: antialiased;
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    button, input, select { font: inherit; color: inherit; }
+    button { cursor: pointer; }
+    [hidden] { display: none !important; }
+    :focus-visible { outline: none; box-shadow: var(--glow); }
+
+    /* ---------- Backdrop: deep blue with drifting light waves ---------- */
+
+    .backdrop {
+      position: fixed;
+      inset: 0;
+      z-index: 0;
+      overflow: hidden;
+      pointer-events: none;
+      background:
+        radial-gradient(120% 70% at 75% 115%, rgba(70, 150, 255, .5), transparent 62%),
+        radial-gradient(80% 60% at 0% -10%, rgba(25, 90, 200, .55), transparent 60%),
+        linear-gradient(165deg, #020f2b 0%, #062766 45%, #0b3f9c 72%, #04194a 100%);
+    }
+
+    .waves {
+      position: absolute;
+      left: 0;
+      bottom: 4%;
+      width: 200%;
+      height: 62%;
+      animation: drift 46s linear infinite;
+    }
+
+    .waves.slow { bottom: 14%; height: 50%; opacity: .7; animation-duration: 70s; animation-direction: reverse; }
+
+    .waves path { fill: none; stroke-linecap: round; }
+
+    @keyframes drift { from { transform: translateX(0); } to { transform: translateX(-50%); } }
+
+    .sparkles {
+      position: absolute;
+      inset: -10% 0;
+      background-image:
+        radial-gradient(1.5px 1.5px at 12% 22%, rgba(255, 255, 255, .7), transparent),
+        radial-gradient(1px 1px at 28% 64%, rgba(255, 255, 255, .55), transparent),
+        radial-gradient(1.5px 1.5px at 47% 38%, rgba(255, 255, 255, .6), transparent),
+        radial-gradient(1px 1px at 63% 76%, rgba(255, 255, 255, .5), transparent),
+        radial-gradient(2px 2px at 78% 30%, rgba(255, 255, 255, .45), transparent),
+        radial-gradient(1px 1px at 88% 58%, rgba(255, 255, 255, .6), transparent),
+        radial-gradient(1.5px 1.5px at 36% 88%, rgba(255, 255, 255, .5), transparent),
+        radial-gradient(1px 1px at 92% 12%, rgba(255, 255, 255, .55), transparent);
+      animation: float 24s ease-in-out infinite alternate;
+    }
+
+    @keyframes float { from { transform: translateY(0); } to { transform: translateY(-4%); } }
+
+    /* ---------- Top bar ---------- */
+
+    .topbar {
+      position: relative;
+      z-index: 2;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      min-height: 52px;
+      padding: max(10px, env(safe-area-inset-top)) max(22px, env(safe-area-inset-right)) 6px max(22px, env(safe-area-inset-left));
+    }
+
+    .tb-group { display: flex; align-items: center; gap: 14px; min-width: 0; }
+
+    .app-mark {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-size: 17px;
+      font-weight: 300;
+      letter-spacing: .02em;
+      white-space: nowrap;
+    }
+
+    .app-mark svg { width: 26px; height: 26px; }
+
+    .clock {
+      font-size: 17px;
+      font-weight: 300;
+      letter-spacing: .02em;
+      font-variant-numeric: tabular-nums;
+    }
+
+    .conn {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      min-width: 0;
+      font-size: 13px;
+      color: var(--muted);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--faint); flex: none; }
+    [data-conn="open"] .dot { background: var(--ok); box-shadow: 0 0 10px var(--ok); }
+    [data-conn="connecting"] .dot { background: var(--warn); animation: pulse 1.2s ease-in-out infinite; }
+    [data-conn="closed"] .dot { background: var(--bad); }
+    @keyframes pulse { 50% { opacity: .3; } }
+
+    .icon-btn {
+      width: 40px;
+      height: 40px;
+      display: grid;
+      place-items: center;
+      border: 0;
+      border-radius: 50%;
+      background: rgba(255, 255, 255, .08);
+      box-shadow: inset 0 0 0 1px var(--line-soft);
+      color: var(--text);
+      transition: transform .2s var(--ease), background .2s, box-shadow .2s;
+    }
+
+    .icon-btn:hover { background: rgba(255, 255, 255, .16); box-shadow: var(--glow); }
+    .icon-btn:active { transform: scale(.93); }
+    .icon-btn svg { width: 19px; height: 19px; }
+
+    /* ---------- Home ---------- */
+
+    .home {
+      position: relative;
+      z-index: 1;
+      min-height: 100dvh;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .home-main {
+      flex: 1;
+      width: 100%;
+      max-width: 1120px;
+      margin: 0 auto;
+      padding: 18px max(22px, env(safe-area-inset-right)) 26px max(22px, env(safe-area-inset-left));
+      display: flex;
+      flex-direction: column;
+      gap: 30px;
+    }
+
+    .screen-title {
+      margin: 0;
+      font-size: clamp(26px, 4vw, 40px);
+      font-weight: 300;
+      letter-spacing: .01em;
+    }
+
+    .screen-sub { margin: 8px 0 0; color: var(--muted); font-size: 15px; font-weight: 300; line-height: 1.5; max-width: 60ch; }
+
+    .tiles {
+      margin-top: 22px;
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 18px;
+    }
+
+    @media (max-width: 760px) { .tiles { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; } }
+
+    .tile {
+      --pc: #3a8cff;
+      position: relative;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      gap: 10px;
+      min-height: 186px;
+      padding: 16px;
+      border: 0;
+      border-radius: 6px;
+      text-align: left;
+      background:
+        linear-gradient(160deg, rgba(255, 255, 255, .13), rgba(255, 255, 255, .02) 55%),
+        var(--tile);
+      box-shadow: inset 0 0 0 1px var(--line), 0 16px 34px -18px rgba(0, 0, 0, .9);
+      backdrop-filter: blur(6px);
+      -webkit-backdrop-filter: blur(6px);
+      user-select: none;
+      -webkit-user-select: none;
+      transition: transform .28s var(--ease), box-shadow .28s var(--ease);
+    }
+
+    .tile::after {
+      content: "";
+      position: absolute;
+      left: 0;
+      right: 0;
+      top: 0;
+      height: 3px;
+      border-radius: 6px 6px 0 0;
+      background: var(--pc);
+      opacity: .9;
+    }
+
+    .tile:hover, .tile:focus-visible { transform: scale(1.045); box-shadow: var(--glow), 0 22px 44px -18px rgba(0, 0, 0, .95); z-index: 1; }
+    .tile:active { transform: scale(1.02); }
+    .tile[data-state="disabled"] { opacity: .45; }
+
+    .tile-head { display: flex; align-items: center; justify-content: space-between; }
+
+    .ring {
+      width: 52px;
+      height: 52px;
+      border-radius: 50%;
+      display: grid;
+      place-items: center;
+      font-size: 24px;
+      font-weight: 300;
+      background: radial-gradient(circle at 50% 35%, rgba(255, 255, 255, .18), rgba(255, 255, 255, .03));
+      box-shadow: inset 0 0 0 3px var(--pc), 0 0 18px -4px var(--pc);
+    }
+
+    .activity { width: 9px; height: 9px; border-radius: 50%; background: var(--pc); opacity: 0; transition: opacity .35s; }
+    .activity.on { opacity: 1; transition: none; }
+
+    .tile-name { font-size: 18px; font-weight: 400; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .tile-meta { font-size: 12.5px; color: var(--muted); font-weight: 300; min-height: 1.3em; }
+
+    .tile-state { display: flex; flex-wrap: wrap; gap: 6px 10px; font-size: 13px; color: var(--muted); }
+    .state { display: inline-flex; align-items: center; gap: 7px; }
+    .state.live { color: #fff; }
+    .state.live .dot { background: var(--ok); box-shadow: 0 0 10px var(--ok); }
+    .state.wait .dot { background: var(--warn); }
+    .state.mine { color: #fff; font-weight: 400; }
+
+    .panel {
+      border-radius: 6px;
+      background: var(--panel);
+      box-shadow: inset 0 0 0 1px var(--line-soft);
+      backdrop-filter: blur(10px);
+      -webkit-backdrop-filter: blur(10px);
+      padding: 18px 20px;
+    }
+
+    .panel h2 { margin: 0; font-size: 19px; font-weight: 300; letter-spacing: .01em; }
+    .hint { margin: 6px 0 0; color: var(--muted); font-size: 13.5px; font-weight: 300; line-height: 1.5; }
+    .hint.error { color: var(--bad); }
+
+    .address-row { display: flex; gap: 10px; margin-top: 12px; }
+
+    .field {
+      width: 100%;
+      min-width: 0;
+      height: 44px;
+      padding: 0 14px;
+      border: 0;
+      border-radius: 4px;
+      background: rgba(0, 0, 0, .3);
+      box-shadow: inset 0 0 0 1px var(--line);
+      color: var(--text);
+      font-size: 15px;
+      transition: box-shadow .2s;
+    }
+
+    .field:focus { outline: none; box-shadow: inset 0 0 0 2px #fff, 0 0 16px rgba(255, 255, 255, .35); }
+    select.field { appearance: none; background-image: linear-gradient(45deg, transparent 50%, #fff 50%), linear-gradient(135deg, #fff 50%, transparent 50%); background-position: calc(100% - 18px) 19px, calc(100% - 13px) 19px; background-size: 5px 5px; background-repeat: no-repeat; padding-right: 34px; }
+    select.field option { background: #071b46; color: #fff; }
+
+    .btn {
+      height: 44px;
+      padding: 0 22px;
+      border: 0;
+      border-radius: 4px;
+      background: rgba(255, 255, 255, .14);
+      box-shadow: inset 0 0 0 1px var(--line);
+      color: #fff;
+      font-size: 15px;
+      white-space: nowrap;
+      transition: transform .2s var(--ease), background .2s, box-shadow .2s;
+    }
+
+    .btn:hover { background: rgba(255, 255, 255, .22); box-shadow: var(--glow); }
+    .btn:active { transform: scale(.97); }
+    .btn.primary { background: linear-gradient(180deg, #3d8dff, #1e63d6); box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .25); }
+    .btn.primary:hover { box-shadow: var(--glow); }
+    .btn.danger { background: rgba(255, 107, 125, .18); box-shadow: inset 0 0 0 1px rgba(255, 107, 125, .55); }
+    .btn:disabled { opacity: .5; pointer-events: none; }
+
+    .gp-list { list-style: none; margin: 14px 0 0; padding: 0; display: grid; gap: 10px; }
+
+    .gp-row {
+      display: grid;
+      grid-template-columns: auto 1fr auto;
+      align-items: center;
+      gap: 14px;
+      padding: 12px 14px;
+      border-radius: 6px;
+      background: rgba(255, 255, 255, .05);
+      box-shadow: inset 0 0 0 1px var(--line-soft);
+      transition: box-shadow .25s;
+    }
+
+    .gp-row.active { box-shadow: var(--glow); }
+    .gp-row svg { width: 30px; height: 30px; color: var(--muted); }
+    .gp-name { font-size: 15px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .gp-sub { font-size: 12.5px; color: var(--muted); font-weight: 300; }
+
+    .seg { display: flex; gap: 6px; flex-wrap: wrap; justify-content: flex-end; }
+
+    .seg button {
+      --pc: rgba(255, 255, 255, .5);
+      min-width: 42px;
+      height: 36px;
+      padding: 0 10px;
+      border: 0;
+      border-radius: 4px;
+      background: rgba(255, 255, 255, .08);
+      box-shadow: inset 0 0 0 1px var(--line-soft);
+      font-size: 14px;
+      transition: background .2s, box-shadow .2s, transform .15s;
+    }
+
+    .seg button:hover { box-shadow: var(--glow); }
+    .seg button:active { transform: scale(.95); }
+    .seg button[aria-checked="true"] { background: #fff; color: #06215a; box-shadow: 0 0 0 2px var(--pc), 0 0 14px rgba(255, 255, 255, .45); }
+
+    @media (max-width: 560px) {
+      .gp-row { grid-template-columns: auto 1fr; }
+      .gp-row .seg { grid-column: 1 / -1; justify-content: flex-start; }
+      /* A phone shows its own clock: give the connection status the room */
+      .home .clock { display: none; }
+    }
+
+    .home-foot {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      padding: 0 max(22px, env(safe-area-inset-right)) max(18px, env(safe-area-inset-bottom)) max(22px, env(safe-area-inset-left));
+      color: var(--faint);
+      font-size: 12.5px;
+      font-weight: 300;
+    }
+
+    .link-btn { border: 0; background: none; padding: 6px 0; color: var(--muted); font-size: 13px; text-decoration: underline; text-underline-offset: 3px; text-decoration-color: var(--line); }
+    .link-btn:hover { color: #fff; }
+    .home-foot a { color: var(--muted); text-underline-offset: 3px; }
+    .home-foot .link-btn, .clock { white-space: nowrap; }
+
+    /* ---------- Controller ---------- */
+
+    /* DualShock 4 buttons over a dark background lit in the pad's color. Every control is placed on its own
+       from the layout in the script (DEFAULT_LAYOUT), so moving one never disturbs the others. */
+    body.in-pad .backdrop { display: none; }
+
+    .pad-view {
+      position: fixed;
+      inset: 0;
+      z-index: 1;
+      background:
+        radial-gradient(75% 95% at 10% -15%, color-mix(in srgb, var(--accent) 14%, transparent), transparent 62%),
+        radial-gradient(65% 80% at 105% 112%, rgba(120, 140, 200, .08), transparent 62%),
+        #0b0e14;
+      touch-action: none;
+      user-select: none;
+      -webkit-user-select: none;
+      -webkit-touch-callout: none;
+      overscroll-behavior: none;
+    }
+
+    /* Fine grain so the dark background doesn't look flat */
+    .pad-view::before {
+      content: "";
+      position: absolute;
+      inset: 0;
+      opacity: .04;
+      pointer-events: none;
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+    }
+
+    .pad-area {
+      position: absolute;
+      inset: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
+      container-type: size;
+      /* Size unit: 1% of the screen height, smaller on narrow screens so both hands' controls still fit */
+      --u: min(1cqh, .46cqw, 7px);
+    }
+
+    @supports not (width: 1cqh) {
+      .pad-area { --u: min(1vh, .46vw, 7px); }
+    }
+
+    /* --x, --y: centre in % of the screen. --w, --h: size in --u */
+    .ctl {
+      position: absolute;
+      left: calc(var(--x) * 1% - var(--w) * var(--u) / 2);
+      top: calc(var(--y) * 1% - var(--h) * var(--u) / 2);
+      width: calc(var(--w) * var(--u));
+      height: calc(var(--h) * var(--u));
+      border: 0;
+      padding: 0;
+      background: none;
+      color: rgba(236, 240, 248, .8);
+    }
+
+    /* Glossy dark plastic, lit from above */
+    .trigger, .bumper, .capsule, .stick-btn {
+      background: linear-gradient(180deg, #343c4f 0%, #1f2532 46%, #151923 100%);
+      box-shadow: inset 0 1px 0 rgba(255, 255, 255, .16), inset 0 0 0 1px rgba(255, 255, 255, .06), 0 6px 16px -4px rgba(0, 0, 0, .8);
+      transition: transform .08s var(--ease), filter .08s, box-shadow .12s, background .12s;
+    }
+
+    .engraved {
+      position: relative;
+      font-size: max(11px, calc(var(--u) * 2.8));
+      font-weight: 500;
+      letter-spacing: .06em;
+      color: rgba(236, 240, 248, .55);
+      text-shadow: 0 -1px 0 rgba(0, 0, 0, .7);
+      pointer-events: none;
+    }
+
+    /* L2 / R2: curved triggers. The fill shows how far an analog trigger is pulled. */
+    .trigger {
+      display: grid;
+      place-items: center;
+      overflow: hidden;
+      border-radius: 44% 44% 18% 18% / 64% 64% 24% 24%;
+    }
+
+    .trigger::after {
+      content: "";
+      position: absolute;
+      left: 12%;
+      right: 12%;
+      top: 9%;
+      height: 26%;
+      border-radius: 50% 50% 0 0 / 100% 100% 0 0;
+      border-top: 1px solid rgba(255, 255, 255, .14);
+      pointer-events: none;
+    }
+
+    .trigger-fill { position: absolute; inset: auto 0 0; height: 0%; background: color-mix(in srgb, var(--accent) 42%, transparent); pointer-events: none; }
+
+    /* L1 / R1: slim bumpers */
+    .bumper {
+      display: grid;
+      place-items: center;
+      border-radius: 34% 34% 26% 26% / 70% 70% 50% 50%;
+    }
+
+    /* L3 / R3: their own buttons, shown only when double-tapping a stick doesn't press it */
+    .stick-btn {
+      display: grid;
+      place-items: center;
+      border-radius: 50%;
+    }
+
+    .stick-btn .engraved { font-size: max(10px, calc(var(--u) * 2.6)); }
+
+    /* Pressed: lit in the pad's color */
+    .trigger.on, .bumper.on, .stick-btn.on {
+      transform: translateY(1px) scale(.98);
+      background: linear-gradient(180deg, color-mix(in srgb, var(--accent) 40%, #2a3142), color-mix(in srgb, var(--accent) 22%, #151923));
+      box-shadow: inset 0 0 0 1.5px color-mix(in srgb, var(--accent) 75%, transparent), 0 0 calc(var(--u) * 3.4) -1px color-mix(in srgb, var(--accent) 75%, transparent);
+    }
+
+    /* SHARE / OPTIONS: small upright capsules with their names printed above */
+    .capsule-btn {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: calc(var(--u) * 1.1);
+    }
+
+    .cap-label { font-size: max(8px, calc(var(--u) * 1.9)); letter-spacing: .1em; color: rgba(236, 240, 248, .55); pointer-events: none; }
+    .capsule { width: calc(var(--u) * 4.2); height: calc(var(--u) * 8); border-radius: 999px; pointer-events: none; }
+    .capsule-btn.on .capsule { transform: scale(.94); background: linear-gradient(180deg, color-mix(in srgb, var(--accent) 45%, #2a3142), color-mix(in srgb, var(--accent) 25%, #151923)); box-shadow: inset 0 0 0 1.5px color-mix(in srgb, var(--accent) 75%, transparent), 0 0 calc(var(--u) * 2.5) -1px var(--accent); }
+
+    /* D-pad: four separate arms pointing in, with the printed direction marks around them */
+    .dpad { touch-action: none; }
+    .dpad svg { display: block; width: 100%; height: 100%; overflow: visible; pointer-events: none; filter: drop-shadow(0 5px 6px rgba(0, 0, 0, .55)); }
+    .dpad .pivot { fill: none; stroke: rgba(255, 255, 255, .07); stroke-width: 1.5; }
+    .dpad .mark { fill: none; stroke: rgba(236, 240, 248, .4); stroke-width: 2.2; stroke-linejoin: round; }
+    .dpad .arm { fill: url(#dpadArm); stroke: rgba(255, 255, 255, .13); stroke-width: 1.2; }
+    .dpad .arm.on { fill: color-mix(in srgb, var(--accent) 42%, #232a3a); stroke: var(--accent); stroke-width: 2; }
+
+    /* Face buttons: round and black, with the outlined symbols in their colors */
+    .face-btn {
+      position: absolute;
+      width: 34%;
+      height: 34%;
+      border: 0;
+      padding: 0;
+      border-radius: 50%;
+      display: grid;
+      place-items: center;
+      background: radial-gradient(circle at 50% 28%, #3c4458 0%, #222837 48%, #141822 100%);
+      box-shadow: inset 0 1px 0 rgba(255, 255, 255, .16), inset 0 -3px 7px rgba(0, 0, 0, .5), 0 0 0 1px rgba(255, 255, 255, .05), 0 6px 16px -4px rgba(0, 0, 0, .8);
+      transition: transform .08s var(--ease), filter .08s, box-shadow .12s;
+    }
+
+    .face-btn svg { width: 56%; height: 56%; pointer-events: none; }
+    .face-btn.on { transform: scale(.92); filter: brightness(1.3); box-shadow: inset 0 0 0 1.5px currentColor, 0 0 calc(var(--u) * 3) -1px currentColor; }
+    .face .tri { left: 33%; top: 0; color: var(--tri); }
+    .face .sqr { left: 0; top: 33%; color: var(--sqr); }
+    .face .cir { left: 66%; top: 33%; color: var(--cir); }
+    .face .crs { left: 33%; top: 66%; color: var(--crs); }
+
+    /* Touchpad: matte plate with a fine dot grain, glowing in the pad's color. The light bar along its top
+       edge pulses while the console isn't connected. */
+    .touchpad {
+      border-radius: calc(var(--u) * 3) calc(var(--u) * 3) calc(var(--u) * 7) calc(var(--u) * 7);
+      background:
+        radial-gradient(circle, rgba(255, 255, 255, .06) .7px, transparent 1.2px) 0 0 / calc(var(--u) * 1.5) calc(var(--u) * 1.5),
+        linear-gradient(180deg, #1d2331 0%, #151a25 70%, #121620 100%);
+      box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .07), inset 0 -10px 24px rgba(0, 0, 0, .35), 0 -6px 30px -14px var(--accent), 0 10px 24px -8px rgba(0, 0, 0, .7);
+      overflow: hidden;
+      touch-action: none;
+      cursor: crosshair;
+      transition: box-shadow .3s;
+    }
+
+    .touchpad::before {
+      content: "";
+      position: absolute;
+      top: 0;
+      left: 7%;
+      right: 7%;
+      height: max(3px, calc(var(--u) * .8));
+      border-radius: 0 0 4px 4px;
+      background: var(--accent);
+      box-shadow: 0 0 calc(var(--u) * 2.5) var(--accent);
+    }
+
+    .pad-view:not([data-conn="open"]) .touchpad::before { animation: pulse 1.1s ease-in-out infinite; }
+    .touchpad.clicked { box-shadow: inset 0 0 0 2px color-mix(in srgb, var(--accent) 70%, transparent), inset 0 -10px 24px rgba(0, 0, 0, .35), 0 -6px 34px -10px var(--accent), 0 10px 24px -8px rgba(0, 0, 0, .7); }
+
+    .pad-label {
+      position: absolute;
+      left: 0;
+      right: 0;
+      bottom: 10%;
+      padding: 0 8%;
+      text-align: center;
+      font-size: max(11px, calc(var(--u) * 2.5));
+      font-weight: 300;
+      line-height: 1.4;
+      color: rgba(236, 240, 248, .55);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      pointer-events: none;
+    }
+
+    .pad-label .muted { display: block; overflow: hidden; text-overflow: ellipsis; color: rgba(236, 240, 248, .36); }
+
+    .finger { position: absolute; width: calc(var(--u) * 7); height: calc(var(--u) * 7); margin: calc(var(--u) * -3.5) 0 0 calc(var(--u) * -3.5); border-radius: 50%; background: color-mix(in srgb, var(--accent) 45%, transparent); box-shadow: 0 0 0 1px color-mix(in srgb, var(--accent) 85%, transparent), 0 0 20px var(--accent); pointer-events: none; }
+
+    /* PS button: opens the menu */
+    .ps-btn {
+      border-radius: 50%;
+      display: grid;
+      place-items: center;
+      color: rgba(236, 240, 248, .75);
+      background: radial-gradient(circle at 50% 30%, #414a5f 0%, #1a1f2b 72%);
+      box-shadow: inset 0 1px 0 rgba(255, 255, 255, .2), 0 0 0 calc(var(--u) * .6) #121620, 0 0 0 calc(var(--u) * .6 + 1px) rgba(255, 255, 255, .08), 0 6px 16px -4px rgba(0, 0, 0, .8);
+      transition: transform .08s var(--ease);
+    }
+
+    .ps-btn:active { transform: scale(.92); }
+    .ps-btn svg { width: 46%; height: 46%; }
+
+    /* Sticks: DualShock tops (hollow, with a ridged rim) in a sunken well that shows how far they move */
+    .stick {
+      border-radius: 50%;
+      background: radial-gradient(circle at 50% 40%, #1d2333, #121621 70%);
+      box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .07), inset 0 8px 20px -10px rgba(0, 0, 0, .9);
+      touch-action: none;
+    }
+
+    .stick .knob {
+      position: absolute;
+      left: 25%;
+      top: 25%;
+      width: 50%;
+      height: 50%;
+      border-radius: 50%;
+      background:
+        repeating-conic-gradient(rgba(255, 255, 255, .045) 0 4deg, transparent 4deg 8deg),
+        linear-gradient(180deg, #3f475b 0%, #252b39 55%, #161a24 100%);
+      box-shadow: inset 0 1px 0 rgba(255, 255, 255, .2), 0 0 0 1px rgba(0, 0, 0, .55), 0 8px 16px rgba(0, 0, 0, .7);
+      pointer-events: none;
+      will-change: transform;
+      transition: filter .08s, scale .08s;
+    }
+
+    /* The thumb dish: dark at the top and lit at the bottom, so it reads as hollow */
+    .stick .knob::before {
+      content: "";
+      position: absolute;
+      inset: 17%;
+      border-radius: 50%;
+      background: linear-gradient(180deg, #0e1118 0%, #1a1f2b 55%, #2b3242 100%);
+      box-shadow: 0 0 0 1px rgba(0, 0, 0, .45), 0 1px 0 1px rgba(255, 255, 255, .07);
+    }
+
+    .stick.on .knob { box-shadow: inset 0 1px 0 rgba(255, 255, 255, .2), 0 0 0 1.5px color-mix(in srgb, var(--accent) 80%, transparent), 0 0 calc(var(--u) * 3) -1px var(--accent), 0 8px 16px rgba(0, 0, 0, .7); }
+    .stick.clicked .knob { scale: .9; filter: brightness(1.35); }
+
+    .keyhint { position: absolute; right: 8%; bottom: 6%; font-size: max(9px, calc(var(--u) * 1.8)); line-height: 1; color: rgba(236, 240, 248, .45); pointer-events: none; display: none; }
+    .show-keys .keyhint { display: block; }
+
+    /* Back and full screen, out of the way in the top corners */
+    .corner-btn {
+      position: absolute;
+      z-index: 2;
+      top: max(8px, env(safe-area-inset-top));
+      width: 38px;
+      height: 38px;
+      display: grid;
+      place-items: center;
+      border: 0;
+      border-radius: 11px;
+      background: rgba(22, 27, 37, .85);
+      box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .08);
+      color: rgba(236, 240, 248, .72);
+      transition: background .15s, color .15s, transform .15s var(--ease);
+    }
+
+    .corner-btn:hover { background: rgba(32, 39, 53, .9); color: #fff; }
+    .corner-btn:active { transform: scale(.92); }
+    .corner-btn.left { left: max(8px, env(safe-area-inset-left)); }
+    .corner-btn.right { right: max(8px, env(safe-area-inset-right)); }
+    .corner-btn svg { width: 18px; height: 18px; }
+
+    /* Layout editor: drag controls on a grid, change the selected one from the bar */
+    .pad-view.editing .pad-area {
+      background-image:
+        linear-gradient(rgba(255, 255, 255, .045) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(255, 255, 255, .045) 1px, transparent 1px);
+      background-size: 5% 5%;
+    }
+
+    .editing .corner-btn { display: none; }
+    .editing .ctl { cursor: grab; outline: 1px dashed rgba(236, 240, 248, .32); outline-offset: 4px; }
+    .editing .ctl * { pointer-events: none; }
+    .editing.dragging .ctl { cursor: grabbing; }
+    .editing .ctl.selected { outline: 2px solid var(--accent); outline-offset: 4px; }
+    .editing .ctl.ctl-off { opacity: .35; }
+
+    .layout-bar {
+      position: absolute;
+      z-index: 3;
+      left: 50%;
+      top: max(8px, env(safe-area-inset-top));
+      transform: translateX(-50%);
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      justify-content: center;
+      gap: 8px 10px;
+      width: max-content;
+      max-width: calc(100% - 16px);
+      padding: 8px 10px;
+      border-radius: 14px;
+      background: rgba(16, 20, 28, .94);
+      box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .1), 0 12px 30px -10px rgba(0, 0, 0, .9);
+      font-size: 13px;
+      transition: opacity .15s;
+    }
+
+    /* Once dragged, the bar sits where it was dropped (left/top set by the script) */
+    .layout-bar.moved { transform: none; }
+    .layout-panel { top: 0; left: 0; transform: none; flex-wrap: nowrap; }
+    .dragging .layout-bar { opacity: .12; pointer-events: none; }
+    .dragging .layout-panel { visibility: hidden; }
+    .lb-grip { width: 24px; height: 32px; display: grid; place-items: center; color: rgba(236, 240, 248, .5); cursor: grab; touch-action: none; }
+    .lb-grip svg { width: 18px; height: 18px; pointer-events: none; }
+    .lb-title { font-weight: 500; white-space: nowrap; }
+    .lb-size { display: inline-flex; align-items: center; gap: 8px; color: rgba(236, 240, 248, .75); white-space: nowrap; }
+    .lb-size input { width: 100px; accent-color: var(--accent); }
+
+    .lb-btn {
+      height: 32px;
+      padding: 0 12px;
+      border: 0;
+      border-radius: 9px;
+      background: rgba(255, 255, 255, .08);
+      box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .1);
+      color: #e7eaf0;
+      font-size: 13px;
+      white-space: nowrap;
+      transition: background .15s, transform .1s var(--ease);
+    }
+
+    .lb-btn:hover { background: rgba(255, 255, 255, .14); }
+    .lb-btn:active { transform: scale(.96); }
+    .lb-btn.primary { background: color-mix(in srgb, var(--accent) 70%, #1d2331); box-shadow: none; color: #fff; }
+    .lb-btn.warn { background: rgba(242, 114, 127, .22); box-shadow: inset 0 0 0 1px rgba(242, 114, 127, .6); }
+    .lb-btn.icon { width: 32px; padding: 0; display: grid; place-items: center; }
+    .lb-btn svg { width: 16px; height: 16px; }
+
+    .rotate { position: fixed; inset: 0; z-index: 5; display: none; place-content: center; justify-items: center; gap: 14px; padding: 24px; text-align: center; background: rgba(11, 14, 20, .96); }
+    .rotate svg { width: 56px; height: 56px; color: #fff; animation: tilt 2.4s var(--ease) infinite; }
+    .rotate strong { font-size: 20px; font-weight: 300; }
+    .rotate p { margin: 0; color: var(--muted); font-size: 14px; font-weight: 300; max-width: 30ch; line-height: 1.5; }
+    @keyframes tilt { 0%, 30% { transform: rotate(0); } 60%, 100% { transform: rotate(-90deg); } }
+    @media (orientation: portrait) and (max-width: 820px) { .pad-view:not(.portrait-ok) .rotate { display: grid; } }
+
+    /* ---------- Settings ---------- */
+
+    .settings-view { position: fixed; inset: 0; z-index: 3; display: grid; grid-template-rows: auto 1fr; }
+    .settings-view .backdrop { z-index: -1; }
+
+    .settings-body {
+      display: grid;
+      grid-template-columns: minmax(200px, 260px) 1fr;
+      gap: 26px;
+      min-height: 0;
+      width: 100%;
+      max-width: 1120px;
+      margin: 0 auto;
+      padding: 10px max(22px, env(safe-area-inset-right)) 0 max(22px, env(safe-area-inset-left));
+    }
+
+    .settings-nav { display: flex; flex-direction: column; gap: 6px; padding-top: 8px; }
+
+    .nav-item {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      height: 52px;
+      padding: 0 16px;
+      border: 0;
+      border-radius: 4px;
+      background: transparent;
+      color: var(--muted);
+      font-size: 16px;
+      font-weight: 300;
+      text-align: left;
+      transition: background .2s, box-shadow .2s, color .2s;
+    }
+
+    .nav-item svg { width: 22px; height: 22px; flex: none; }
+    .nav-item:hover { color: #fff; background: rgba(255, 255, 255, .08); }
+    .nav-item[aria-selected="true"] { color: #fff; background: rgba(255, 255, 255, .14); box-shadow: var(--glow); }
+
+    /* No bottom padding: a sticky save bar keeps that much distance from the bottom edge */
+    .settings-pages { min-height: 0; overflow-y: auto; padding: 8px 4px 0; touch-action: pan-y; -webkit-overflow-scrolling: touch; }
+    .page-title { margin: 0 0 4px; font-size: 26px; font-weight: 300; }
+
+    .rows { margin-top: 16px; border-radius: 6px; overflow: hidden; background: var(--panel); box-shadow: inset 0 0 0 1px var(--line-soft); }
+
+    .row {
+      display: grid;
+      grid-template-columns: 1fr auto;
+      align-items: center;
+      gap: 6px 18px;
+      min-height: 60px;
+      padding: 12px 18px;
+      border-top: 1px solid var(--line-soft);
+      transition: background .2s, box-shadow .2s;
+    }
+
+    .row:first-child { border-top: 0; }
+    .row:hover { background: rgba(255, 255, 255, .05); }
+    .row-label { font-size: 16px; font-weight: 400; }
+    .row-desc { grid-column: 1; font-size: 13px; color: var(--muted); font-weight: 300; line-height: 1.45; }
+    label.row { cursor: pointer; }
+
+    .check {
+      grid-column: 2;
+      grid-row: 1 / span 2;
+      appearance: none;
+      width: 26px;
+      height: 26px;
+      margin: 0;
+      border-radius: 3px;
+      background: rgba(0, 0, 0, .25);
+      box-shadow: inset 0 0 0 2px rgba(255, 255, 255, .75);
+      display: grid;
+      place-items: center;
+      cursor: pointer;
+      transition: background .15s, box-shadow .15s;
+    }
+
+    .check::after { content: ""; width: 7px; height: 13px; margin-top: -3px; border: solid #fff; border-width: 0 3px 3px 0; transform: rotate(45deg) scale(0); transition: transform .15s var(--ease); }
+    .check:checked { background: #1f6fe6; box-shadow: inset 0 0 0 2px #fff; }
+    .check:checked::after { transform: rotate(45deg) scale(1); }
+    .check:disabled, .field:disabled { opacity: .5; cursor: not-allowed; }
+    .check:focus-visible { box-shadow: inset 0 0 0 2px #fff, var(--glow); }
+
+    .pad-card { margin-top: 16px; border-radius: 6px; background: var(--panel); box-shadow: inset 0 0 0 1px var(--line-soft); overflow: hidden; }
+    .pad-card-head { --pc: #3a8cff; display: flex; align-items: center; gap: 14px; padding: 14px 18px; border-bottom: 1px solid var(--line-soft); }
+    .pad-card-head .ring { width: 40px; height: 40px; font-size: 18px; }
+    .pad-card-head h3 { margin: 0; flex: 1; font-size: 18px; font-weight: 400; }
+    .pad-card-head .row-desc { font-size: 12.5px; }
+    .pad-card .row .field { width: min(320px, 46vw); }
+    .pad-card .row.stack { grid-template-columns: 1fr; }
+    .pad-card .row.stack .field { width: 100%; }
+
+    .switch-inline { display: flex; align-items: center; gap: 10px; color: var(--muted); font-size: 14px; }
+    .switch-inline .check { grid-column: auto; grid-row: auto; }
+
+    .save-bar {
+      position: sticky;
+      bottom: 0;
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      justify-content: flex-end;
+      gap: 12px;
+      margin-top: 18px;
+      padding: 14px 18px max(14px, env(safe-area-inset-bottom));
+      border-radius: 6px;
+      background: var(--panel-strong);
+      box-shadow: inset 0 0 0 1px var(--line), 0 -10px 30px -10px rgba(0, 0, 0, .7);
+    }
+
+    .save-bar .save-status { flex: 1; min-width: 180px; font-size: 13.5px; color: var(--muted); font-weight: 300; }
+    .save-bar .field { width: auto; }
+
+    .key-row { display: grid; grid-template-columns: 1fr auto; align-items: center; gap: 12px; min-height: 52px; padding: 8px 18px; border-top: 1px solid var(--line-soft); }
+    .key-row:first-child { border-top: 0; }
+    .key-btn { min-width: 110px; height: 36px; padding: 0 14px; border: 0; border-radius: 4px; background: rgba(255, 255, 255, .1); box-shadow: inset 0 0 0 1px var(--line); font-size: 14px; }
+    .key-btn:hover { box-shadow: var(--glow); }
+    .key-btn.listening { background: #fff; color: #06215a; animation: pulse 1s ease-in-out infinite; }
+
+    @media (max-width: 760px) {
+      .settings-body { grid-template-columns: 1fr; gap: 10px; }
+      .settings-nav { flex-direction: row; overflow-x: auto; gap: 6px; padding: 2px 2px 8px; }
+      .nav-item { height: 40px; padding: 0 14px; font-size: 14px; white-space: nowrap; }
+      .nav-item svg { display: none; }
+      .pad-card .row { grid-template-columns: 1fr; }
+      .pad-card .row .field { width: 100%; }
+      .row .check { grid-row: 1; }
+    }
+
+    /* ---------- Options menu (controller) ---------- */
+
+    .scrim { position: fixed; inset: 0; z-index: 10; background: rgba(1, 6, 18, .5); opacity: 0; pointer-events: none; transition: opacity .25s; }
+    .menu-open .scrim { opacity: 1; pointer-events: auto; }
+
+    .options-menu {
+      position: fixed;
+      z-index: 11;
+      top: 0;
+      right: 0;
+      bottom: 0;
+      width: min(380px, 92vw);
+      padding: max(18px, env(safe-area-inset-top)) max(18px, env(safe-area-inset-right)) 18px 18px;
+      background: linear-gradient(180deg, rgba(4, 22, 62, .97), rgba(2, 10, 30, .98));
+      box-shadow: -1px 0 0 var(--line), -30px 0 60px -30px rgba(0, 0, 0, .9);
+      transform: translateX(105%);
+      transition: transform .3s var(--ease);
+      overflow-y: auto;
+      touch-action: pan-y;
+    }
+
+    .options-menu.open { transform: none; }
+    .options-menu h2 { margin: 6px 0 14px; font-size: 22px; font-weight: 300; }
+    .options-menu .rows { margin-top: 0; }
+    .options-menu .actions { display: grid; gap: 10px; margin-top: 16px; }
+    .menu-close { position: absolute; top: max(14px, env(safe-area-inset-top)); right: 14px; }
+
+    /* ---------- Notification ---------- */
+
+    .toast {
+      position: fixed;
+      z-index: 20;
+      top: max(14px, env(safe-area-inset-top));
+      left: max(14px, env(safe-area-inset-left));
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      max-width: min(420px, 90vw);
+      padding: 12px 16px 12px 12px;
+      border-radius: 4px;
+      background: linear-gradient(90deg, rgba(10, 52, 130, .96), rgba(4, 20, 56, .96));
+      box-shadow: inset 3px 0 0 #fff, 0 16px 40px -16px rgba(0, 0, 0, .9);
+      font-size: 14px;
+      opacity: 0;
+      transform: translateX(-20px);
+      pointer-events: none;
+      transition: opacity .25s, transform .3s var(--ease);
+    }
+
+    .toast svg { width: 26px; height: 26px; flex: none; }
+    .toast.show { opacity: 1; transform: none; }
+
+    .keep-awake { position: fixed; left: 0; bottom: 0; width: 1px; height: 1px; opacity: .01; pointer-events: none; }
+
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after { animation: none !important; transition: none !important; }
+    }
+  </style>
+</head>
+<body>
+  <div class="backdrop" aria-hidden="true">
+    <svg class="waves slow" viewBox="0 0 3200 400" preserveAspectRatio="none">
+      <defs>
+        <linearGradient id="wg1" x1="0" x2="1"><stop offset="0" stop-color="#fff" stop-opacity="0"/><stop offset=".5" stop-color="#bcd8ff" stop-opacity=".55"/><stop offset="1" stop-color="#fff" stop-opacity="0"/></linearGradient>
+      </defs>
+      <path stroke="url(#wg1)" stroke-width="1.2" d="M0 230 C 200 150 400 310 800 230 S 1400 150 1600 230 C 1800 150 2000 310 2400 230 S 3000 150 3200 230"/>
+      <path stroke="url(#wg1)" stroke-width="2" opacity=".6" d="M0 260 C 250 200 550 330 800 260 S 1350 190 1600 260 C 1850 200 2150 330 2400 260 S 2950 190 3200 260"/>
+    </svg>
+    <svg class="waves" viewBox="0 0 3200 400" preserveAspectRatio="none">
+      <defs>
+        <linearGradient id="wg2" x1="0" x2="1"><stop offset="0" stop-color="#7fb2ff" stop-opacity=".1"/><stop offset=".5" stop-color="#fff" stop-opacity=".5"/><stop offset="1" stop-color="#7fb2ff" stop-opacity=".1"/></linearGradient>
+      </defs>
+      <path stroke="url(#wg2)" stroke-width="1.5" d="M0 200 C 300 110 500 300 800 200 S 1300 100 1600 200 C 1900 110 2100 300 2400 200 S 2900 100 3200 200"/>
+      <path stroke="url(#wg2)" stroke-width="1" opacity=".7" d="M0 215 C 300 140 520 290 800 215 S 1320 130 1600 215 C 1900 140 2120 290 2400 215 S 2920 130 3200 215"/>
+      <path stroke="url(#wg2)" stroke-width="3" opacity=".35" d="M0 240 C 280 170 540 330 800 240 S 1330 160 1600 240 C 1880 170 2140 330 2400 240 S 2930 160 3200 240"/>
+    </svg>
+    <div class="sparkles"></div>
+  </div>
+
+  <!-- Home: pick a pad -->
+  <div class="home" id="home">
+    <header class="topbar">
+      <div class="tb-group">
+        <div class="app-mark">
+          <svg viewBox="0 0 32 32" aria-hidden="true"><path fill="#fff" d="M9 10h14a6 6 0 0 1 5.8 7.6l-1.2 4.6a3.4 3.4 0 0 1-5.9 1.3L18.5 20h-5l-3.2 3.5a3.4 3.4 0 0 1-5.9-1.3l-1.2-4.6A6 6 0 0 1 9 10zm1 4v2h-2v2h2v2h2v-2h2v-2h-2v-2h-2zm11.5 0a1.5 1.5 0 1 0 0 3 1.5 1.5 0 0 0 0-3zm-2.5 3.5a1.5 1.5 0 1 0 0 3 1.5 1.5 0 0 0 0-3z"/></svg>
+          <span>Control4Free</span>
+        </div>
+        <span class="conn" id="conn" data-conn="connecting" role="status" aria-live="polite"><span class="dot"></span><span id="connText">Connecting</span></span>
+      </div>
+      <div class="tb-group">
+        <button class="icon-btn" type="button" id="openSettings" aria-label="Settings">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3.2"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg>
+        </button>
+        <span class="clock" data-clock></span>
+      </div>
+    </header>
+
+    <main class="home-main">
+      <form class="panel" id="addressForm" hidden>
+        <h2>Console address</h2>
+        <p class="hint" id="addressHint">Enter your PS4 IP address followed by :4264. Load Control4Free on the PS4 first.</p>
+        <div class="address-row">
+          <input class="field" id="address" inputmode="url" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="192.168.1.20:4264" aria-label="Console address">
+          <button class="btn primary" type="submit">Connect</button>
+        </div>
+      </form>
+
+      <section aria-labelledby="padsTitle">
+        <h1 class="screen-title" id="padsTitle">Connect a controller</h1>
+        <p class="screen-sub">Select a controller, then choose its user on the PS4 with the D-pad and Cross. Connect one at a time. PS cancels the user-selection screen.</p>
+        <div class="tiles" id="padGrid"></div>
+      </section>
+
+      <section class="panel" aria-labelledby="gpTitle" id="gamepadSection">
+        <h2 id="gpTitle">Controllers on this device</h2>
+        <p class="hint" id="gamepadHint"></p>
+        <ul class="gp-list" id="gamepadList"></ul>
+      </section>
+    </main>
+
+    <footer class="home-foot">
+      <span id="version">Control4Free</span>
+      <button class="link-btn" type="button" id="keysLink">Keyboard keys</button>
+    </footer>
+  </div>
+
+  <!-- Controller: DualShock 4 buttons, each placed from DEFAULT_LAYOUT in the script -->
+  <div class="pad-view" id="padView" data-conn="connecting" hidden>
+    <button class="corner-btn left" id="backBtn" type="button" aria-label="Back to the pads">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg>
+    </button>
+    <button class="corner-btn right" id="fsBtn" type="button" aria-label="Full screen">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/></svg>
+    </button>
+
+    <button class="corner-btn" style="right:70px" id="padMenuBtn" type="button" aria-label="Controller menu">☰</button>
+    <div class="pad-area">
+      <button class="ctl trigger" data-ctl="l2" data-btn="L2" type="button"><span class="trigger-fill" data-fill="L2"></span><span class="engraved">L2</span><span class="keyhint" data-hint="L2"></span></button>
+      <button class="ctl bumper" data-ctl="l1" data-btn="L1" type="button"><span class="engraved">L1</span><span class="keyhint" data-hint="L1"></span></button>
+      <button class="ctl trigger" data-ctl="r2" data-btn="R2" type="button"><span class="trigger-fill" data-fill="R2"></span><span class="engraved">R2</span><span class="keyhint" data-hint="R2"></span></button>
+      <button class="ctl bumper" data-ctl="r1" data-btn="R1" type="button"><span class="engraved">R1</span><span class="keyhint" data-hint="R1"></span></button>
+
+      <button class="ctl capsule-btn" data-ctl="share" id="shareBtn" data-btn="SHARE" type="button" aria-label="Share"><span class="cap-label">SHARE</span><span class="capsule"></span></button>
+      <button class="ctl capsule-btn" data-ctl="options" data-btn="OPTIONS" type="button" aria-label="Options"><span class="cap-label">OPTIONS</span><span class="capsule"></span><span class="keyhint" data-hint="OPTIONS"></span></button>
+
+      <div class="ctl touchpad" data-ctl="touchpad" id="touchpad" aria-label="Touchpad"><span class="pad-label" id="padLabel"></span></div>
+
+      <button class="ctl ps-btn" data-ctl="ps" id="psBtn" data-btn="PS" type="button" aria-label="PS button">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 11.5L12 5l8 6.5"/><path d="M6.5 10v8.5h11V10"/></svg>
+      </button>
+
+      <div class="ctl dpad" data-ctl="dpad" id="dpad" aria-label="Directional buttons">
+        <svg viewBox="-128 -128 256 256" aria-hidden="true">
+          <defs>
+            <linearGradient id="dpadArm" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#3d4558"/><stop offset=".5" stop-color="#232a38"/><stop offset="1" stop-color="#161a24"/></linearGradient>
+          </defs>
+          <circle class="pivot" r="34"/>
+          <path class="mark" d="M0-122l12 14h-24zM0 122l12-14h-24zM-122 0l14 12v-24zM122 0l-14 12v-24z"/>
+          <path class="arm" data-arm="UP" d="M0-9L30-39V-88Q30-100 18-100H-18Q-30-100-30-88V-39Z"/>
+          <path class="arm" data-arm="RIGHT" d="M9 0L39 30H88Q100 30 100 18V-18Q100-30 88-30H39Z"/>
+          <path class="arm" data-arm="DOWN" d="M0 9L-30 39V88Q-30 100-18 100H18Q30 100 30 88V39Z"/>
+          <path class="arm" data-arm="LEFT" d="M-9 0L-39-30H-88Q-100-30-100-18V18Q-100 30-88 30H-39Z"/>
+        </svg>
+      </div>
+
+      <div class="ctl face" data-ctl="face">
+        <button class="face-btn tri" data-btn="TRIANGLE" data-slide type="button" aria-label="Triangle"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"><path d="M12 4.6l7.2 12.4H4.8z"/></svg><span class="keyhint" data-hint="TRIANGLE"></span></button>
+        <button class="face-btn cir" data-btn="CIRCLE" data-slide type="button" aria-label="Circle"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><circle cx="12" cy="12" r="6.6"/></svg><span class="keyhint" data-hint="CIRCLE"></span></button>
+        <button class="face-btn crs" data-btn="CROSS" data-slide type="button" aria-label="Cross"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><path d="M6.6 6.6l10.8 10.8M17.4 6.6L6.6 17.4"/></svg><span class="keyhint" data-hint="CROSS"></span></button>
+        <button class="face-btn sqr" data-btn="SQUARE" data-slide type="button" aria-label="Square"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"><rect x="6.4" y="6.4" width="11.2" height="11.2"/></svg><span class="keyhint" data-hint="SQUARE"></span></button>
+      </div>
+
+      <div class="ctl stick" data-ctl="lstick" data-stick="L" aria-label="Left stick"><div class="knob"></div></div>
+      <div class="ctl stick" data-ctl="rstick" data-stick="R" aria-label="Right stick"><div class="knob"></div></div>
+      <button class="ctl stick-btn" data-ctl="l3" data-btn="L3" type="button" aria-label="L3"><span class="engraved">L3</span><span class="keyhint" data-hint="L3"></span></button>
+      <button class="ctl stick-btn" data-ctl="r3" data-btn="R3" type="button" aria-label="R3"><span class="engraved">R3</span><span class="keyhint" data-hint="R3"></span></button>
+    </div>
+
+    <!-- Layout editor: the bar can be dragged by its grip; the panel follows the selected control -->
+    <div class="layout-bar" id="layoutBar" hidden>
+      <span class="lb-grip" id="lbGrip" role="button" aria-label="Move this bar">
+        <svg viewBox="0 0 24 24" fill="currentColor"><circle cx="9" cy="6" r="1.6"/><circle cx="15" cy="6" r="1.6"/><circle cx="9" cy="12" r="1.6"/><circle cx="15" cy="12" r="1.6"/><circle cx="9" cy="18" r="1.6"/><circle cx="15" cy="18" r="1.6"/></svg>
+      </span>
+      <button class="lb-btn" type="button" id="lbReset">Reset to default</button>
+      <button class="lb-btn" type="button" id="lbCancel">Cancel</button>
+      <button class="lb-btn primary" type="button" id="lbDone">Done</button>
+    </div>
+
+    <div class="layout-bar layout-panel" id="layoutPanel" hidden>
+      <span class="lb-title" id="lbTitle"></span>
+      <label class="lb-size">Size <input type="range" id="lbSize" min="50" max="200" step="5"></label>
+      <button class="lb-btn" type="button" id="lbHide">Hide</button>
+    </div>
+
+    <div class="rotate">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="6" y="2.5" width="12" height="19" rx="2.5"/><path d="M11 18.5h2"/></svg>
+      <strong>Turn your phone sideways</strong>
+      <p>The controller needs landscape mode.</p>
+      <button class="link-btn" type="button" id="portraitOk">Use it upright anyway</button>
+    </div>
+  </div>
+
+  <!-- Settings -->
+  <div class="settings-view" id="settingsView" hidden>
+    <div class="backdrop" aria-hidden="true"></div>
+    <header class="topbar">
+      <div class="tb-group">
+        <button class="icon-btn" id="settingsBack" type="button" aria-label="Back">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg>
+        </button>
+        <span class="app-mark">Settings</span>
+      </div>
+      <span class="clock" data-clock></span>
+    </header>
+    <div class="settings-body">
+      <nav class="settings-nav" role="tablist" aria-label="Settings">
+        <button class="nav-item" role="tab" data-page="device" aria-selected="false"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="7" y="2.5" width="10" height="19" rx="2"/><path d="M11 18.5h2"/></svg>This device</button>
+        <button class="nav-item" role="tab" data-page="keyboard" aria-selected="false"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="2.5" y="6" width="19" height="12" rx="2"/><path d="M6 10h1M9.5 10h1M13 10h1M16.5 10h1M7 14h10"/></svg>Keyboard</button>
+      </nav>
+
+      <div class="settings-pages">
+        <section data-page="device" hidden>
+          <h2 class="page-title">This device</h2>
+          <p class="hint">Saved on this phone or computer only.</p>
+          <div class="rows" id="deviceRows"></div>
+        </section>
+
+        <section data-page="keyboard" hidden>
+          <h2 class="page-title">Keyboard</h2>
+          <p class="hint">Click a key to change it, then press the new key. Keys drive the pad opened on this page.</p>
+          <div class="rows" id="keyRows"></div>
+          <div class="actions" style="margin-top:14px"><button class="btn" type="button" id="resetKeys">Reset keys</button></div>
+        </section>
+
+      </div>
+    </div>
+  </div>
+
+  <!-- Options menu on the controller -->
+  <div class="scrim" id="scrim"></div>
+  <aside class="options-menu" id="optionsMenu" aria-label="Options">
+    <button class="icon-btn menu-close" type="button" id="closeOptions" aria-label="Close">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg>
+    </button>
+    <h2>Options</h2>
+    <div class="rows" id="menuRows"></div>
+    <div class="actions">
+      <button class="btn" type="button" id="menuLayout">Edit the button layout</button>
+      <button class="btn" type="button" id="menuSettings">All settings</button>
+      <button class="btn danger" type="button" id="leaveBtn">Disconnect controller</button>
+      <button class="btn danger" type="button" id="stopBtn">Stop Control4Free</button>
+    </div>
+  </aside>
+
+  <div class="toast" id="toast" role="status" aria-live="polite">
+    <svg viewBox="0 0 32 32" aria-hidden="true"><path fill="#fff" d="M9 10h14a6 6 0 0 1 5.8 7.6l-1.2 4.6a3.4 3.4 0 0 1-5.9 1.3L18.5 20h-5l-3.2 3.5a3.4 3.4 0 0 1-5.9-1.3l-1.2-4.6A6 6 0 0 1 9 10z"/></svg>
+    <span id="toastText"></span>
+  </div>
+
+  <script>
+  (() => {
+    'use strict';
+
+    const PADS = 4;
+    const B = {
+      SHARE: 0x0001, PS: 0x10000, L3: 0x0002, R3: 0x0004, OPTIONS: 0x0008, UP: 0x0010, RIGHT: 0x0020, DOWN: 0x0040, LEFT: 0x0080,
+      L2: 0x0100, R2: 0x0200, L1: 0x0400, R1: 0x0800,
+      TRIANGLE: 0x1000, CIRCLE: 0x2000, CROSS: 0x4000, SQUARE: 0x8000, TOUCH: 0x100000,
+    };
+    const VALID_BUTTONS = 0x0011FFFF;
+    const TOUCH_W = 1919, TOUCH_H = 941;
+    // How far the drawn stick top moves at full tilt, as a share of the stick's area
+    const KNOB_TRAVEL = 0.27;
+    // A press shorter than this is held a bit longer, so games that poll once per frame still see it
+    const MIN_HOLD_MS = 50;
+    const KEEPALIVE_MS = 1000;
+    const FALLBACK_COLORS = [[32, 96, 255], [255, 48, 64], [48, 200, 96], [255, 80, 180]];
+    const KEEP_AWAKE_MP4 = 'data:video/mp4;base64,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';
+    const KEEP_AWAKE_WEBM = 'data:video/webm;base64,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';
+
+    const $ = (sel, root = document) => root.querySelector(sel);
+    const $$ = (sel, root = document) => Array.from(root.querySelectorAll(sel));
+    const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
+    const now = () => performance.now();
+    const css = rgb => `rgb(${rgb[0]}, ${rgb[1]}, ${rgb[2]})`;
+
+    const store = {
+      get(key, fallback) {
+        try { const v = localStorage.getItem('c4f.' + key); return v === null ? fallback : JSON.parse(v); }
+        catch (e) { return fallback; }
+      },
+      set(key, value) { try { localStorage.setItem('c4f.' + key, JSON.stringify(value)); } catch (e) { /* private mode */ } },
+    };
+
+    // Settings of this device (the console's settings live on the console)
+    const DEVICE_SETTINGS = [
+      ['keepAwake', 'Keep the screen on', 'While this page controls a pad, the screen doesn\'t turn off.', true],
+      ['haptics', 'Vibration', 'Buzz this device when you press a button or the game rumbles (Android).', 'vibrate' in navigator],
+      ['floating', 'Floating sticks', 'A stick starts wherever your thumb lands inside its area.', false],
+      ['tapClick', 'Tap the touchpad to click', 'A quick tap presses the touchpad button. Hold still to keep it pressed.', true],
+      ['stickClick', 'Double-tap a stick for L3 / R3', 'Tap a stick, then touch it again right away to press it in. Hold the second touch to keep it pressed. Off: L3 and R3 get their own buttons.', true],
+      // Key labels only by default where a keyboard is likely: not on phones and tablets
+      ['keys', 'Show keyboard keys', 'Label the on-screen buttons with their keyboard keys.',
+        navigator.maxTouchPoints === 0 && matchMedia('(hover: hover) and (pointer: fine)').matches],
+    ];
+    const settings = {};
+    for (const [key, , , fallback] of DEVICE_SETTINGS) settings[key] = store.get(key, fallback);
+
+    let toastTimer = 0;
+    function toast(text) {
+      $('#toastText').textContent = text;
+      $('#toast').classList.add('show');
+      clearTimeout(toastTimer);
+      toastTimer = setTimeout(() => $('#toast').classList.remove('show'), 3000);
+    }
+
+    function el(tag, cls, text) {
+      const e = document.createElement(tag);
+      if (cls) e.className = cls;
+      if (text !== undefined) e.textContent = text;
+      return e;
+    }
+
+    // ---------------------------------------------------------------- clock
+
+    function tickClock() {
+      const text = new Date().toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+      for (const c of $$('[data-clock]')) c.textContent = text;
+    }
+    tickClock();
+    setInterval(tickClock, 10000);
+
+    // ---------------------------------------------------------------- connection
+
+    const conn = {
+      ws: null, state: 'connecting', address: '', protocol: 1, version: '', nextId: 1,
+      pending: new Map(), retry: 0, retryTimer: 0, everOpened: false,
+    };
+
+    const status = Array.from({ length: PADS }, (_, i) => ({
+      pad: i, open: false, enabled: true, real: false, logged: false, joined: false, connected: false,
+      full: false, shared: false, player: 0, uid: '', cfg: '', name: 'Pad ' + (i + 1),
+      color: FALLBACK_COLORS[i], clients: 0, known: false,
+    }));
+
+    const servedByConsole = location.protocol === 'http:' || location.protocol === 'https:';
+
+    function initialAddress() {
+      const param = new URLSearchParams(location.search).get('host');
+      if (param) return param;
+      if (servedByConsole && location.host) return location.host;
+      return store.get('address', '');
+    }
+
+    function setConnState(state, text) {
+      conn.state = state;
+      $('#conn').dataset.conn = state;
+      $('#padView').dataset.conn = state;
+      $('#connText').textContent = text;
+      renderPadLabel();
+    }
+
+    function connect(address) {
+      clearTimeout(conn.retryTimer);
+      if (conn.ws) {
+        conn.ws.onclose = null;
+        conn.ws.close();
+      }
+      conn.address = address.trim().replace(/^wss?:\/\//, '').replace(/\/.*$/, '');
+      if (!conn.address) {
+        setConnState('closed', 'Not connected');
+        $('#addressForm').hidden = false;
+        return;
+      }
+      if (!servedByConsole) store.set('address', conn.address);
+      setConnState('connecting', conn.everOpened ? 'Waiting for Control4Free on the PS4' : 'Connecting to ' + conn.address);
+      let ws;
+      try {
+        ws = new WebSocket('ws://' + conn.address);
+      } catch (e) {
+        setConnState('closed', 'Invalid address');
+        $('#addressForm').hidden = false;
+        return;
+      }
+      conn.ws = ws;
+      ws.onopen = () => {
+        conn.retry = 0;
+        conn.everOpened = true;
+        setConnState('open', 'Connected to ' + conn.address);
+        $('#addressForm').hidden = servedByConsole;
+        $('#addressHint').classList.remove('error');
+        call('info', []).then(info => {
+          conn.protocol = info.protocol || 1;
+          conn.version = info.version || '';
+          $('#version').textContent = 'Control4Free' + (conn.version ? ' ' + conn.version : '');
+          if (conn.protocol >= 2) sendClaim(true); else renderPads();
+        }).catch(() => {});
+        resendAll();
+      };
+      ws.onmessage = ev => onMessage(ev.data);
+      ws.onclose = () => {
+        conn.ws = null;
+        // Reconnecting the page must not silently recreate a controller or
+        // replay held buttons. The user selects a controller again.
+        lastClaim = '';
+        releaseScreen(); heldKeys.clear();
+        for (const src of gamepadSources.values()) src.pad = -1;
+        primaryPad = -1;
+        Object.assign(screenSource, blankSource(-1));
+        Object.assign(keySource, blankSource(-1));
+        padView.hidden = true; $('#home').hidden = false;
+        document.body.classList.remove('in-pad');
+        for (const [, p] of conn.pending) p.reject(new Error('closed'));
+        conn.pending.clear();
+        stopAllRumble();
+        const wait = Math.min(5000, 800 * Math.pow(1.6, conn.retry++));
+        if (!conn.everOpened && !servedByConsole) {
+          setConnState('closed', 'Can\'t reach ' + conn.address);
+          $('#addressForm').hidden = false;
+          $('#addressHint').textContent = 'Can\'t reach the console. Load the Control4Free payload, then check the address.';
+          $('#addressHint').classList.add('error');
+        } else {
+          setConnState('connecting', 'Waiting for Control4Free on the PS4');
+        }
+        conn.retryTimer = setTimeout(() => connect(conn.address), wait);
+      };
+    }
+
+    function send(obj) {
+      if (conn.ws && conn.ws.readyState === WebSocket.OPEN) {
+        conn.ws.send(JSON.stringify(obj));
+        return true;
+      }
+      return false;
+    }
+
+    function call(method, params) {
+      const id = conn.nextId++;
+      return new Promise((resolve, reject) => {
+        if (!send({ id, method, params })) return reject(new Error('Not connected to the console'));
+        const timer = setTimeout(() => {
+          conn.pending.delete(id);
+          reject(new Error('The console did not answer'));
+        }, 4000);
+        conn.pending.set(id, {
+          resolve: v => { clearTimeout(timer); resolve(v); },
+          reject: e => { clearTimeout(timer); reject(e); },
+        });
+      });
+    }
+
+    function onMessage(data) {
+      let msg;
+      try { msg = JSON.parse(data); } catch (e) { return; }
+      if (msg.id !== undefined) {
+        const p = conn.pending.get(msg.id);
+        if (p) {
+          conn.pending.delete(msg.id);
+          if (msg.error) p.reject(msg.error); else p.resolve(msg.result);
+        }
+        return;
+      }
+      const params = msg.params;
+      switch (msg.method) {
+        case 's': applyStatus(params); break;
+        case 'error': toast(params.message || 'Controller error'); break;
+        case 'v': onRumble(params[0], params[1], params[2]); break;
+        case 'l': setPadColor(params[0], [params[1], params[2], params[3]]); break;
+        case 'rl': setPadColor(params[0], params.length >= 4 ? [params[1], params[2], params[3]] : FALLBACK_COLORS[params[0]]); break;
+      }
+    }
+
+    function applyStatus(s) {
+      if (!s || !Array.isArray(s.pads)) return;
+      if (s.version) {
+        conn.version = s.version;
+        $('#version').textContent = 'Control4Free ' + s.version;
+      }
+      for (const p of s.pads) {
+        const st = status[p.pad];
+        if (!st) continue;
+        const wasOpen = st.open;
+        const wasMine = st.mine;
+        Object.assign(st, p, { known: true });
+        if (wasMine && !st.mine) {
+          for (const src of gamepadSources.values()) if (src.pad === p.pad) src.pad = -1;
+          if (primaryPad === p.pad) closePad();
+          lastClaim = '';
+        }
+        // The game just opened this pad: make sure it gets our current state right away
+        if (!wasOpen && st.open) lastSent[p.pad] = '';
+      }
+      renderPads();
+      renderPadLabel();
+      if (gamepadSources.size && !(document.activeElement && document.activeElement.closest('.seg'))) renderGamepads();
+    }
+
+    function setPadColor(pad, rgb) {
+      if (!status[pad] || !Array.isArray(rgb)) return;
+      status[pad].color = rgb;
+      renderPads();
+      renderPadLabel();
+    }
+
+    // ---------------------------------------------------------------- input state
+
+    // Every input source reports into its own slot; a pad's state merges all sources that drive it
+    function blankSource(pad) {
+      return { pad, buttons: 0, lx: 128, ly: 128, rx: 128, ry: 128, l2: 0, r2: 0, touches: [] };
+    }
+
+    const screenSource = blankSource(-1);
+    const keySource = blankSource(-1);
+    const gamepadSources = new Map(); // gamepad index -> source
+    let primaryPad = -1;              // the pad opened in the controller view
+
+    function allSources() {
+      return [screenSource, keySource, ...gamepadSources.values()];
+    }
+
+    function farther(a, b) {
+      return Math.abs(b - 128) > Math.abs(a - 128) ? b : a;
+    }
+
+    function mergedState(pad) {
+      const s = blankSource(pad);
+      for (const src of allSources()) {
+        if (src.pad !== pad) continue;
+        s.buttons |= src.buttons;
+        s.lx = farther(s.lx, src.lx);
+        s.ly = farther(s.ly, src.ly);
+        s.rx = farther(s.rx, src.rx);
+        s.ry = farther(s.ry, src.ry);
+        s.l2 = Math.max(s.l2, src.l2);
+        s.r2 = Math.max(s.r2, src.r2);
+        if (src.touches.length) s.touches = s.touches.concat(src.touches);
+      }
+      if (s.buttons & B.L2) s.l2 = Math.max(s.l2, 255);
+      if (s.buttons & B.R2) s.r2 = Math.max(s.r2, 255);
+      if (s.l2 > 20) s.buttons |= B.L2;
+      if (s.r2 > 20) s.buttons |= B.R2;
+      s.touches = s.touches.slice(0, 2);
+      return s;
+    }
+
+    function claimedPads() {
+      const pads = new Set();
+      if (primaryPad >= 0) pads.add(primaryPad);
+      for (const src of gamepadSources.values()) if (src.pad >= 0) pads.add(src.pad);
+      return [...pads].sort();
+    }
+
+    let lastClaim = '';
+    function sendClaim(force) {
+      keepAwake.update();
+      if (conn.protocol < 2 || conn.state !== 'open') return;
+      const pads = claimedPads();
+      const key = pads.join(',');
+      if (!force && key === lastClaim) return;
+      lastClaim = key;
+      call('claim', pads).then(applyStatus).catch(e => {
+        lastClaim = '';
+        toast(e.message || 'Could not connect the controller');
+        closePad();
+        for (const src of gamepadSources.values()) src.pad = -1;
+        renderGamepads();
+      });
+    }
+
+    const lastSent = Array(PADS).fill('');
+    const lastSentAt = Array(PADS).fill(0);
+
+    function packState(pad, s) {
+      const params = [pad, s.buttons & VALID_BUTTONS, s.lx, s.ly, s.rx, s.ry, s.l2, s.r2, s.touches.length];
+      for (const t of s.touches) params.push(t.id, t.x, t.y);
+      return params;
+    }
+
+    function flush(t) {
+      for (const pad of claimedPads()) {
+        const params = packState(pad, mergedState(pad));
+        const key = params.join(',');
+        // Send on change, and once a second anyway so the console knows this device is still here
+        if (key !== lastSent[pad] || t - lastSentAt[pad] > KEEPALIVE_MS) {
+          if (send({ method: 'u', params })) {
+            if (key !== lastSent[pad]) pulseActivity(pad);
+            lastSent[pad] = key;
+            lastSentAt[pad] = t;
+          }
+        }
+      }
+    }
+
+    function resendAll() {
+      lastSent.fill('');
+    }
+
+    // Leaving a pad: protocol 2 consoles release it when the claim changes (input would claim it again),
+    // protocol 1 consoles need a neutral state
+    function releasePad(pad) {
+      if (pad < 0) return;
+      if (conn.protocol < 2) send({ method: 'u', params: [pad, 0, 128, 128, 128, 128, 0, 0, 0] });
+      lastSent[pad] = '';
+    }
+
+    // ---------------------------------------------------------------- buttons with a minimum hold
+
+    const holdTimers = new Map();
+
+    function press(src, bit) {
+      src.buttons |= bit;
+      src.pressedAt = src.pressedAt || {};
+      src.pressedAt[bit] = now();
+      const key = (src === screenSource ? 's' : 'k') + bit;
+      clearTimeout(holdTimers.get(key));
+      holdTimers.delete(key);
+      if (settings.haptics && src === screenSource) haptic(8);
+    }
+
+    function release(src, bit) {
+      const at = (src.pressedAt && src.pressedAt[bit]) || 0;
+      const left = MIN_HOLD_MS - (now() - at);
+      const key = (src === screenSource ? 's' : 'k') + bit;
+      if (left > 0) {
+        holdTimers.set(key, setTimeout(() => { src.buttons &= ~bit; holdTimers.delete(key); }, left));
+      } else {
+        src.buttons &= ~bit;
+      }
+    }
+
+    function haptic(ms) {
+      if ('vibrate' in navigator) {
+        try { navigator.vibrate(ms); } catch (e) { /* not allowed yet */ }
+      }
+    }
+
+    // ---------------------------------------------------------------- keep the screen on
+
+    // The Wake Lock API only works on secure (https) pages; the console's page is plain http. A tiny
+    // silent looping video does the same job there: browsers keep the screen on while media plays.
+    const keepAwake = {
+      video: null,
+      lock: null,
+      wanted() {
+        return settings.keepAwake && !document.hidden && claimedPads().length > 0;
+      },
+      async update() {
+        if (this.wanted()) await this.on(); else this.off();
+      },
+      async on() {
+        if ('wakeLock' in navigator && window.isSecureContext) {
+          if (!this.lock) {
+            try {
+              this.lock = await navigator.wakeLock.request('screen');
+              this.lock.addEventListener('release', () => { this.lock = null; });
+            } catch (e) { /* fall back to the video */ }
+          }
+          if (this.lock) return;
+        }
+        if (!this.video) {
+          const v = document.createElement('video');
+          v.className = 'keep-awake';
+          v.muted = true;
+          v.loop = true;
+          v.setAttribute('muted', '');
+          v.setAttribute('playsinline', '');
+          v.setAttribute('webkit-playsinline', '');
+          v.setAttribute('aria-hidden', 'true');
+          for (const [src, type] of [[KEEP_AWAKE_WEBM, 'video/webm'], [KEEP_AWAKE_MP4, 'video/mp4']]) {
+            const s = document.createElement('source');
+            s.src = src;
+            s.type = type;
+            v.appendChild(s);
+          }
+          document.body.appendChild(v);
+          this.video = v;
+        }
+        if (this.video.paused) {
+          try { await this.video.play(); } catch (e) { /* needs a tap first; tried again on the next one */ }
+        }
+      },
+      off() {
+        if (this.lock) { this.lock.release().catch(() => {}); this.lock = null; }
+        if (this.video && !this.video.paused) this.video.pause();
+      },
+    };
+
+    // Starting media needs a user gesture
+    document.addEventListener('pointerdown', () => { if (keepAwake.wanted()) keepAwake.update(); }, true);
+    document.addEventListener('keydown', () => { if (keepAwake.wanted()) keepAwake.update(); }, true);
+
+    // ---------------------------------------------------------------- on-screen controls
+
+    const padView = $('#padView');
+    const pointers = new Map();
+    const draggingStick = { L: false, R: false };
+
+    // ---------------------------------------------------------------- controller layout
+
+    // Where each control sits: x and y are its centre in % of the screen, w and h its size in --u (about 1%
+    // of the screen height). Each control is placed on its own.
+    const DEFAULT_LAYOUT = {
+      l2: { x: 14, y: 10, w: 22, h: 11 },
+      l1: { x: 14, y: 23, w: 22, h: 8 },
+      r2: { x: 86, y: 10, w: 22, h: 11 },
+      r1: { x: 86, y: 23, w: 22, h: 8 },
+      share: { x: 28.5, y: 13, w: 10, h: 14 },
+      options: { x: 71.5, y: 13, w: 10, h: 14 },
+      touchpad: { x: 50, y: 35, w: 76, h: 48 },
+      dpad: { x: 15, y: 55, w: 40, h: 40 },
+      face: { x: 85, y: 55, w: 40, h: 40 },
+      ps: { x: 50, y: 75, w: 10, h: 10 },
+      lstick: { x: 33, y: 79, w: 34, h: 34 },
+      rstick: { x: 67, y: 79, w: 34, h: 34 },
+      l3: { x: 17, y: 88, w: 11, h: 11 },
+      r3: { x: 83, y: 88, w: 11, h: 11 },
+    };
+
+    const CONTROL_NAMES = {
+      l2: 'L2', l1: 'L1', r2: 'R2', r1: 'R1', share: 'SHARE', options: 'OPTIONS', touchpad: 'Touchpad',
+      dpad: 'D-pad', face: 'Face buttons', ps: 'PS button', lstick: 'Left stick', rstick: 'Right stick',
+      l3: 'L3', r3: 'R3',
+    };
+
+    // This device keeps one layout per orientation
+    const portraitQuery = matchMedia('(orientation: portrait)');
+    const layoutKey = () => portraitQuery.matches ? 'layout.portrait' : 'layout.landscape';
+
+    function defaultLayout() {
+      const out = {};
+      for (const [id, place] of Object.entries(DEFAULT_LAYOUT)) out[id] = Object.assign({ hide: false }, place);
+      return out;
+    }
+
+    function loadLayout() {
+      const saved = store.get(layoutKey(), {}) || {};
+      const out = defaultLayout();
+      const num = (v, lo, hi, fallback) => Number.isFinite(v) ? clamp(v, lo, hi) : fallback;
+      for (const [id, def] of Object.entries(DEFAULT_LAYOUT)) {
+        const s = saved[id];
+        if (!s || typeof s !== 'object') continue;
+        out[id] = {
+          x: num(s.x, 0, 100, def.x), y: num(s.y, 0, 100, def.y),
+          w: num(s.w, def.w / 2, def.w * 2, def.w), h: num(s.h, def.h / 2, def.h * 2, def.h),
+          hide: !!s.hide,
+        };
+      }
+      return out;
+    }
+
+    let layout = loadLayout();
+
+    function ctlNode(id) {
+      return $(`[data-ctl="${id}"]`, padView);
+    }
+
+    function setPlace(node, place) {
+      for (const key of ['x', 'y', 'w', 'h']) node.style.setProperty('--' + key, place[key]);
+    }
+
+    function applyLayout() {
+      for (const node of $$('[data-ctl]', padView)) {
+        const id = node.dataset.ctl;
+        const place = layout[id];
+        setPlace(node, place);
+        // L3 / R3 buttons are only needed when double-tapping a stick doesn't press it
+        const unused = (id === 'l3' || id === 'r3') && settings.stickClick;
+        node.hidden = unused || (place.hide && !editor.active);
+        node.classList.toggle('ctl-off', place.hide);
+      }
+    }
+
+    // Keep the whole control on screen
+    function keepOnScreen(node, place) {
+      const area = padArea.getBoundingClientRect();
+      const halfW = node.offsetWidth / area.width * 50;
+      const halfH = node.offsetHeight / area.height * 50;
+      place.x = Math.round(clamp(place.x, halfW, 100 - halfW) * 2) / 2;
+      place.y = Math.round(clamp(place.y, halfH, 100 - halfH) * 2) / 2;
+    }
+
+    // ---------------------------------------------------------------- layout editor
+
+    const padArea = $('.pad-area', padView);
+
+    const editor = {
+      active: false,
+      key: '',
+      before: null,
+      selected: '',
+      resetTimer: 0,
+
+      open() {
+        if (this.active) return;
+        releaseScreen();
+        this.active = true;
+        this.key = layoutKey();
+        this.before = JSON.parse(JSON.stringify(layout));
+        padView.classList.add('editing');
+        const bar = $('#layoutBar');
+        bar.classList.remove('moved');
+        bar.style.left = bar.style.top = '';
+        bar.hidden = false;
+        this.select('');
+        applyLayout();
+        toast('Drag a control to move it. Tap one to resize or hide it.');
+      },
+
+      // Done keeps the changes on this device, Cancel puts back the layout from before
+      finish(save) {
+        if (!this.active) return;
+        if (save) store.set(this.key, layout);
+        else layout = this.before;
+        this.active = false;
+        this.select('');
+        this.disarmReset();
+        padView.classList.remove('editing', 'dragging');
+        $('#layoutBar').hidden = true;
+        applyLayout();
+      },
+
+      select(id) {
+        this.selected = id;
+        for (const node of $$('[data-ctl]', padView)) node.classList.toggle('selected', node.dataset.ctl === id);
+        if (id) {
+          $('#lbTitle').textContent = CONTROL_NAMES[id];
+          $('#lbSize').value = Math.round(layout[id].w / DEFAULT_LAYOUT[id].w * 100);
+          $('#lbHide').textContent = layout[id].hide ? 'Show' : 'Hide';
+        }
+        this.placePanel();
+      },
+
+      // The size and hide panel sits just below the selected control, or above it when there's no room
+      placePanel() {
+        const panel = $('#layoutPanel');
+        panel.hidden = !this.selected;
+        if (!this.selected) return;
+        const view = padView.getBoundingClientRect();
+        const r = ctlNode(this.selected).getBoundingClientRect();
+        const pw = panel.offsetWidth, ph = panel.offsetHeight, gap = 10;
+        let top = r.bottom + gap;
+        if (top + ph > view.height - 4) top = r.top - gap - ph;
+        top = clamp(top, 4, view.height - ph - 4);
+        panel.style.left = clamp(r.left + r.width / 2 - pw / 2, 4, view.width - pw - 4) + 'px';
+        panel.style.top = top + 'px';
+      },
+
+      // Drag the bar by its grip, out of the way of the controls under it
+      dragBar(e) {
+        e.preventDefault();
+        const bar = $('#layoutBar');
+        const view = padView.getBoundingClientRect();
+        const r = bar.getBoundingClientRect();
+        const dx = e.clientX - r.left, dy = e.clientY - r.top;
+        pointers.set(e.pointerId, {
+          move(ev) {
+            bar.classList.add('moved');
+            bar.style.left = clamp(ev.clientX - dx, 4, view.width - r.width - 4) + 'px';
+            bar.style.top = clamp(ev.clientY - dy, 4, view.height - r.height - 4) + 'px';
+          },
+          up() {},
+        });
+        try { padView.setPointerCapture(e.pointerId); } catch (err) { /* already gone */ }
+      },
+
+      pointerDown(e) {
+        if (e.target.closest('#lbGrip')) {
+          this.dragBar(e);
+          return;
+        }
+        if (e.target.closest('#layoutBar, #layoutPanel')) return;
+        const node = e.target.closest('[data-ctl]');
+        if (!node || !padArea.contains(node)) {
+          this.select('');
+          return;
+        }
+        e.preventDefault();
+        const id = node.dataset.ctl;
+        const place = layout[id];
+        this.select(id);
+        const area = padArea.getBoundingClientRect();
+        const startX = e.clientX, startY = e.clientY, x0 = place.x, y0 = place.y;
+        let moved = false;
+        pointers.set(e.pointerId, {
+          move(ev) {
+            if (!moved && Math.hypot(ev.clientX - startX, ev.clientY - startY) < 4) return;
+            moved = true;
+            padView.classList.add('dragging');
+            place.x = x0 + (ev.clientX - startX) / area.width * 100;
+            place.y = y0 + (ev.clientY - startY) / area.height * 100;
+            keepOnScreen(node, place);
+            setPlace(node, place);
+          },
+          up() {
+            padView.classList.remove('dragging');
+            editor.placePanel();
+          },
+        });
+        try { padView.setPointerCapture(e.pointerId); } catch (err) { /* already gone */ }
+      },
+
+      resize(percent) {
+        const id = this.selected;
+        if (!id) return;
+        const node = ctlNode(id);
+        const place = layout[id];
+        place.w = Math.round(DEFAULT_LAYOUT[id].w * percent) / 100;
+        place.h = Math.round(DEFAULT_LAYOUT[id].h * percent) / 100;
+        setPlace(node, place);
+        keepOnScreen(node, place);
+        setPlace(node, place);
+        this.placePanel();
+      },
+
+      toggleHidden() {
+        const id = this.selected;
+        if (!id) return;
+        layout[id].hide = !layout[id].hide;
+        applyLayout();
+        this.select(id);
+      },
+
+      // Reset asks for a second tap, so a stray tap doesn't throw a layout away
+      reset() {
+        if (!this.resetTimer) {
+          this.resetTimer = setTimeout(() => this.disarmReset(), 3000);
+          $('#lbReset').textContent = 'Tap again to reset';
+          $('#lbReset').classList.add('warn');
+          return;
+        }
+        this.disarmReset();
+        layout = defaultLayout();
+        this.select('');
+        applyLayout();
+        toast('Back to the default layout. Tap Done to keep it.');
+      },
+
+      disarmReset() {
+        clearTimeout(this.resetTimer);
+        this.resetTimer = 0;
+        $('#lbReset').textContent = 'Reset to default';
+        $('#lbReset').classList.remove('warn');
+      },
+    };
+
+    $('#lbSize').addEventListener('input', () => editor.resize(Number($('#lbSize').value)));
+    $('#lbHide').addEventListener('click', () => editor.toggleHidden());
+    $('#lbReset').addEventListener('click', () => editor.reset());
+    $('#lbCancel').addEventListener('click', () => editor.finish(false));
+    $('#lbDone').addEventListener('click', () => editor.finish(true));
+
+    const onOrientation = () => {
+      editor.finish(true);
+      layout = loadLayout();
+      applyLayout();
+    };
+    if (portraitQuery.addEventListener) portraitQuery.addEventListener('change', onOrientation);
+    else portraitQuery.addListener(onOrientation);
+
+    applyLayout();
+
+    function buttonHandler(el) {
+      let current = el;
+      press(screenSource, B[el.dataset.btn]);
+      return {
+        move(ev) {
+          if (!current.hasAttribute('data-slide')) return;
+          const hit = document.elementFromPoint(ev.clientX, ev.clientY);
+          const next = hit && hit.closest('[data-slide]');
+          if (next && next !== current) {
+            release(screenSource, B[current.dataset.btn]);
+            current = next;
+            press(screenSource, B[current.dataset.btn]);
+          }
+        },
+        up() { release(screenSource, B[current.dataset.btn]); },
+      };
+    }
+
+    function dpadHandler(el, e) {
+      let bits = 0;
+      const update = ev => {
+        const r = el.getBoundingClientRect();
+        const dx = (ev.clientX - (r.left + r.width / 2)) / (r.width / 2);
+        const dy = (ev.clientY - (r.top + r.height / 2)) / (r.height / 2);
+        let next = 0;
+        if (Math.hypot(dx, dy) > 0.2) {
+          const angle = Math.atan2(dy, dx) * 180 / Math.PI;
+          const sector = Math.round(((angle + 360) % 360) / 45) % 8;
+          next = [B.RIGHT, B.RIGHT | B.DOWN, B.DOWN, B.DOWN | B.LEFT, B.LEFT, B.LEFT | B.UP, B.UP, B.UP | B.RIGHT][sector];
+        }
+        for (const bit of [B.UP, B.DOWN, B.LEFT, B.RIGHT]) {
+          if ((next & bit) && !(bits & bit)) press(screenSource, bit);
+          if (!(next & bit) && (bits & bit)) release(screenSource, bit);
+        }
+        bits = next;
+      };
+      update(e);
+      return {
+        move: update,
+        up() { for (const bit of [B.UP, B.DOWN, B.LEFT, B.RIGHT]) if (bits & bit) release(screenSource, bit); },
+      };
+    }
+
+    // L3 / R3 on a touch screen: a short, still tap on a stick, then a second touch right after presses the
+    // stick in until that touch lifts
+    const lastStickTap = { L: null, R: null };
+
+    function stickHandler(el, e) {
+      const side = el.dataset.stick;
+      const knob = $('.knob', el);
+      const r = el.getBoundingClientRect();
+      const radius = r.width * 0.36;
+      const travel = r.width * KNOB_TRAVEL;
+      let cx = r.left + r.width / 2;
+      let cy = r.top + r.height / 2;
+      if (settings.floating) { cx = e.clientX; cy = e.clientY; }
+      const startX = e.clientX, startY = e.clientY, startAt = now();
+      const tap = lastStickTap[side];
+      const clickBit = side === 'L' ? B.L3 : B.R3;
+      const clicking = !!(settings.stickClick && tap && startAt - tap.at < 300 && Math.hypot(startX - tap.x, startY - tap.y) < r.width * 0.3);
+      lastStickTap[side] = null;
+      if (clicking) press(screenSource, clickBit);
+      let moved = false;
+      draggingStick[side] = true;
+      el.classList.add('on');
+      const update = ev => {
+        let dx = ev.clientX - cx;
+        let dy = ev.clientY - cy;
+        const len = Math.hypot(dx, dy);
+        if (len > radius) { dx *= radius / len; dy *= radius / len; }
+        if (Math.hypot(ev.clientX - startX, ev.clientY - startY) > r.width * 0.1) moved = true;
+        knob.style.transform = `translate(${dx / radius * travel}px, ${dy / radius * travel}px)`;
+        const x = Math.round(clamp(128 + (dx / radius) * 127.5, 0, 255));
+        const y = Math.round(clamp(128 + (dy / radius) * 127.5, 0, 255));
+        if (side === 'L') { screenSource.lx = x; screenSource.ly = y; } else { screenSource.rx = x; screenSource.ry = y; }
+      };
+      update(e);
+      return {
+        move: update,
+        up(ev) {
+          draggingStick[side] = false;
+          el.classList.remove('on');
+          knob.style.transform = '';
+          shownStick[side] = '';
+          if (side === 'L') { screenSource.lx = 128; screenSource.ly = 128; } else { screenSource.rx = 128; screenSource.ry = 128; }
+          if (clicking) release(screenSource, clickBit);
+          else if (ev && !moved && now() - startAt < 250) lastStickTap[side] = { at: now(), x: startX, y: startY };
+        },
+      };
+    }
+
+    let touchIdCounter = 0;
+    const touchpad = $('#touchpad');
+
+    function touchHandler(el, e) {
+      if (screenSource.touches.length >= 2) return null;
+      const id = touchIdCounter = (touchIdCounter + 1) % 128;
+      const dot = el.appendChild(el.ownerDocument.createElement('span'));
+      dot.className = 'finger';
+      const touch = { id, x: 0, y: 0 };
+      screenSource.touches.push(touch);
+      const startX = e.clientX, startY = e.clientY, startAt = now();
+      let moved = false, held = false;
+      const update = ev => {
+        const r = el.getBoundingClientRect();
+        const fx = clamp((ev.clientX - r.left) / r.width, 0, 1);
+        const fy = clamp((ev.clientY - r.top) / r.height, 0, 1);
+        touch.x = Math.round(fx * TOUCH_W);
+        touch.y = Math.round(fy * TOUCH_H);
+        dot.style.left = (fx * 100) + '%';
+        dot.style.top = (fy * 100) + '%';
+        if (Math.hypot(ev.clientX - startX, ev.clientY - startY) > 12) moved = true;
+      };
+      update(e);
+      const holdTimer = setTimeout(() => {
+        if (!moved && settings.tapClick) { held = true; press(screenSource, B.TOUCH); }
+      }, 420);
+      const remove = () => {
+        dot.remove();
+        const i = screenSource.touches.indexOf(touch);
+        if (i >= 0) screenSource.touches.splice(i, 1);
+      };
+      return {
+        move: update,
+        up() {
+          clearTimeout(holdTimer);
+          if (held) {
+            release(screenSource, B.TOUCH);
+            remove();
+          } else if (!moved && settings.tapClick && now() - startAt < 300) {
+            // Tap: click while the finger is still reported on the pad
+            press(screenSource, B.TOUCH);
+            setTimeout(() => { release(screenSource, B.TOUCH); remove(); }, 90);
+          } else {
+            remove();
+          }
+        },
+      };
+    }
+
+    padView.addEventListener('pointerdown', e => {
+      if (editor.active) {
+        editor.pointerDown(e);
+        return;
+      }
+      const target = e.target.closest('[data-btn], .dpad, [data-stick], #touchpad');
+      if (!target || !padView.contains(target)) return;
+      e.preventDefault();
+      let handler;
+      if (target.dataset.btn) handler = buttonHandler(target);
+      else if (target.classList.contains('dpad')) handler = dpadHandler(target, e);
+      else if (target.dataset.stick) handler = stickHandler(target, e);
+      else handler = touchHandler(target, e);
+      if (!handler) return;
+      pointers.set(e.pointerId, handler);
+      try { padView.setPointerCapture(e.pointerId); } catch (err) { /* already gone */ }
+    });
+
+    padView.addEventListener('pointermove', e => {
+      const h = pointers.get(e.pointerId);
+      if (h) h.move(e);
+    });
+
+    const endPointer = e => {
+      const h = pointers.get(e.pointerId);
+      if (!h) return;
+      pointers.delete(e.pointerId);
+      h.up(e);
+    };
+    padView.addEventListener('pointerup', endPointer);
+    padView.addEventListener('pointercancel', endPointer);
+    padView.addEventListener('lostpointercapture', endPointer);
+    padView.addEventListener('contextmenu', e => e.preventDefault());
+
+    function releaseScreen() {
+      for (const [id, h] of pointers) { pointers.delete(id); h.up(); }
+      Object.assign(screenSource, blankSource(screenSource.pad));
+    }
+
+    // ---------------------------------------------------------------- keyboard (remappable)
+
+    const KEY_ACTIONS = [
+      ['CROSS', 'Cross', 'Space'], ['CIRCLE', 'Circle', 'Escape'], ['SQUARE', 'Square', 'Backspace'],
+      ['TRIANGLE', 'Triangle', 'Enter'], ['L1', 'L1', 'KeyQ'], ['R1', 'R1', 'KeyE'], ['L2', 'L2', 'Digit1'],
+      ['R2', 'R2', 'Digit3'], ['L3', 'L3', 'KeyZ'], ['R3', 'R3', 'KeyC'], ['OPTIONS', 'Options', 'KeyO'],
+      ['PS', 'PS button', 'KeyP'], ['SHARE', 'Share', 'KeyV'], ['TOUCH', 'Touchpad click', 'KeyU'], ['UP', 'D-pad up', 'KeyI'], ['DOWN', 'D-pad down', 'KeyK'],
+      ['LEFT', 'D-pad left', 'KeyJ'], ['RIGHT', 'D-pad right', 'KeyL'],
+      ['LS_UP', 'Left stick up', 'KeyW'], ['LS_DOWN', 'Left stick down', 'KeyS'], ['LS_LEFT', 'Left stick left', 'KeyA'], ['LS_RIGHT', 'Left stick right', 'KeyD'],
+      ['RS_UP', 'Right stick up', 'ArrowUp'], ['RS_DOWN', 'Right stick down', 'ArrowDown'], ['RS_LEFT', 'Right stick left', 'ArrowLeft'], ['RS_RIGHT', 'Right stick right', 'ArrowRight'],
+      ['T_TL', 'Touch top left', 'KeyT'], ['T_TR', 'Touch top right', 'KeyY'], ['T_BL', 'Touch bottom left', 'KeyG'], ['T_BR', 'Touch bottom right', 'KeyH'],
+    ];
+    const STICK_ACTIONS = { LS_UP: ['ly', -1], LS_DOWN: ['ly', 1], LS_LEFT: ['lx', -1], LS_RIGHT: ['lx', 1], RS_UP: ['ry', -1], RS_DOWN: ['ry', 1], RS_LEFT: ['rx', -1], RS_RIGHT: ['rx', 1] };
+    const TOUCH_ACTIONS = { T_TL: [0.25, 0.25], T_TR: [0.75, 0.25], T_BL: [0.25, 0.75], T_BR: [0.75, 0.75] };
+    const defaultKeys = () => Object.fromEntries(KEY_ACTIONS.map(([action, , code]) => [action, code]));
+    let keymap = Object.assign(defaultKeys(), store.get('keymap', {}));
+    let actionForCode = {};
+    const heldKeys = new Map(); // code -> action
+
+    function rebuildKeymap() {
+      actionForCode = {};
+      for (const [action, code] of Object.entries(keymap)) if (code) actionForCode[code] = action;
+      for (const hint of $$('[data-hint]')) hint.textContent = keyLabel(keymap[hint.dataset.hint === 'OPTIONS' ? 'OPTIONS' : hint.dataset.hint]);
+    }
+
+    function keyLabel(code) {
+      if (!code) return '—';
+      const names = { Space: 'Space', Escape: 'Esc', Backspace: 'Bksp', Enter: 'Enter', ArrowUp: '↑', ArrowDown: '↓', ArrowLeft: '←', ArrowRight: '→', ShiftLeft: 'Shift', ShiftRight: 'R Shift', ControlLeft: 'Ctrl', ControlRight: 'R Ctrl', AltLeft: 'Alt', AltRight: 'R Alt', Tab: 'Tab' };
+      return names[code] || code.replace(/^Key/, '').replace(/^Digit/, '').replace(/^Numpad/, 'Num ');
+    }
+
+    function updateKeySticks() {
+      for (const axis of ['lx', 'ly', 'rx', 'ry']) {
+        let v = 0;
+        for (const action of heldKeys.values()) {
+          const s = STICK_ACTIONS[action];
+          if (s && s[0] === axis) v += s[1];
+        }
+        keySource[axis] = v === 0 ? 128 : v < 0 ? 0 : 255;
+      }
+    }
+
+    function typing() {
+      const a = document.activeElement;
+      return a && (a.tagName === 'INPUT' && a.type !== 'checkbox' || a.tagName === 'SELECT' || a.tagName === 'TEXTAREA');
+    }
+
+    window.addEventListener('keydown', e => {
+      if (listeningKey) return;
+      if (primaryPad < 0 || padView.hidden || typing() || e.metaKey || e.ctrlKey || e.altKey) return;
+      const action = actionForCode[e.code];
+      if (!action) return;
+      e.preventDefault();
+      if (e.repeat || heldKeys.has(e.code)) return;
+      heldKeys.set(e.code, action);
+      if (STICK_ACTIONS[action]) updateKeySticks();
+      else if (TOUCH_ACTIONS[action]) {
+        const [fx, fy] = TOUCH_ACTIONS[action];
+        const id = touchIdCounter = (touchIdCounter + 1) % 128;
+        keySource.touches = [{ id, x: Math.round(fx * TOUCH_W), y: Math.round(fy * TOUCH_H), code: e.code }];
+        press(keySource, B.TOUCH);
+      } else press(keySource, B[action]);
+    });
+
+    window.addEventListener('keyup', e => {
+      const action = heldKeys.get(e.code);
+      if (!action) return;
+      heldKeys.delete(e.code);
+      e.preventDefault();
+      if (STICK_ACTIONS[action]) updateKeySticks();
+      else if (TOUCH_ACTIONS[action]) {
+        release(keySource, B.TOUCH);
+        setTimeout(() => { keySource.touches = keySource.touches.filter(t => t.code !== e.code); }, MIN_HOLD_MS);
+      } else release(keySource, B[action]);
+    });
+
+    window.addEventListener('blur', () => {
+      heldKeys.clear();
+      Object.assign(keySource, blankSource(keySource.pad));
+    });
+
+    // ---------------------------------------------------------------- gamepads
+
+    // Standard mapping: https://w3c.github.io/gamepad/#remapping
+    const GP_BUTTONS = [
+      B.CROSS, B.CIRCLE, B.SQUARE, B.TRIANGLE, B.L1, B.R1, 0, 0,
+      B.SHARE, B.OPTIONS, B.L3, B.R3, B.UP, B.DOWN, B.LEFT, B.RIGHT, B.PS, B.TOUCH,
+    ];
+    const gpAssign = {};
+    const gamepadsAvailable = typeof navigator.getGamepads === 'function';
+
+    function gpKey(gp) { return gp.id + '#' + gp.index; }
+
+    function axisByte(v) {
+      if (Math.abs(v) < 0.06) return 128;
+      return Math.round(clamp((v + 1) / 2 * 255, 0, 255));
+    }
+
+    function pollGamepads(t) {
+      if (!gamepadsAvailable) return;
+      let list;
+      try { list = navigator.getGamepads(); } catch (e) { return; }
+      const seen = new Set();
+      for (const gp of list) {
+        if (!gp || !gp.connected) continue;
+        seen.add(gp.index);
+        let src = gamepadSources.get(gp.index);
+        if (!src) {
+          const saved = undefined;
+          // A new controller drives the pad opened on this page; elsewhere it waits until you pick a pad
+          const pad = saved !== undefined ? saved : (primaryPad >= 0 && ![...gamepadSources.values()].some(s => s.pad === primaryPad) ? primaryPad : -1);
+          src = blankSource(pad);
+          src.gp = gp;
+          src.activeAt = 0;
+          gamepadSources.set(gp.index, src);
+          renderGamepads();
+          sendClaim();
+          toast(pad >= 0 ? 'Controller ' + (gp.index + 1) + ' plays as Pad ' + (pad + 1) : 'Controller ' + (gp.index + 1) + ' connected. Pick its pad on the home screen.');
+        }
+        src.gp = gp;
+        let buttons = 0;
+        gp.buttons.forEach((b, i) => {
+          const bit = GP_BUTTONS[i];
+          if (bit && (b.pressed || b.value > 0.5)) buttons |= bit;
+        });
+        const before = src.buttons + ',' + src.lx + ',' + src.ly + ',' + src.rx + ',' + src.ry + ',' + src.l2 + ',' + src.r2;
+        src.buttons = buttons;
+        src.l2 = gp.buttons[6] ? Math.round(gp.buttons[6].value * 255) : 0;
+        src.r2 = gp.buttons[7] ? Math.round(gp.buttons[7].value * 255) : 0;
+        src.lx = axisByte(gp.axes[0] || 0);
+        src.ly = axisByte(gp.axes[1] || 0);
+        src.rx = axisByte(gp.axes[2] || 0);
+        src.ry = axisByte(gp.axes[3] || 0);
+        const after = src.buttons + ',' + src.lx + ',' + src.ly + ',' + src.rx + ',' + src.ry + ',' + src.l2 + ',' + src.r2;
+        if (before !== after) src.activeAt = t;
+      }
+      let removed = false;
+      for (const index of gamepadSources.keys()) {
+        if (!seen.has(index)) { gamepadSources.delete(index); removed = true; }
+      }
+      if (removed) { renderGamepads(); sendClaim(); }
+      // Light up the row of a controller in use, so you can tell which one is which
+      for (const [index, src] of gamepadSources) {
+        const row = $(`.gp-row[data-index="${index}"]`);
+        if (row) row.classList.toggle('active', t - src.activeAt < 250);
+      }
+    }
+
+    function setGamepadPad(index, pad) {
+      const src = gamepadSources.get(index);
+      if (!src) return;
+      // One controller per pad on this device: the controller that had this pad lets go of it
+      if (pad >= 0) {
+        for (const [other, s] of gamepadSources) {
+          if (other !== index && s.pad === pad) {
+            s.pad = -1;
+            if (s.gp) gpAssign[gpKey(s.gp)] = -1;
+          }
+        }
+      }
+      const old = src.pad;
+      src.pad = pad;
+      if (old >= 0 && old !== pad && !claimedPads().includes(old)) releasePad(old);
+      if (src.gp) gpAssign[gpKey(src.gp)] = pad;
+      store.set('gamepads', gpAssign);
+      renderGamepads();
+      renderPads();
+      sendClaim();
+    }
+
+    // ---------------------------------------------------------------- rumble and lightbar
+
+    const rumble = Array.from({ length: PADS }, () => ({ large: 0, small: 0, lastKick: 0 }));
+
+    function onRumble(pad, large, small) {
+      if (!rumble[pad]) return;
+      rumble[pad].large = large;
+      rumble[pad].small = small;
+      rumble[pad].lastKick = 0;
+      if (!large && !small) stopRumble(pad);
+    }
+
+    function stopRumble(pad) {
+      for (const src of gamepadSources.values()) {
+        if (src.pad === pad && src.gp && src.gp.vibrationActuator && src.gp.vibrationActuator.reset) {
+          try { src.gp.vibrationActuator.reset(); } catch (e) { /* ignore */ }
+        }
+      }
+      if (pad === primaryPad && settings.haptics) haptic(0);
+    }
+
+    function stopAllRumble() {
+      for (let i = 0; i < PADS; i++) {
+        rumble[i].large = rumble[i].small = 0;
+        stopRumble(i);
+      }
+    }
+
+    function driveRumble(t) {
+      for (let pad = 0; pad < PADS; pad++) {
+        const r = rumble[pad];
+        if (!r.large && !r.small) continue;
+        if (t - r.lastKick < 110) continue;
+        r.lastKick = t;
+        for (const src of gamepadSources.values()) {
+          const act = src.gp && src.gp.vibrationActuator;
+          if (src.pad === pad && act && act.playEffect) {
+            act.playEffect('dual-rumble', { startDelay: 0, duration: 150, strongMagnitude: r.large / 255, weakMagnitude: r.small / 255 }).catch(() => {});
+          }
+        }
+        if (pad === primaryPad && settings.haptics) {
+          const strength = Math.max(r.large, r.small) / 255;
+          if (strength > 0.15) haptic(Math.round(30 + strength * 80));
+        }
+      }
+    }
+
+    // ---------------------------------------------------------------- home screen
+
+    function padState(s) {
+      return !s.known ? 'unknown' : s.state || 'free';
+    }
+
+    function padMeta(s) {
+      if (s.state === 'select') return 'Choose a user on the PS4';
+      if (s.state === 'ready') return 'Signed in on the PS4';
+      if (s.state === 'paused') return 'Input paused';
+      if (s.state === 'error') return 'Input error — disconnect and reconnect';
+      return 'Touch, keyboard, or a controller on this device';
+    }
+
+    function stateItem(cls, text) {
+      const e = el('span', 'state ' + cls);
+      if (cls === 'live' || cls === 'wait') e.appendChild(el('span', 'dot'));
+      e.appendChild(document.createTextNode(text));
+      return e;
+    }
+
+    function renderPads() {
+      const grid = $('#padGrid');
+      const mine = new Set(claimedPads());
+      grid.textContent = '';
+      status.forEach((s, i) => {
+        const state = padState(s);
+        const tile = el('button', 'tile');
+        tile.type = 'button';
+        tile.dataset.pad = i;
+        tile.dataset.state = state;
+        tile.style.setProperty('--pc', css(s.color));
+        const head = el('span', 'tile-head');
+        head.appendChild(el('span', 'ring', String(i + 1)));
+        head.appendChild(el('span', 'activity'));
+        tile.appendChild(head);
+        const body = el('span');
+        body.appendChild(el('div', 'tile-name', s.known ? s.name : 'Pad ' + (i + 1)));
+        body.appendChild(el('div', 'tile-meta', padMeta(s) || (s.known ? '' : conn.protocol < 2 && conn.version ? 'Waiting for controller status' : '')));
+        tile.appendChild(body);
+        const states = el('span', 'tile-state');
+        if (state === 'ready') states.appendChild(stateItem('live', 'Connected'));
+        else if (state === 'select') states.appendChild(stateItem('wait', 'Choose user on TV'));
+        else if (state === 'paused') states.appendChild(stateItem('wait', 'Paused'));
+        else if (state === 'error') states.appendChild(stateItem('', 'Error'));
+        else if (state === 'free') states.appendChild(stateItem('', 'Free'));
+        else if (state === 'noslot') states.appendChild(stateItem('', 'No free player slot'));
+        else if (state === 'disabled') states.appendChild(stateItem('', 'Turned off'));
+        if (mine.has(i)) states.appendChild(stateItem('mine', 'This device'));
+        const others = s.clients - (mine.has(i) ? 1 : 0);
+        if (others > 0) states.appendChild(stateItem('', others === 1 ? '+1 device' : '+' + others + ' devices'));
+        tile.appendChild(states);
+        tile.addEventListener('click', () => openPad(i));
+        grid.appendChild(tile);
+      });
+    }
+
+    function renderGamepads() {
+      const list = $('#gamepadList');
+      list.textContent = '';
+      if (!gamepadsAvailable) {
+        $('#gamepadHint').textContent = window.isSecureContext
+          ? 'This browser does not support controllers.'
+          : 'This browser only allows controllers on secure pages. Save this page to your device, open the saved file, and enter the console address.';
+        return;
+      }
+      $('#gamepadHint').textContent = gamepadSources.size
+        ? 'Pick the pad each controller plays as. A row lights up while you use its controller. Keep this window in front: browsers only read controllers on the active window.'
+        : 'Connect controllers to this device and press a button on each one. Each controller can play as a different pad.';
+      for (const [index, src] of gamepadSources) {
+        const row = el('li', 'gp-row');
+        row.dataset.index = index;
+        row.insertAdjacentHTML('afterbegin', '<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M7 7h10a5 5 0 0 1 4.8 6.4l-1 3.4a2.6 2.6 0 0 1-4.4 1.2L14.4 16H9.6l-2 2a2.6 2.6 0 0 1-4.4-1.2l-1-3.4A5 5 0 0 1 7 7z"/></svg>');
+        const text = el('div');
+        const name = (src.gp && src.gp.id || 'Controller').replace(/\s*\(.*?\)\s*/g, ' ').trim();
+        text.appendChild(el('div', 'gp-name', name || 'Controller'));
+        const mapped = src.gp && src.gp.mapping === 'standard';
+        text.appendChild(el('div', 'gp-sub', 'Controller ' + (index + 1) + (mapped ? '' : ' · buttons may be mixed up')));
+        row.appendChild(text);
+        const seg = el('div', 'seg');
+        seg.setAttribute('role', 'radiogroup');
+        seg.setAttribute('aria-label', 'Pad for controller ' + (index + 1));
+        for (let pad = -1; pad < PADS; pad++) {
+          const b = el('button', '', pad < 0 ? 'Off' : String(pad + 1));
+          b.type = 'button';
+          b.setAttribute('role', 'radio');
+          b.setAttribute('aria-checked', String(src.pad === pad));
+          if (pad >= 0) {
+            b.style.setProperty('--pc', css(status[pad].color));
+            b.title = 'Pad ' + (pad + 1) + ' · ' + status[pad].name;
+          }
+          b.addEventListener('click', () => setGamepadPad(index, pad));
+          seg.appendChild(b);
+        }
+        row.appendChild(seg);
+        list.appendChild(row);
+      }
+    }
+
+    const activityTimers = [];
+    function pulseActivity(pad) {
+      const dot = $(`.tile[data-pad="${pad}"] .activity`);
+      if (!dot) return;
+      dot.classList.add('on');
+      clearTimeout(activityTimers[pad]);
+      activityTimers[pad] = setTimeout(() => dot.classList.remove('on'), 120);
+    }
+
+    // ---------------------------------------------------------------- controller screen
+
+    // The pad's name and state, printed on the touchpad
+    function renderPadLabel() {
+      if (primaryPad < 0) return;
+      const s = status[primaryPad];
+      document.documentElement.style.setProperty('--accent', css(s.color));
+      const label = $('#padLabel');
+      label.textContent = 'Pad ' + (primaryPad + 1) + (s.known && s.name ? ' · ' + s.name : '');
+      const state = padState(s);
+      const extra = conn.state !== 'open' ? $('#connText').textContent
+        : state === 'ready' ? 'Signed in on the PS4'
+        : state === 'select' ? 'Choose your user on TV with D-pad and Cross'
+        : state === 'noslot' ? 'No free player slot'
+        : state === 'disabled' ? 'Turned off' : '';
+      if (extra) label.appendChild(el('span', 'muted', extra));
+      $('#leaveBtn').hidden = !s.mine;
+    }
+
+    // Light up on-screen controls for every source driving this pad (keyboard and controllers too)
+    let shownButtons = -1, shownL2 = -1, shownR2 = -1;
+    const shownStick = { L: '', R: '' };
+    function renderPressed() {
+      if (primaryPad < 0) return;
+      const s = mergedState(primaryPad);
+      if (s.buttons !== shownButtons) {
+        shownButtons = s.buttons;
+        for (const k of $$('[data-btn]', padView)) k.classList.toggle('on', !!(s.buttons & B[k.dataset.btn]));
+        for (const a of $$('[data-arm]', padView)) a.classList.toggle('on', !!(s.buttons & B[a.dataset.arm]));
+        for (const st of $$('[data-stick]', padView)) st.classList.toggle('clicked', !!(s.buttons & B[st.dataset.stick + '3']));
+        touchpad.classList.toggle('clicked', !!(s.buttons & B.TOUCH));
+      }
+      if (s.l2 !== shownL2) { shownL2 = s.l2; $('[data-fill="L2"]').style.height = (s.l2 / 2.55) + '%'; }
+      if (s.r2 !== shownR2) { shownR2 = s.r2; $('[data-fill="R2"]').style.height = (s.r2 / 2.55) + '%'; }
+      // Sticks follow controllers and keys too, unless a finger is moving them
+      for (const side of ['L', 'R']) {
+        if (draggingStick[side]) continue;
+        const x = side === 'L' ? s.lx : s.rx;
+        const y = side === 'L' ? s.ly : s.ry;
+        const key = x + ',' + y;
+        if (key === shownStick[side]) continue;
+        shownStick[side] = key;
+        const stick = $(`[data-stick="${side}"]`, padView);
+        const travel = stick.offsetWidth * KNOB_TRAVEL;
+        const knob = $('.knob', stick);
+        knob.style.transform = key === '128,128' ? '' : `translate(${(x - 128) / 127.5 * travel}px, ${(y - 128) / 127.5 * travel}px)`;
+        stick.classList.toggle('on', key !== '128,128');
+      }
+    }
+
+    function openPad(pad) {
+      const s = status[pad];
+      if (s.known && !s.enabled) {
+        toast('Pad ' + (pad + 1) + ' is turned off in Settings');
+        return;
+      }
+      const others = s.clients - (claimedPads().includes(pad) ? 1 : 0);
+      if (s.known && others > 0) {
+        toast('Another device is using this controller');
+        return;
+      } else if (!store.get('padTips', false)) {
+        store.set('padTips', true);
+        toast('Choose your user on the TV with D-pad and Cross. Use the ☰ button for layout and settings.');
+      }
+      if (primaryPad >= 0 && primaryPad !== pad) {
+        const old = primaryPad;
+        primaryPad = -1;
+        if (!claimedPads().includes(old)) releasePad(old);
+      }
+      primaryPad = pad;
+      screenSource.pad = pad;
+      keySource.pad = pad;
+      $('#home').hidden = true;
+      $('#settingsView').hidden = true;
+      padView.hidden = false;
+      document.body.classList.add('in-pad');
+      document.title = 'Pad ' + (pad + 1) + ' · Control4Free';
+      history.replaceState(null, '', updateQuery('pad', String(pad + 1)));
+      shownButtons = -1;
+      shownStick.L = shownStick.R = '';
+      renderPadLabel();
+      sendClaim();
+      renderPads();
+    }
+
+    function closePad() {
+      editor.finish(true);
+      releaseScreen();
+      heldKeys.clear();
+      Object.assign(keySource, blankSource(-1));
+      if (primaryPad >= 0) {
+        const stillUsed = [...gamepadSources.values()].some(src => src.pad === primaryPad);
+        if (!stillUsed) releasePad(primaryPad);
+      }
+      primaryPad = -1;
+      screenSource.pad = -1;
+      padView.hidden = true;
+      document.body.classList.remove('in-pad');
+      $('#home').hidden = false;
+      document.title = 'Control4Free';
+      history.replaceState(null, '', updateQuery('pad', null));
+      document.documentElement.style.removeProperty('--accent');
+      if (document.fullscreenElement) document.exitFullscreen().catch(() => {});
+      sendClaim();
+      renderPads();
+    }
+
+    function updateQuery(key, value) {
+      const url = new URL(location.href);
+      if (value === null) url.searchParams.delete(key); else url.searchParams.set(key, value);
+      return url.pathname + url.search;
+    }
+
+    $('#backBtn').addEventListener('click', closePad);
+    $('#portraitOk').addEventListener('click', () => padView.classList.add('portrait-ok'));
+
+    const fsSupported = !!(document.documentElement.requestFullscreen || document.documentElement.webkitRequestFullscreen);
+    $('#fsBtn').hidden = !fsSupported;
+    $('#fsBtn').addEventListener('click', async () => {
+      try {
+        if (document.fullscreenElement) {
+          await document.exitFullscreen();
+        } else {
+          const root = document.documentElement;
+          await (root.requestFullscreen ? root.requestFullscreen() : root.webkitRequestFullscreen());
+          if (screen.orientation && screen.orientation.lock) screen.orientation.lock('landscape').catch(() => {});
+        }
+      } catch (e) {
+        toast('Full screen is not available here');
+      }
+    });
+
+    // Options menu
+    function openMenu() {
+      document.body.classList.add('menu-open');
+      $('#optionsMenu').classList.add('open');
+    }
+
+    function closeMenu() {
+      document.body.classList.remove('menu-open');
+      $('#optionsMenu').classList.remove('open');
+    }
+
+    $('#padMenuBtn').addEventListener('click', () => { if (!editor.active) openMenu(); });
+    $('#menuLayout').addEventListener('click', () => { closeMenu(); editor.open(); });
+    $('#closeOptions').addEventListener('click', closeMenu);
+    $('#scrim').addEventListener('click', closeMenu);
+    $('#menuSettings').addEventListener('click', () => { closeMenu(); openSettings('device'); });
+
+    $('#leaveBtn').addEventListener('click', async () => {
+      const pad = primaryPad;
+      if (pad < 0) return;
+      // Controllers on this page that play as this pad stop, or their input would bring the guest back
+      for (const [index, src] of gamepadSources) if (src.pad === pad) setGamepadPad(index, -1);
+      closeMenu();
+      closePad();
+      // Updating the claim removes the device; a second leave would target an
+      // already removed pad. The claim response reports any failure.
+      toast('Controller ' + (pad + 1) + ' disconnected');
+    });
+
+    // ---------------------------------------------------------------- device settings (local)
+
+    function renderDeviceRows(container) {
+      container.textContent = '';
+      for (const [key, label, desc] of DEVICE_SETTINGS) {
+        if (key === 'haptics' && !('vibrate' in navigator)) continue;
+        const row = el('label', 'row');
+        row.appendChild(el('span', 'row-label', label));
+        const input = el('input', 'check');
+        input.type = 'checkbox';
+        input.checked = !!settings[key];
+        input.dataset.setting = key;
+        input.addEventListener('change', () => setDeviceSetting(key, input.checked));
+        row.appendChild(input);
+        row.appendChild(el('span', 'row-desc', desc));
+        container.appendChild(row);
+      }
+    }
+
+    function setDeviceSetting(key, value) {
+      settings[key] = value;
+      store.set(key, value);
+      for (const input of $$(`[data-setting="${key}"]`)) input.checked = value;
+      if (key === 'keys') padView.classList.toggle('show-keys', !!value);
+      if (key === 'stickClick') applyLayout();
+      if (key === 'keepAwake') keepAwake.update();
+    }
+
+    renderDeviceRows($('#menuRows'));
+    renderDeviceRows($('#deviceRows'));
+    padView.classList.toggle('show-keys', !!settings.keys);
+
+    // ---------------------------------------------------------------- keyboard settings
+
+    let listeningKey = null;
+
+    function renderKeyRows() {
+      const rows = $('#keyRows');
+      rows.textContent = '';
+      for (const [action, label] of KEY_ACTIONS) {
+        const row = el('div', 'key-row');
+        row.appendChild(el('span', 'row-label', label));
+        const b = el('button', 'key-btn', keyLabel(keymap[action]));
+        b.type = 'button';
+        b.addEventListener('click', () => {
+          if (listeningKey) listeningKey.button.classList.remove('listening');
+          listeningKey = { action, button: b };
+          b.classList.add('listening');
+          b.textContent = 'Press a key';
+        });
+        row.appendChild(b);
+        rows.appendChild(row);
+      }
+    }
+
+    window.addEventListener('keydown', e => {
+      if (!listeningKey) return;
+      e.preventDefault();
+      e.stopPropagation();
+      const { action } = listeningKey;
+      // A key drives one action: whatever had it before loses it
+      for (const [other, code] of Object.entries(keymap)) if (code === e.code && other !== action) keymap[other] = '';
+      keymap[action] = e.code;
+      store.set('keymap', keymap);
+      listeningKey = null;
+      rebuildKeymap();
+      renderKeyRows();
+    }, true);
+
+    $('#resetKeys').addEventListener('click', () => {
+      keymap = defaultKeys();
+      store.set('keymap', keymap);
+      rebuildKeymap();
+      renderKeyRows();
+      toast('Keyboard keys reset');
+    });
+
+    rebuildKeymap();
+    renderKeyRows();
+
+    // ---------------------------------------------------------------- local settings only
+    function showPage(page) {
+      for (const tab of $$('.nav-item')) tab.setAttribute('aria-selected', String(tab.dataset.page === page));
+      for (const section of $$('.settings-pages section')) section.hidden = section.dataset.page !== page;
+      if (listeningKey) { listeningKey.button.classList.remove('listening'); listeningKey = null; renderKeyRows(); }
+    }
+    for (const tab of $$('.nav-item')) tab.addEventListener('click', () => showPage(tab.dataset.page));
+    function openSettings(page) {
+      releaseScreen(); heldKeys.clear(); Object.assign(keySource, blankSource(keySource.pad));
+      $('#home').hidden = true; padView.hidden = true;
+      document.body.classList.remove('in-pad'); $('#settingsView').hidden = false;
+      showPage(page || 'device');
+    }
+    function closeSettings() {
+      $('#settingsView').hidden = true;
+      if (primaryPad >= 0) { padView.hidden = false; document.body.classList.add('in-pad'); }
+      else $('#home').hidden = false;
+    }
+    $('#openSettings').addEventListener('click', () => openSettings('device'));
+    $('#settingsBack').addEventListener('click', closeSettings);
+    $('#keysLink').addEventListener('click', () => openSettings('keyboard'));
+    $('#stopBtn').addEventListener('click', () => {
+      if (!confirm('Disconnect your controllers and stop Control4Free on the PS4?')) return;
+      send({ method: 'stop', params: [] });
+      closeMenu();
+    });
+
+    // ---------------------------------------------------------------- page lifecycle
+
+    $('#addressForm').addEventListener('submit', e => {
+      e.preventDefault();
+      conn.retry = 0;
+      conn.everOpened = false;
+      connect($('#address').value);
+    });
+
+    // A hidden page stops sending (no animation frames): let go of every button right away. If it stays
+    // hidden, the console sees the controller disconnect after 3 seconds without keepalives.
+    document.addEventListener('visibilitychange', () => {
+      if (document.hidden) {
+        releaseScreen();
+        heldKeys.clear();
+        Object.assign(keySource, blankSource(keySource.pad));
+        for (const pad of claimedPads()) {
+          send({ method: 'u', params: [pad, 0, 128, 128, 128, 128, 0, 0, 0] });
+          lastSent[pad] = '';
+        }
+        stopAllRumble();
+        keepAwake.off();
+      } else {
+        resendAll();
+        sendClaim(true);
+      }
+    });
+
+    function frame(t) {
+      pollGamepads(t);
+      flush(t);
+      driveRumble(t);
+      renderPressed();
+      requestAnimationFrame(frame);
+    }
+
+    window.addEventListener('gamepadconnected', () => { pollGamepads(now()); renderGamepads(); });
+    window.addEventListener('gamepaddisconnected', () => pollGamepads(now()));
+
+    renderPads();
+    renderGamepads();
+    const address = initialAddress();
+    $('#address').value = address;
+    if (!servedByConsole) $('#addressForm').hidden = false;
+    connect(address);
+
+
+    requestAnimationFrame(frame);
+  })();
+  </script>
+</body>
+</html>
