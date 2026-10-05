@@ -106,9 +106,8 @@ When a game rumbles the controller, the device driving it feels it:
 
 - **an Android phone** buzzes, with **Vibration** turned on in the settings. Safari on iPhone doesn't let pages
   vibrate the phone;
-- **a gamepad** playing as that controller rumbles, if the browser can rumble it. Chrome and Edge rumble
-  Xbox pads; many browsers can't rumble a DualSense, and Firefox can't rumble any. A gamepad the browser
-  can't rumble says *no rumble in this browser* on its row.
+- **a gamepad** playing as that controller rumbles too, though not every controller supports vibration in
+  the browser. When the browser knows it can't, the gamepad's row says *no rumble in this browser*.
 
 A gamepad's own light bar stays as it is: browsers don't let pages change it.
 

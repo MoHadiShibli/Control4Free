@@ -8,8 +8,8 @@ nothing, MAJOR for anything people rely on that changes.
 Rumble and the light bar.
 
 - When a game rumbles a controller, the device driving it feels it: an Android phone buzzes, and a gamepad
-  playing as that controller rumbles in browsers that support it, such as Chrome and Edge. Safari on iPhone
-  doesn't let pages vibrate the phone.
+  playing as that controller rumbles too, though not every controller supports vibration in the browser. A
+  gamepad that can't be rumbled says so on its row.
 - The page glows in the controller's light-bar colour, the player colour the PS4 gives each user or whatever
   the game sets, brightened from the quarter strength the PS4 uses.
 - The page says "Choose user on PS4" rather than "on TV": not everyone plays on a TV.

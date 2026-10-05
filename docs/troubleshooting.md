@@ -67,9 +67,9 @@ that takes over a signed-in user's controller can stop games from reading Contro
 the console. Above about 30 ms, your Wi-Fi is the slow part: move closer to the router or use 5 GHz.
 
 **No vibration from the game.** Check **Vibration** is on in the settings. Only Android phones can vibrate:
-Safari on iPhone doesn't let pages do it. A gamepad whose row says *no rumble in this browser* can't be
-rumbled by that browser at all: that's common for a DualSense, while Chrome and Edge rumble Xbox pads. Keep the
-page's window in front. And not every game rumbles every player.
+Safari on iPhone doesn't let pages do it. Not every controller supports vibration in the browser, and one
+whose row says *no rumble in this browser* can't be rumbled from the page at all. Keep the page's window in
+front. And not every game rumbles every player.
 
 ## Gamepads
 
