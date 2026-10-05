@@ -15,6 +15,9 @@ typedef struct C4fNetClient {
     const unsigned char *body;
     size_t bodySize, bodySent;
     void *user;
+#ifdef C4F_DIAG
+    char peer[16]; /* the other end's address, for the diagnostic log */
+#endif
 } C4fNetClient;
 
 enum { C4F_NET_OPEN, C4F_NET_MESSAGE_EVENT, C4F_NET_CLOSE,

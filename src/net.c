@@ -14,6 +14,16 @@
 #include <unistd.h>
 #include "c4f_net.h"
 
+#ifdef C4F_DIAG
+#include "c4f_log.h"
+/* Diagnostic build: each connection from another device, step by step. The
+ * launcher's status checks over loopback come every 2 seconds and stay out. */
+#define C4F_NET_LOG(c, fmt, ...) do { if (strcmp((c)->peer, "127.0.0.1")) \
+    c4fLog("net: %s " fmt "\n", (c)->peer, __VA_ARGS__); } while (0)
+#else
+#define C4F_NET_LOG(c, fmt, ...) do { } while (0)
+#endif
+
 /* Which interface would carry traffic out, without sending anything: a connected
  * UDP socket picks the route, and getsockname then names the local end. */
 void c4fNetLocalAddress(char *out, size_t size)
@@ -152,6 +162,7 @@ static void c4fHttpError(C4fNetClient *c, int code, const char *message)
 {
     char buf[512];
     int n = snprintf(buf, sizeof(buf), "HTTP/1.1 %d Error\r\nConnection: close\r\nContent-Type: text/plain\r\nContent-Length: %zu\r\n\r\n%s", code, strlen(message), message);
+    C4F_NET_LOG(c, "answered %d %s", code, message);
     c4fQueue(c, buf, (size_t)n); c->closing = 2;
 }
 
@@ -165,6 +176,7 @@ static void c4fHttp(C4fNet *net, C4fNetClient *c)
     if (!end) { if (c->rxUsed == sizeof(c->rx)) c4fHttpError(c, 431, "Headers too large"); return; }
     used = (size_t)(end-request) + 4;
     request[used] = 0;
+    C4F_NET_LOG(c, "asked: %.*s", (int)strcspn(request, "\r\n") > 100 ? 100 : (int)strcspn(request, "\r\n"), request);
     int statusRequest = !strncmp(request, "GET /api/status HTTP/1.1\r\n", 26);
     int stopRequest = !strncmp(request, "POST /api/stop HTTP/1.1\r\n", 25);
     /* The two files a phone needs to keep this page on its home screen. */
@@ -231,17 +243,20 @@ static void c4fHttp(C4fNet *net, C4fNetClient *c)
         if (!strstr(connection, "upgrade")) { c4fHttpError(c, 400, "Upgrade required"); return; }
         c4fWebSocketAccept(key, accept);
         n = snprintf(reply, sizeof(reply), "HTTP/1.1 101 Switching Protocols\r\nUpgrade: websocket\r\nConnection: Upgrade\r\nSec-WebSocket-Accept: %s\r\n\r\n", accept);
+        C4F_NET_LOG(c, "websocket open%s", "");
         c4fQueue(c, reply, (size_t)n); c->websocket = 1;
         memmove(c->rx, c->rx+used, c->rxUsed-used); c->rxUsed -= used;
         net->handler(c, C4F_NET_OPEN, NULL, 0, net->context);
     } else if (asset) {
         char reply[256];
         int n = snprintf(reply, sizeof(reply), "HTTP/1.1 200 OK\r\nContent-Type: %s\r\nContent-Length: %zu\r\nConnection: close\r\nCache-Control: max-age=86400\r\nX-Content-Type-Options: nosniff\r\n\r\n", assetType, assetSize);
+        C4F_NET_LOG(c, "sending %s, %zu bytes", assetType, assetSize);
         c4fQueue(c, reply, (size_t)n);
         c->body = asset; c->bodySize = assetSize; c->rxUsed = 0;
     } else {
         char reply[768];
         int n = snprintf(reply, sizeof(reply), "HTTP/1.1 200 OK\r\nContent-Type: text/html; charset=utf-8\r\nContent-Encoding: gzip\r\nContent-Length: %zu\r\nConnection: close\r\nCache-Control: no-store\r\nX-Content-Type-Options: nosniff\r\nReferrer-Policy: no-referrer\r\nContent-Security-Policy: default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src 'self' data:; media-src data:; connect-src ws:; manifest-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'none'\r\n\r\n", c4fPageSize);
+        C4F_NET_LOG(c, "sending the page, %zu bytes", c4fPageSize);
         c4fQueue(c, reply, (size_t)n);
         c->body = c4fPage; c->bodySize = c4fPageSize; c->rxUsed = 0;
     }
@@ -343,6 +358,12 @@ int c4fNetPoll(C4fNet *net, int timeoutMs)
             return -1;
         for (index = 0; index < C4F_NET_CLIENTS && net->clients[index].fd >= 0; index++) {}
         if (fd >= 0) {
+#ifdef C4F_DIAG
+            char peerName[16] = "?";
+            inet_ntop(AF_INET, &peer.sin_addr, peerName, sizeof(peerName));
+            if (index == C4F_NET_CLIENTS || fd >= (int)FD_SETSIZE)
+                c4fLog("net: %s turned away: fd %d, %s\n", peerName, fd, index == C4F_NET_CLIENTS ? "all slots taken" : "fd too high");
+#endif
             if (index == C4F_NET_CLIENTS || fd >= (int)FD_SETSIZE || fcntl(fd, F_SETFL, O_NONBLOCK)) close(fd);
             else {
                 int one = 1;
@@ -351,6 +372,10 @@ int c4fNetPoll(C4fNet *net, int timeoutMs)
                 setsockopt(fd, SOL_SOCKET, SO_NOSIGPIPE, &one, sizeof(one));
 #endif
                 net->clients[index].fd = fd; net->clients[index].openedMs = c4fTimeMs();
+#ifdef C4F_DIAG
+                memcpy(net->clients[index].peer, peerName, sizeof(peerName));
+                C4F_NET_LOG(&net->clients[index], "connected: slot %d, fd %d", index, fd);
+#endif
             }
         }
     }
@@ -359,8 +384,10 @@ int c4fNetPoll(C4fNet *net, int timeoutMs)
         if (c->fd < 0) continue;
         if (FD_ISSET(c->fd, &rd)) {
             ssize_t n = recv(c->fd, c->rx+c->rxUsed, sizeof(c->rx)-c->rxUsed, 0);
-            if (n == 0 || (n < 0 && errno != EAGAIN && errno != EWOULDBLOCK && errno != EINTR)) c->closing = 1;
-            else if (n > 0) {
+            if (n == 0 || (n < 0 && errno != EAGAIN && errno != EWOULDBLOCK && errno != EINTR)) {
+                C4F_NET_LOG(c, "recv = %zd, errno %d: it closed its end", n, n < 0 ? errno : 0);
+                c->closing = 1;
+            } else if (n > 0) {
                 c->rxUsed += (size_t)n;
                 if (!c->websocket) c4fHttp(net, c);
                 if (c->websocket) c4fWs(net, c);
@@ -376,15 +403,23 @@ int c4fNetPoll(C4fNet *net, int timeoutMs)
             flags = MSG_NOSIGNAL;
 #endif
             ssize_t n = send(c->fd, data, left, flags);
-            if (n < 0 && errno != EAGAIN && errno != EWOULDBLOCK && errno != EINTR) c->closing = 1;
-            else if (n > 0) {
+            if (n < 0 && errno != EAGAIN && errno != EWOULDBLOCK && errno != EINTR) {
+                C4F_NET_LOG(c, "send of %zu bytes failed, errno %d (%s, %zu sent)", left, errno,
+                            body ? "body" : "header", body ? c->bodySent : c->txSent);
+                c->closing = 1;
+            } else if (n > 0) {
                 if (body) {
                     c->bodySent += (size_t)n;
-                    if (c->bodySent == c->bodySize) { c->body = NULL; c->closing = 1; }
+                    if (c->bodySent == c->bodySize) { C4F_NET_LOG(c, "sent all %zu bytes", c->bodySize); c->body = NULL; c->closing = 1; }
                 } else { c->txSent += (size_t)n; if (c->txSent == c->txUsed) c->txSent = c->txUsed = 0; }
             }
         }
-        if (!c->websocket && c4fTimeMs()-c->openedMs > 10000) c->closing = 1;
+        if (!c->websocket && c4fTimeMs()-c->openedMs > 10000) {
+            /* A first byte of 0x16 is a TLS handshake: the browser tried https. */
+            C4F_NET_LOG(c, "timed out after 10 s with %zu bytes unanswered, first byte 0x%02x", c->rxUsed,
+                        c->rxUsed ? c->rx[0] : 0);
+            c->closing = 1;
+        }
         if (c->closing == 1 || (c->closing == 2 && c->txSent == c->txUsed)) c4fDrop(net, c);
     }
     return 0;

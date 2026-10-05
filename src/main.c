@@ -118,6 +118,7 @@ static void c4fDiagHost(pid_t pid)
     C4fProcInfo info;
     struct sigaction ignore, previous;
 
+    c4fLog("diag: built %s %s\n", __DATE__, __TIME__);
     c4fLog("diag: kernel image base=0x%lx size=0x%lx allproc=0x%lx prison0=0x%lx rootvnode=0x%lx targetid=0x%lx\n",
            (unsigned long)KERNEL_ADDRESS_IMAGE_BASE, (unsigned long)KERNEL_IMAGE_SIZE,
            (unsigned long)KERNEL_ADDRESS_ALLPROC, (unsigned long)KERNEL_ADDRESS_PRISON0,

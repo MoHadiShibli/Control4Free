@@ -102,5 +102,10 @@ void c4fNotify(const char *fmt, ...)
     va_start(ap, fmt);
     (void)vsnprintf(req.message, sizeof(req.message), fmt, ap);
     va_end(ap);
+#ifdef C4F_DIAG
+    int ret = sceKernelSendNotificationRequest(0, &req, sizeof(req), 0);
+    c4fLog("notification = 0x%08x: %s\n", (uint32_t)ret, req.message);
+#else
     (void)sceKernelSendNotificationRequest(0, &req, sizeof(req), 0);
+#endif
 }

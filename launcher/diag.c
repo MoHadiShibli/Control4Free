@@ -290,9 +290,11 @@ void c4fDiagStart(int sandboxResult, int sandboxError)
     version.VersionString[sizeof(version.VersionString) - 1] = 0;
     snprintf(c4fFirmware, sizeof(c4fFirmware), "\"%s\" = 0x%08x (call returned 0x%08x)",
              version.VersionString, version.Version, (uint32_t)ret);
+    /* GoldHEN returns the version as the call's error value (seen on 13.52:
+     * 256 = SDK 1.00), so only ENOSYS (78) means there is no GoldHEN call. */
     long goldHen = c4fGoldHenCommand(0, NULL);
-    if (goldHen >= 0) snprintf(c4fGoldHen, sizeof(c4fGoldHen), "answers, SDK version 0x%lx", goldHen);
-    else snprintf(c4fGoldHen, sizeof(c4fGoldHen), "no answer, errno %ld (78 = no GoldHEN SDK call)", -goldHen);
+    if (goldHen == -78) snprintf(c4fGoldHen, sizeof(c4fGoldHen), "no answer (errno 78: no GoldHEN SDK call)");
+    else snprintf(c4fGoldHen, sizeof(c4fGoldHen), "answers, SDK version 0x%lx", goldHen < 0 ? -goldHen : goldHen);
     if (sandboxResult == 0) snprintf(c4fSandbox, sizeof(c4fSandbox), "left through GoldHEN");
     else snprintf(c4fSandbox, sizeof(c4fSandbox), "still inside, errno %d", sandboxError);
     size_t size = 0;
@@ -355,8 +357,9 @@ static char *c4fSummary(const C4fDiagState *s)
     if (log) c4fLastLine(log, last, sizeof(last));
 
     if (s->running == 1)
-        c4fAdd(&t, ">> Control4Free is RUNNING (%s). Now try it from your phone. If a controller fails, come back\n"
-                   ">> here and take screenshots of every page again.\n", s->version);
+        c4fAdd(&t, ">> Control4Free is RUNNING (%s). Now open %s on your phone or PC. Whatever happens, come back\n"
+                   ">> here and take screenshots of pages 1 and 2: page 2 lists every connection it saw.\n",
+               s->version, s->address[0] ? s->address : "the PS4's address with :4264");
     else if (c4fStarted && c4fContains(c4fStartMessage, "PayLoader did not answer"))
         c4fAdd(&t, ">> GoldHEN's PayLoader (port 9090) did not take the payload. Turn PayLoader on in GoldHEN's\n"
                    ">> settings, then press Cross again.\n");
@@ -541,8 +544,9 @@ void c4fDrawDiag(uint32_t *pixels, const C4fLauncherScreen *s)
     char line[320];
     c4fFillRect(&c, 0, 0, c.w, c.h, C4F_D_BG);
 
-    snprintf(line, sizeof(line), "Control4Free DIAGNOSTIC BUILD %s    page %d of %d: %s", C4F_LAUNCHER_VERSION,
-             page + 1, C4F_DIAG_PAGES, c4fPageNames[page]);
+    /* The build time tells one diagnostic build from the next in a screenshot. */
+    snprintf(line, sizeof(line), "Control4Free DIAGNOSTIC BUILD %s (%s %s)    page %d of %d: %s", C4F_LAUNCHER_VERSION,
+             __DATE__, __TIME__, page + 1, C4F_DIAG_PAGES, c4fPageNames[page]);
     c4fText(&c, C4F_FONT_REGULAR, C4F_D_TITLE, C4F_D_LEFT, 48, C4F_D_ACCENT, line);
     c4fText(&c, C4F_FONT_REGULAR, C4F_D_SIZE, C4F_D_LEFT, 84, C4F_D_FAINT,
             "L1 / R1: change page    Up / Down: scroll    Options: read the kernel log again    "
