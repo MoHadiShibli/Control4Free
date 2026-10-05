@@ -53,7 +53,7 @@ sees a real controller, so it works wherever a DualShock does:
 3. Open **Control4Free** from **Library → Applications** and press **Cross**. It sets up auto-start and
    starts Control4Free.
 4. On your phone or PC, scan the QR code or open the address shown, for example `http://192.168.1.20:4264`.
-   Pick a controller, then choose your user on the TV with the D-pad and Cross.
+   Pick a controller, then choose your user on the PS4.
 
 New to GoldHEN packages? The **[installation guide](docs/installation.md)** walks through every step.
 
