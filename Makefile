@@ -46,7 +46,9 @@ all: $(ELF)
 $(OBJDIR) build:
 	mkdir -p $@
 
-$(OBJDIR)/%.o: src/%.c | $(OBJDIR)
+# VERSION is compiled into the objects, and make doesn't notice a changed flag,
+# so a new version has to rebuild them.
+$(OBJDIR)/%.o: src/%.c VERSION | $(OBJDIR)
 	$(CC) $(CFLAGS) -c $< -o $@
 
 build/client.c: client/index.html tools/embed_client.py | build

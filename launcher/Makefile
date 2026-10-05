@@ -18,9 +18,10 @@ FONTS := ../vendor/roboto/Roboto-Light.ttf ../vendor/roboto/Roboto-Regular.ttf
 all: package
 $(OUT):
 	mkdir -p $@
-$(OUT)/%.o: %.c | $(OUT)
+# The version is compiled in; a new one must rebuild everything that shows it.
+$(OUT)/%.o: %.c ../VERSION | $(OUT)
 	$(CC) $(CFLAGS) -std=gnu11 -c $< -o $@
-$(OUT)/main.o: main.cpp | $(OUT)
+$(OUT)/main.o: main.cpp ../VERSION | $(OUT)
 	$(CXX) $(CFLAGS) -std=c++17 -fno-exceptions -fno-rtti -c $< -o $@
 $(OUT)/qrcodegen.o: ../vendor/qrcodegen/qrcodegen.c | $(OUT)
 	$(CC) $(CFLAGS) -std=gnu11 -c $< -o $@
