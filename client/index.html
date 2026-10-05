@@ -924,6 +924,18 @@
     .options-menu .actions { display: grid; gap: 10px; margin-top: 16px; }
     .menu-close { position: absolute; top: max(14px, env(safe-area-inset-top)); right: 14px; }
 
+    /* Invite: the page's address as a QR code, in a panel opened on demand */
+    .invite-qr {
+      width: min(280px, 100%);
+      aspect-ratio: 1;
+      margin: 20px auto 14px;
+      border-radius: 14px;
+      background: #fff;
+      overflow: hidden;
+    }
+    .invite-qr svg { display: block; width: 100%; height: 100%; }
+    .invite-address { text-align: center; font-size: 18px; letter-spacing: .02em; word-break: break-all; user-select: all; }
+
     /* ---------- Notification ---------- */
 
     .toast {
@@ -987,6 +999,9 @@
         <span class="conn" id="conn" data-conn="connecting" role="status" aria-live="polite"><span class="dot"></span><span id="connText">Connecting</span><span class="conn-detail" id="connDetail"></span></span>
       </div>
       <div class="tb-group">
+        <button class="icon-btn" type="button" id="openInvite" aria-label="Invite someone" title="Invite someone">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3.5" y="3.5" width="6.5" height="6.5" rx="1.2"/><rect x="14" y="3.5" width="6.5" height="6.5" rx="1.2"/><rect x="3.5" y="14" width="6.5" height="6.5" rx="1.2"/><path d="M14 14h3v3M20.5 14v.01M14 20.5h3M20.5 17.5v3"/></svg>
+        </button>
         <button class="icon-btn" type="button" id="openSettings" aria-label="Settings">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3.2"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg>
         </button>
@@ -1146,10 +1161,21 @@
     <div class="rows" id="menuRows"></div>
     <div class="actions">
       <button class="btn" type="button" id="menuLayout">Edit the button layout</button>
+      <button class="btn" type="button" id="menuInvite">Invite someone</button>
       <button class="btn" type="button" id="menuSettings">All settings</button>
       <button class="btn danger" type="button" id="leaveBtn">Disconnect controller</button>
       <button class="btn danger" type="button" id="stopBtn">Stop Control4Free</button>
     </div>
+  </aside>
+
+  <aside class="options-menu" id="inviteSheet" aria-label="Invite someone">
+    <button class="icon-btn menu-close" type="button" id="closeInvite" aria-label="Close">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg>
+    </button>
+    <h2>Invite someone</h2>
+    <p class="hint">Scan this with a phone's camera to open the controller page. The phone has to be on the same network as the PS4.</p>
+    <div class="invite-qr" id="inviteQr"></div>
+    <p class="invite-address" id="inviteAddress"></p>
   </aside>
 
   <div class="toast" id="toast" role="status" aria-live="polite">
@@ -1239,7 +1265,7 @@
 
     const status = Array.from({ length: PADS }, (_, i) => ({
       pad: i, open: false, enabled: true, real: false, logged: false, joined: false, connected: false,
-      full: false, shared: false, player: 0, uid: '', cfg: '', name: 'Controller ' + (i + 1),
+      full: false, shared: false, player: 0, uid: '', cfg: '', name: 'Controller ' + (i + 1), user: '',
       color: FALLBACK_COLORS[i], clients: 0, known: false,
     }));
 
@@ -2336,7 +2362,8 @@
         head.appendChild(el('span', 'activity'));
         tile.appendChild(head);
         const body = el('span');
-        body.appendChild(el('div', 'tile-name', s.known ? s.name : 'Controller ' + (i + 1)));
+        // Who's signed in on it, once the PS4 says; the ring keeps the number.
+        body.appendChild(el('div', 'tile-name', s.known && s.user ? s.user : 'Controller ' + (i + 1)));
         body.appendChild(el('div', 'tile-meta', padMeta(s) || ''));
         tile.appendChild(body);
         const states = el('span', 'tile-state');
@@ -2400,7 +2427,7 @@
           b.setAttribute('aria-checked', String(src.pad === pad));
           if (pad >= 0) {
             b.style.setProperty('--pc', css(status[pad].color));
-            b.title = 'Controller ' + (pad + 1) + ' · ' + status[pad].name;
+            b.title = 'Controller ' + (pad + 1) + (status[pad].user ? ' · ' + status[pad].user : '');
           }
           b.addEventListener('click', () => setGamepadPad(index, pad));
           seg.appendChild(b);
@@ -2427,9 +2454,8 @@
       const s = status[primaryPad];
       document.documentElement.style.setProperty('--accent', css(s.color));
       const label = $('#padLabel');
-      // The console's name for it, when it says more than the number does.
-      const title = 'Controller ' + (primaryPad + 1);
-      label.textContent = title + (s.known && s.name && s.name !== title ? ' · ' + s.name : '');
+      // And who's signed in on it, once the PS4 says.
+      label.textContent = 'Controller ' + (primaryPad + 1) + (s.known && s.user ? ' · ' + s.user : '');
       const state = padState(s);
       const extra = conn.state !== 'open' ? $('#connText').textContent + $('#connDetail').textContent
         : state === 'ready' ? 'Signed in on the PS4'
@@ -2573,10 +2599,64 @@
     }
 
     function closeMenu() {
+      $('#inviteSheet').classList.remove('open');
       document.body.classList.remove('menu-open');
       $('#optionsMenu').classList.remove('open');
     }
 
+    // ---------------------------------------------------------------- invite
+
+    // The console sends the QR code as a grid, one hex string per row, so the page
+    // needs no QR library: each run of dark modules becomes one rectangle.
+    function qrPath(size, rows, quiet) {
+      const dark = (row, x) => x < size && ((parseInt(row[x >> 2], 16) >> (3 - (x & 3))) & 1) === 1;
+      let d = '';
+      for (let y = 0; y < size; y++) {
+        const row = rows[y] || '';
+        for (let x = 0; x < size;) {
+          if (!dark(row, x)) { x++; continue; }
+          let end = x;
+          while (dark(row, end)) end++;
+          d += 'M' + (x + quiet) + ' ' + (y + quiet) + 'h' + (end - x) + 'v1h-' + (end - x) + 'z';
+          x = end;
+        }
+      }
+      return d;
+    }
+
+    // The address this page reached the console on, which is the one that works
+    // from this network; the console falls back to its own when there's none.
+    function inviteParams() {
+      const m = /^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})(?::(\d{1,5}))?$/.exec(conn.address || '');
+      return m ? [+m[1], +m[2], +m[3], +m[4], +(m[5] || 4264)] : [];
+    }
+
+    function openInvite() {
+      closeMenu();
+      document.body.classList.add('menu-open');
+      $('#inviteSheet').classList.add('open');
+      const box = $('#inviteQr'), address = $('#inviteAddress');
+      box.textContent = '';
+      address.textContent = '';
+      call('invite', inviteParams()).then(r => {
+        const quiet = 4, n = r.size + quiet * 2, ns = 'http://www.w3.org/2000/svg';
+        const svg = document.createElementNS(ns, 'svg');
+        svg.setAttribute('viewBox', '0 0 ' + n + ' ' + n);
+        svg.setAttribute('shape-rendering', 'crispEdges');
+        svg.setAttribute('role', 'img');
+        svg.setAttribute('aria-label', 'QR code for ' + r.text);
+        const path = document.createElementNS(ns, 'path');
+        path.setAttribute('d', qrPath(r.size, r.rows, quiet));
+        path.setAttribute('fill', '#000');
+        svg.appendChild(path);
+        box.appendChild(svg);
+        address.textContent = r.text.replace(/\/$/, '');
+      }).catch(e => { address.textContent = e.message || 'Couldn\'t make the QR code'; });
+    }
+
+    $('#openInvite').addEventListener('click', openInvite);
+    $('#menuInvite').addEventListener('click', openInvite);
+    $('#closeInvite').addEventListener('click', closeMenu);
     $('#padMenuBtn').addEventListener('click', () => { if (!editor.active) openMenu(); });
     $('#menuLayout').addEventListener('click', () => { closeMenu(); editor.open(); });
     $('#closeOptions').addEventListener('click', closeMenu);

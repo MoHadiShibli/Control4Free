@@ -18,9 +18,15 @@ The home screen shows all four controllers live:
 | **Free** | Nobody is using it. Pick it to play. |
 | **Connecting** | The PS4 is setting it up. Takes a moment. |
 | **Choose user on PS4** | Waiting for someone to pick a user on the PS4's screen. |
-| **Connected** | Signed in and ready. |
+| **Connected** | Signed in and ready. The tile shows the user's name. |
 | **Paused** | Its phone stopped sending input, for example because the screen locked. |
 | **This device** / **+1 device** | Who's driving it: this browser, or other ones. |
+
+## Inviting someone
+
+Press the **QR code button** at the top of the home screen, or **☰ → Invite someone** on the controller
+screen. The page shows its own address as a QR code: a friend scans it with their phone's camera and gets the
+controller page, as long as they're on the same network as the PS4. Tap outside the panel to close it.
 
 ## Touch controls
 

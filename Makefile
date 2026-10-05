@@ -29,11 +29,11 @@ ifdef C4F_PROBE
     OBJDIR := build/probe
 endif
 
-OBJECTS := $(SOURCES:src/%.c=$(OBJDIR)/%.o) $(OBJDIR)/client.o $(OBJDIR)/assets.o
+OBJECTS := $(SOURCES:src/%.c=$(OBJDIR)/%.o) $(OBJDIR)/client.o $(OBJDIR)/assets.o $(OBJDIR)/qrcodegen.o
 
 CFLAGS  += -std=gnu11 -Wall -Wextra -Wpointer-arith -g -O2
 CFLAGS  += -MMD -MP
-CFLAGS  += -Iinclude -Ivendor/jsmn -DC4F_VERSION='"$(VERSION)"' $(EXTRA_CFLAGS)
+CFLAGS  += -Iinclude -Ivendor/jsmn -Ivendor/qrcodegen -DC4F_VERSION='"$(VERSION)"' $(EXTRA_CFLAGS)
 LDFLAGS += -lScePad -lSceUserService -ldl -lpthread
 
 .PHONY: all clean
@@ -53,6 +53,10 @@ $(OBJDIR)/%.o: src/%.c VERSION | $(OBJDIR)
 
 build/client.c: client/index.html tools/embed_client.py | build
 	python3 tools/embed_client.py $< $@
+
+# The page's Invite QR code (MIT, the same copy the app uses).
+$(OBJDIR)/qrcodegen.o: vendor/qrcodegen/qrcodegen.c | $(OBJDIR)
+	$(CC) $(CFLAGS) -c $< -o $@
 
 $(OBJDIR)/client.o: build/client.c | $(OBJDIR)
 	$(CC) $(CFLAGS) -c $< -o $@

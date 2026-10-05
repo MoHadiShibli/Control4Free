@@ -74,6 +74,10 @@ void c4fPadFeedbackParse(const uint8_t *buf, size_t size, C4fPadFeedback *out);
  * Returns 0, the call's error code, or -1 if the call isn't exported. */
 int32_t c4fVirtualPadFeedback(const C4fVirtualPad *pad, C4fPadFeedback *out);
 
+/* The PS4's name for a user, as it shows it. Returns 0, or the call's error.
+ * Not written to the log: people post logs in bug reports. */
+int32_t c4fUserName(uint32_t userId, char *out, size_t size);
+
 /* A neutral sample: sticks centred, identity quaternion, connected. */
 void c4fPadDataNeutral(ScePadData *data);
 

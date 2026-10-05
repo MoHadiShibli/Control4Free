@@ -10,6 +10,7 @@
 #define JSMN_STATIC
 #define JSMN_STRICT
 #include "jsmn.h"
+#include "qrcodegen.h"
 #include "c4f_log.h"
 #include "c4f_net.h"
 #include "c4f_vda.h"
@@ -47,6 +48,10 @@ typedef struct {
     int feedbackKnown, rumbleSentValid, feedbackFailed;
     uint8_t rumbleSent[2];
     uint64_t feedbackAt;
+    /* The signed-in user's name, once the PS4 will tell it. */
+    char userName[72];
+    int nameTries;
+    uint64_t nameAt;
 } C4fWebPad;
 
 /* Creating a controller means issuing AddDevice and then finding its DeviceId in
@@ -155,9 +160,34 @@ static void c4fError(C4fNetClient *c, const C4fRequest *r, int code, const char 
     c4fNetText(c, reply);
 }
 
+/* `in` as the inside of a JSON string. Quotes and backslashes are escaped, and
+ * control characters and anything that isn't valid UTF-8 become '?'. A user
+ * name is the one string here we don't write ourselves, and a browser drops the
+ * whole WebSocket on a text frame that isn't valid UTF-8. */
+static void c4fJsonText(char *out, size_t size, const char *in)
+{
+    const unsigned char *p = (const unsigned char *)in;
+    size_t o = 0;
+
+    if (!size) return;
+    while (*p && o + 7 < size) {
+        unsigned c = *p;
+        unsigned n = c < 0x80 ? 1 : (c & 0xe0) == 0xc0 ? 2 : (c & 0xf0) == 0xe0 ? 3 : (c & 0xf8) == 0xf0 ? 4 : 0;
+        int valid = n > 0 && !(n == 2 && c < 0xc2) && c <= 0xf4;
+        for (unsigned k = 1; valid && k < n; k++) valid = (p[k] & 0xc0) == 0x80;
+        /* No overlong forms, no UTF-16 surrogates, nothing past U+10FFFF. */
+        if (valid && n == 3 && ((c == 0xe0 && p[1] < 0xa0) || (c == 0xed && p[1] >= 0xa0))) valid = 0;
+        if (valid && n == 4 && ((c == 0xf0 && p[1] < 0x90) || (c == 0xf4 && p[1] >= 0x90))) valid = 0;
+        if (!valid || (n == 1 && (c < 0x20 || c == 0x7f))) { out[o++] = '?'; p++; continue; }
+        if (c == '"' || c == '\\') out[o++] = '\\';
+        memcpy(out + o, p, n); o += n; p += n;
+    }
+    out[o] = 0;
+}
+
 static void c4fStatus(C4fWeb *app, C4fNetClient *c, const C4fRequest *request)
 {
-    char json[3072];
+    char json[4096];
     size_t pos;
     if (request && request->hasId) pos = (size_t)snprintf(json, sizeof(json), "{\"id\":%lld,\"result\":", (long long)request->id);
     else pos = (size_t)snprintf(json, sizeof(json), "{\"method\":\"s\",\"params\":");
@@ -177,9 +207,11 @@ static void c4fStatus(C4fWeb *app, C4fNetClient *c, const C4fRequest *request)
             if (l[2] > top) top = l[2];
             if (top) for (int k = 0; k < 3; k++) rgb[k] = l[k] * 255 / top;
         }
+        char user[160];
+        c4fJsonText(user, sizeof(user), p->active && p->assigned ? p->userName : "");
         pos += (size_t)snprintf(json+pos, sizeof(json)-pos,
-            "%s{\"pad\":%d,\"name\":\"Controller %d\",\"enabled\":true,\"open\":%s,\"connected\":%s,\"clients\":%d,\"mine\":%s,\"state\":\"%s\",\"uid\":\"%s%08x\",\"color\":[%u,%u,%u],\"reports\":%llu,\"error\":%d}",
-            i ? "," : "", i, i+1, p->active ? "true" : "false", p->owner && !p->stale ? "true" : "false", p->owner ? 1 : 0,
+            "%s{\"pad\":%d,\"name\":\"Controller %d\",\"user\":\"%s\",\"enabled\":true,\"open\":%s,\"connected\":%s,\"clients\":%d,\"mine\":%s,\"state\":\"%s\",\"uid\":\"%s%08x\",\"color\":[%u,%u,%u],\"reports\":%llu,\"error\":%d}",
+            i ? "," : "", i, i+1, user, p->active ? "true" : "false", p->owner && !p->stale ? "true" : "false", p->owner ? 1 : 0,
             p->owner == c ? "true" : "false", state, p->assigned ? "" : "unassigned-", p->userId,
             rgb[0], rgb[1], rgb[2], (unsigned long long)p->reports, p->error);
     }
@@ -249,6 +281,27 @@ static uint64_t c4fTimeUs(void)
     struct timespec t;
     clock_gettime(CLOCK_MONOTONIC, &t);
     return (uint64_t)t.tv_sec * 1000000 + (uint64_t)t.tv_nsec / 1000;
+}
+
+/* The names of signed-in users. The PS4 may not have finished signing a user in
+ * when it reports the controller assigned, so a failed look-up is retried for a
+ * few seconds. Names are kept out of the log. */
+static void c4fLookUpNames(C4fWeb *app, uint64_t now)
+{
+    for (int i = 0; i < C4F_MAX_PADS; i++) {
+        C4fWebPad *p = &app->pads[i];
+        if (!p->active || !p->assigned || p->userName[0] || p->nameTries >= 10 || now < p->nameAt) continue;
+        p->nameTries++;
+        p->nameAt = now + 500;
+        int32_t ret = c4fUserName(p->userId, p->userName, sizeof(p->userName));
+        if (ret == 0 && p->userName[0]) {
+            c4fLog("web controller %d user name found (%u bytes)\n", i + 1, (unsigned)strlen(p->userName));
+            app->changed = 1;
+        } else if (p->nameTries == 10) {
+            p->userName[0] = 0;
+            c4fLog("web controller %d user name unavailable (0x%08x)\n", i + 1, (uint32_t)ret);
+        }
+    }
 }
 
 /* Reads back what the game wants from each controller. Rumble goes to the
@@ -392,6 +445,7 @@ static void c4fKlogLine(C4fWeb *app, const char *line)
             C4fWebPad *p = &app->pads[i];
             if (p->active && p->device.deviceId == device) {
                 p->assigned = user != 0xffffffffu; p->userId = user; app->changed = 1;
+                p->userName[0] = 0; p->nameTries = 0; p->nameAt = 0;
                 c4fLog("web controller %d assignment confirmed=%d\n", i+1, p->assigned);
             }
         }
@@ -611,6 +665,51 @@ static void c4fClaim(C4fWeb *app, C4fNetClient *c, C4fRequest *r)
     app->changed = 1;
 }
 
+/* A QR code of the page's address, for the page's Invite panel. The page names
+ * the address it reached us on, as [a, b, c, d, port], because that's the one
+ * that works from this network; without it, the console's own address is used.
+ * The answer is the module grid, one hex string per row, most significant bit
+ * first: the page draws it, so it needs no QR library of its own. */
+static void c4fInvite(C4fNetClient *c, const C4fRequest *r)
+{
+    char text[64], address[64], reply[1024];
+    uint8_t qr[qrcodegen_BUFFER_LEN_FOR_VERSION(5)], scratch[qrcodegen_BUFFER_LEN_FOR_VERSION(5)];
+    size_t pos;
+
+    if (r->argc == 5) {
+        for (int i = 0; i < 4; i++)
+            if (r->args[i] < 0 || r->args[i] > 255) { c4fError(c, r, 400, "That isn't an IPv4 address"); return; }
+        if (r->args[4] < 1 || r->args[4] > 65535) { c4fError(c, r, 400, "That isn't a port"); return; }
+        snprintf(text, sizeof(text), "http://%d.%d.%d.%d:%d/", (int)r->args[0], (int)r->args[1],
+                 (int)r->args[2], (int)r->args[3], (int)r->args[4]);
+    } else if (r->argc == 0) {
+        c4fNetLocalAddress(address, sizeof(address));
+        if (!address[0]) { c4fError(c, r, 503, "Couldn't work out the console's address"); return; }
+        snprintf(text, sizeof(text), "http://%s:%d/", address, C4F_WEB_PORT);
+    } else {
+        c4fError(c, r, 400, "Invalid request"); return;
+    }
+    if (!qrcodegen_encodeText(text, scratch, qr, qrcodegen_Ecc_MEDIUM, 1, 5, qrcodegen_Mask_AUTO, true)) {
+        c4fError(c, r, 500, "Couldn't make the QR code"); return;
+    }
+    int size = qrcodegen_getSize(qr);
+    pos = (size_t)snprintf(reply, sizeof(reply), "{\"id\":%lld,\"result\":{\"text\":\"%s\",\"size\":%d,\"rows\":[",
+                           (long long)r->id, text, size);
+    for (int y = 0; y < size && pos < sizeof(reply) - 16; y++) {
+        reply[pos++] = y ? ',' : '"';
+        if (y) reply[pos++] = '"';
+        for (int x = 0; x < size; x += 4) {
+            unsigned nibble = 0;
+            for (int b = 0; b < 4; b++)
+                nibble = nibble << 1 | (x + b < size && qrcodegen_getModule(qr, x + b, y));
+            reply[pos++] = "0123456789abcdef"[nibble];
+        }
+        reply[pos++] = '"';
+    }
+    snprintf(reply + pos, sizeof(reply) - pos, "]}}");
+    c4fNetText(c, reply);
+}
+
 static void c4fUpdate(C4fWeb *app, C4fNetClient *c, C4fRequest *r)
 {
     if (r->argc < 9 || r->args[0] < 0 || r->args[0] >= C4F_MAX_PADS) { c4fError(c, r, 400, "That input was not in a form Control4Free understands"); return; }
@@ -672,6 +771,8 @@ static void c4fWebEvent(C4fNetClient *c, int event, const char *text, size_t len
     } else if (!strcmp(r.method, "ping")) {
         char reply[64];
         if (r.hasId) { snprintf(reply, sizeof(reply), "{\"id\":%lld,\"result\":{}}", (long long)r.id); c4fNetText(c, reply); }
+    } else if (!strcmp(r.method, "invite")) {
+        if (r.hasId) c4fInvite(c, &r);
     } else if (!strcmp(r.method, "status")) c4fStatus(app, c, &r);
     else if (!strcmp(r.method, "claim")) c4fClaim(app, c, &r);
     else if (!strcmp(r.method, "u")) c4fUpdate(app, c, &r);
@@ -738,6 +839,7 @@ int c4fWebRun(int klogFd)
         long klogBytes = c4fReadKlog(app);
         c4fReportPads(app);
         c4fPollFeedback(app, now);
+        c4fLookUpNames(app, now);
 #ifdef C4F_PROBE_SETTING
         c4fProbeSetting(app, now);
 #endif

@@ -159,6 +159,17 @@ int32_t c4fVirtualPadFeedback(const C4fVirtualPad *pad, C4fPadFeedback *out)
     return ret;
 }
 
+int32_t c4fUserName(uint32_t userId, char *out, size_t size)
+{
+    char name[64];   /* the system's own limit is 16 characters */
+
+    if (size) out[0] = 0;
+    (void)memset(name, 0, sizeof(name));
+    int32_t ret = sceUserServiceGetUserName((int32_t)userId, name, sizeof(name) - 1);
+    if (ret == 0) snprintf(out, size, "%s", name);
+    return ret;
+}
+
 void c4fPadDataNeutral(ScePadData *data)
 {
     (void)memset(data, 0, sizeof(*data));

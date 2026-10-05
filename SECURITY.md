@@ -16,7 +16,8 @@ can reach your PS4 over the network can:
 
 - take a free controller and play, on the home screen, at sign-in and in games;
 - press PS and Share, which reach the system menus;
-- stop Control4Free, which disconnects every controller.
+- stop Control4Free, which disconnects every controller;
+- see the names of the users signed in on the controllers.
 
 They cannot sign in as one of your users without someone at the PS4 choosing that
 user on the PS4's own screen, and they cannot see your screen.

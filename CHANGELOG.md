@@ -12,9 +12,13 @@ Rumble and the light bar.
   gamepad that can't be rumbled says so on its row.
 - The page glows in the controller's light-bar colour, the player colour the PS4 gives each user or whatever
   the game sets, brightened from the quarter strength the PS4 uses.
+- Each controller shows the name of the PS4 user signed in on it.
+- An **Invite** button shows the page's address as a QR code, so friends can scan it and join. The console
+  makes the code, so the page still needs no libraries.
 - The page says "Choose user on PS4" rather than "on TV": not everyone plays on a TV.
-- The status reports the light bar's colour in `color`, and the service sends rumble as
-  `{"method": "v", "params": [pad, large, small]}`. See [docs/protocol.md](docs/protocol.md).
+- Protocol: the status reports the light bar's colour in `color` and the signed-in user in `user`; the
+  service sends rumble as `{"method": "v", "params": [pad, large, small]}`; a new `invite` method returns the
+  QR code. See [docs/protocol.md](docs/protocol.md).
 
 ## 1.0.0 — 2026-10-05
 

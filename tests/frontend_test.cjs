@@ -123,4 +123,14 @@ function padStatus(fields) {
   assert.equal(can({}), false, 'Firefox');
   assert.equal(can({ vibrationActuator: { playEffect: play, effects: [] } }), false);
   console.log('PASS gamepads that cannot rumble are named as such');
+
+  // The Invite panel draws the console's grid as runs of dark modules.
+  const qrCtx = {};
+  vm.createContext(qrCtx);
+  vm.runInContext(extract('    function qrPath(size, rows, quiet)', '    // The address this page reached'), qrCtx);
+  // 5 wide: row 0 = 11011, row 1 = 00100 -> hex d8, 20.
+  assert.equal(vm.runInContext("qrPath(5, ['d8', '20'], 4)", qrCtx),
+               'M4 4h2v1h-2zM7 4h2v1h-2zM6 5h1v1h-1z');
+  assert.equal(vm.runInContext("qrPath(3, ['0', '0', '0'], 4)", qrCtx), '');
+  console.log('PASS the invite QR is drawn from the console grid');
 })();

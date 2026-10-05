@@ -31,6 +31,9 @@ sees a real controller, so it works wherever a DualShock does:
 ## Features
 
 - **Up to four controllers**, from as many phones, tablets or computers as you like.
+- **See who's playing.** Each controller shows the name of the PS4 user signed in on it.
+- **Invite friends with a QR code.** One button on the page shows its address as a QR code: friends scan it
+  and they're in.
 - **A full DualShock 4 on the screen**: analog sticks, a two-finger touchpad, L3/R3, PS, Share and Options.
   Move, resize or hide any button with the layout editor; each device keeps its own layout.
 - **The gamepads you already have.** Connect one to the phone or PC and give it a controller. One computer

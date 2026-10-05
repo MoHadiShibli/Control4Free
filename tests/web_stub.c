@@ -189,6 +189,21 @@ void c4fVirtualPadAdopt(C4fVirtualPad *p, int32_t user, int32_t vdaUser, uint64_
     printf("ADOPT %x %d\n", (unsigned)p->handle, vdaUser);
 }
 
+/* Alex, and a name built to break JSON and UTF-8 that only resolves on a retry,
+ * as a user still signing in does. */
+int32_t c4fUserName(uint32_t userId, char *out, size_t size)
+{
+    static int samTries;
+    if (size) out[0] = 0;
+    if (userId == 0x1a2b3c4d) { snprintf(out, size, "Alex"); return 0; }
+    if (userId == 0x1a2b3c4e) {
+        if (++samTries < 2) return (int32_t)0x80960009;
+        snprintf(out, size, "Sam \"S\" \\ \x01 \xff \xc3\xa9");
+        return 0;
+    }
+    return (int32_t)0x80960009;
+}
+
 void c4fVirtualPadRemove(C4fVirtualPad *p) { printf("REMOVE %x\n", p->handle); p->owned = 0; }
 void c4fPadDataNeutral(ScePadData *p)
 {

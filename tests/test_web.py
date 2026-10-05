@@ -21,8 +21,8 @@ def build():
     subprocess.run(['python3', 'tools/embed_file.py', 'build/assets.c',
                     'c4fManifest=client/manifest.webmanifest', 'c4fIcon=client/icon-192.png'], check=True)
     subprocess.run(['clang-18', '-std=gnu11', '-Wall', '-Wextra', '-Werror', '-g',
-                    '-Iinclude', '-Ivendor/jsmn', '-DC4F_STALE_MS=400', '-DC4F_RELEASE_MS=1800',
-                    'src/net.c', 'src/web.c', 'src/klog_line.c', 'tests/web_stub.c', 'build/client.c',
+                    '-Iinclude', '-Ivendor/jsmn', '-Ivendor/qrcodegen', '-DC4F_STALE_MS=400', '-DC4F_RELEASE_MS=1800',
+                    'src/net.c', 'src/web.c', 'src/klog_line.c', 'vendor/qrcodegen/qrcodegen.c', 'tests/web_stub.c', 'build/client.c',
                     'build/assets.c', '-pthread', '-o', str(BINARY)], check=True)
 
 
@@ -417,6 +417,47 @@ def main():
         assert server.c.request('status')['result']['pads'][0]['color'] == [32, 96, 255]
         assert len([r for r in server.rows() if 'not exported' in r]) == 1
         print('PASS no rumble call: logged once, controllers unaffected', flush=True)
+    finally:
+        server.close()
+
+    # Who's signed in on each controller, made safe for JSON and UTF-8, kept out of the log.
+    server = Server()
+    try:
+        c = server.c
+        assert c.request('claim', [0, 1])['result']['pads'][1]['mine']
+        assert c.request('status')['result']['pads'][0]['user'] == ''
+        os.write(server.log, b'<118>#LOGIN MGR# Receive Event : SCE_MBUS_EVENT_DEVICE_OWNER_CHANGED [DeviceId:0x11030d][UserId:0x1a2b3c4d]\n')
+        os.write(server.log, b'<118>#LOGIN MGR# Receive Event : SCE_MBUS_EVENT_DEVICE_OWNER_CHANGED [DeviceId:0x12030d][UserId:0x1a2b3c4e]\n')
+        time.sleep(1.2)   # Sam's name only comes on the retry, half a second later
+        pads = c.request('status')['result']['pads']
+        assert pads[0]['user'] == 'Alex', pads[0]
+        assert pads[1]['user'] == 'Sam "S" \\ ? ? \u00e9', repr(pads[1]['user'])
+        assert pads[2]['user'] == '' and pads[3]['user'] == ''
+        assert not any('Alex' in r or 'Sam' in r for r in server.rows()), 'a name reached the log'
+        assert any('user name found (4 bytes)' in r for r in server.rows())
+        print('PASS signed-in names shown, made safe for JSON and UTF-8, kept out of the log', flush=True)
+    finally:
+        server.close()
+
+    # The Invite panel's QR code: a real QR code of the address the page names.
+    server = Server()
+    try:
+        r = server.c.request('invite', [192, 168, 1, 20, 4264])['result']
+        assert r['text'] == 'http://192.168.1.20:4264/', r
+        size = r['size']
+        assert size in (21, 25, 29, 33, 37) and len(r['rows']) == size
+        bits = [[int(row[x >> 2], 16) >> (3 - (x & 3)) & 1 for x in range(size)] for row in r['rows']]
+        assert all(len(row) == (size + 3) // 4 for row in r['rows'])
+        # The three finder squares: a dark ring, a light ring, a dark 3x3 core.
+        finder = [[1,1,1,1,1,1,1], [1,0,0,0,0,0,1], [1,0,1,1,1,0,1], [1,0,1,1,1,0,1],
+                  [1,0,1,1,1,0,1], [1,0,0,0,0,0,1], [1,1,1,1,1,1,1]]
+        for ox, oy in ((0, 0), (size - 7, 0), (0, size - 7)):
+            assert [bits[oy + y][ox:ox + 7] for y in range(7)] == finder, (ox, oy)
+        assert server.c.request('invite', [300, 1, 1, 1, 4264])['error']['code'] == 400
+        assert server.c.request('invite', [192, 168, 1, 20, 0])['error']['code'] == 400
+        reply = server.c.request('invite', [])   # the console's own address, when it has a route
+        assert reply.get('result', {}).get('text', 'http://').startswith('http://') or reply['error']['code'] == 503
+        print('PASS invite: a real QR code of the page address, bad addresses refused', flush=True)
     finally:
         server.close()
 

@@ -47,6 +47,7 @@ Controllers are numbered 0 to 3 in the protocol and 1 to 4 on screen.
 | `leave` | `[pad]` | A status object. |
 | `stop` | `[]` | None; the service stops and the connection closes. |
 | `ping` | `[]` | `{}` |
+| `invite` | `[a, b, c, d, port]`, the address the page reached, or `[]` | `{"text": "http://192.168.1.20:4264/", "size": 29, "rows": […]}` |
 
 **`claim`** is the whole set this connection wants: controllers missing from it that it owned are removed,
 and free ones in it are created. A claim that needs a new controller is answered when the controller exists,
@@ -89,6 +90,10 @@ a connection claims them again; the page does so when it reconnects.
 
 **`stop`** is refused with `409` while another connection owns a controller.
 
+**`invite`** returns a QR code of the page's address: `[]` uses the console's own address. `rows` holds one
+hex string per row of modules, most significant bit first, `size` modules wide; add a light border of 4
+modules around it when you draw it.
+
 ### The status object
 
 ```json
@@ -96,7 +101,7 @@ a connection claims them again; the page does so when it reconnects.
   "version": "1.1.0",
   "protocol": 2,
   "pads": [
-    {"pad": 0, "name": "Controller 1", "enabled": true, "open": true, "connected": true, "clients": 1,
+    {"pad": 0, "name": "Controller 1", "user": "Alex", "enabled": true, "open": true, "connected": true, "clients": 1,
      "mine": true, "state": "ready", "uid": "1a2b3c4d", "color": [32, 96, 255], "reports": 5120, "error": 0}
   ]
 }
@@ -104,6 +109,7 @@ a connection claims them again; the page does so when it reconnects.
 
 | Field | Meaning |
 |---|---|
+| `user` | The name of the PS4 user signed in on it, or `""` (not signed in, or not known yet). |
 | `open` | The virtual controller exists. |
 | `connected` | A connection owns it and is sending input. |
 | `clients` | 1 if a connection owns it, else 0. |

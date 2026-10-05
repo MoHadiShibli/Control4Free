@@ -21,7 +21,7 @@ def connect_again():
 
 def main():
     subprocess.run(['clang-18', '-std=gnu11', '-Wall', '-Wextra', '-Werror', '-g',
-                    '-Iinclude', '-Ivendor/jsmn', 'src/net.c', 'src/web.c', 'src/klog_line.c',
+                    '-Iinclude', '-Ivendor/jsmn', '-Ivendor/qrcodegen', 'src/net.c', 'src/web.c', 'src/klog_line.c', 'vendor/qrcodegen/qrcodegen.c',
                     'tests/web_stub.c', 'tests/recovery_faults.c', 'build/client.c', 'build/assets.c', '-pthread',
                     '-Wl,--wrap=select,--wrap=accept,--wrap=getsockopt', '-o', str(web.BINARY)], check=True)
     with tempfile.TemporaryDirectory() as directory:
