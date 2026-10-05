@@ -43,4 +43,4 @@ the PS4's own *"Who's using this controller?"* screen deciding who each one is.
 - Open on the local network by design, with no pairing. What that does and does not protect is written down in
   [SECURITY.md](SECURITY.md).
 
-Tested on firmware 10.01 with GoldHEN v2.4b18.10. Rumble, light bar and motion are not passed on yet.
+Tested on firmware 10.01 with GoldHEN v2.4b18.10. Rumble, light bar and motion are not passed on.
