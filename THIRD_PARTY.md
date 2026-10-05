@@ -35,8 +35,6 @@
   [DualShock 4 layout diagram](https://commons.wikimedia.org/wiki/File:Dualshock_4_Layout.svg)
   by Tokyoship, licensed under CC BY 3.0
   (https://creativecommons.org/licenses/by/3.0/).
-- The package settings that file the app under Applications (`CATEGORY`,
-  `ATTRIBUTE`) follow Apollo Save Tool (https://github.com/bucanero/apollo-ps4).
 
 These license notices are also included inside the package.
 

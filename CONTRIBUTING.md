@@ -83,8 +83,8 @@ Build without new warnings; the app is built with `-Werror`.
 
 ## Reviewing AI-written code
 
-Much of Control4Free was written with the help of AI models (Claude by Anthropic and Codex by OpenAI). It has
-been tested, on the console as well, but AI-written code can look right and still be wrong. Please read it
+Much of Control4Free was written with the help of AI models (Claude Opus 5.5 by Anthropic and Astra GPT-6 by
+OpenAI). It has been tested, on the console as well, but AI-written code can look right and still be wrong. Please read it
 critically: if you find dead code, wrong assumptions or needless complexity,
 [open an issue](https://github.com/MoHadiShibli/Control4Free/issues) or send a pull request.
 

@@ -102,30 +102,16 @@ project and read every report. If Control4Free is useful to you, you can help ke
 
 ## Credits
 
-- [seregonwar/SplashDown](https://github.com/seregonwar/SplashDown): Control4Free's virtual-device code is
-  ported from its `psbutton.c`, the first working use of this API on a PS4.
-- [GoldHEN](https://github.com/GoldHEN/GoldHEN), its PayLoader and AutoRun, and the
-  [GoldHEN Plugins SDK](https://github.com/GoldHEN/GoldHEN_Plugins_SDK).
-- [ps4-payload-sdk](https://github.com/ps4-payload-dev/sdk) by John Törnblom builds the payload, and the
-  [OpenOrbis PS4 Toolchain](https://github.com/OpenOrbis/OpenOrbis-PS4-Toolchain) builds the app and its package.
-- [Ghostcontrol](https://github.com/srbraboo/Ghostcontrol-PS5-USB-Controller-Patcher) was a research reference.
-- [Apollo Save Tool](https://github.com/bucanero/apollo-ps4) showed the package settings that file an app under
-  Applications.
-- [jsmn](https://github.com/zserge/jsmn), Project Nayuki's
-  [QR Code generator](https://github.com/nayuki/QR-Code-generator),
-  [stb_truetype](https://github.com/nothings/stb) and the [Roboto](https://github.com/googlefonts/roboto) font.
-- The on-screen buttons are drawn after the
-  [DualShock 4 layout diagram](https://commons.wikimedia.org/wiki/File:Dualshock_4_Layout.svg) by Tokyoship
-  (CC BY 3.0).
-
-Full licence details are in [THIRD_PARTY.md](THIRD_PARTY.md).
+Control4Free's virtual-device code is ported from [SplashDown](https://github.com/seregonwar/SplashDown) by
+seregonwar. The other code, fonts and artwork it uses, and their licenses, are listed in
+[THIRD_PARTY.md](THIRD_PARTY.md).
 
 ### Built with AI help
 
-Control4Free was built with the help of AI models, Claude by Anthropic and Codex by OpenAI, which worked on the
-code, tests and documentation with me. AI-written code can look right and still be wrong. Reviews are very
-welcome: if you spot AI slop (dead code, wrong assumptions, needless complexity), please
-[open an issue](https://github.com/MoHadiShibli/Control4Free/issues) or send a pull request.
+Control4Free was built with the help of AI models, **Claude Opus 5.5** by Anthropic and **Astra GPT-6** by
+OpenAI, which worked on the code, tests and documentation with me. AI-written code can look right and still be
+wrong. Reviews are very welcome: if you spot AI slop (dead code, wrong assumptions, needless complexity),
+please [open an issue](https://github.com/MoHadiShibli/Control4Free/issues) or send a pull request.
 
 ## License
 
