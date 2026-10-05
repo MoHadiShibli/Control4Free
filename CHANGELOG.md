@@ -3,7 +3,7 @@
 Versions follow [Semantic Versioning](https://semver.org): PATCH for fixes, MINOR for features that break
 nothing, MAJOR for anything people rely on that changes.
 
-## 1.1.0 — 2026-10-05
+## 1.1.0 — 2026-10-06
 
 Rumble and the light bar.
 
