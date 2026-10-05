@@ -13,7 +13,7 @@
   GPL-3.0). The toolchain supplies `sce_sys/about/right.sprx` and its stub
   `sce_module/libc.prx` and `sce_module/libSceFios2.prx`; LibOrbisPkg produces the
   package. `docker/Dockerfile.launcher` pins the OpenOrbis image by digest.
-- `launcher/autorun.c` calls GoldHEN's SDK command (syscall 500, jailbreak and
+- `launcher/sandbox.c` calls GoldHEN's SDK command (syscall 500, jailbreak and
   unjailbreak) with the `jailbreak_backup` layout from the GoldHEN Plugins SDK
   (https://github.com/GoldHEN/GoldHEN_Plugins_SDK), MIT. No SDK code is included.
 - `vendor/qrcodegen/qrcodegen.c` and `.h` are Project Nayuki's QR generator v1.8.0

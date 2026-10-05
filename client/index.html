@@ -148,6 +148,11 @@
       text-overflow: ellipsis;
     }
 
+    #connText, .conn-detail { overflow: hidden; text-overflow: ellipsis; }
+    #connText { flex: none; }
+    .conn-detail { min-width: 0; margin-left: -4px; }
+    @media (max-width: 520px) { .conn-detail { display: none; } }
+
     .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--faint); flex: none; }
     [data-conn="open"] .dot { background: var(--ok); box-shadow: 0 0 10px var(--ok); }
     [data-conn="connecting"] .dot { background: var(--warn); animation: pulse 1.2s ease-in-out infinite; }
@@ -675,12 +680,15 @@
     .corner-btn:hover { background: rgba(32, 39, 53, .9); color: #fff; }
     .corner-btn:active { transform: scale(.92); }
     .corner-btn.left { left: max(8px, env(safe-area-inset-left)); }
+    /* A column, not a row: in landscape R2 starts about 68px from the right
+       edge, room for one button beside it, not two. */
     .corner-group {
       position: absolute;
       z-index: 2;
       top: max(8px, env(safe-area-inset-top));
       right: max(8px, env(safe-area-inset-right));
       display: flex;
+      flex-direction: column;
       gap: 8px;
     }
     .corner-group .corner-btn { position: static; }
@@ -976,7 +984,7 @@
           <svg viewBox="56 38 888 566" aria-hidden="true"><path fill="#fff" d="M500 78C410 78 330 74 262 62C232 46 188 42 146 62C108 80 86 120 78 170C70 230 58 320 60 400C62 470 80 535 118 568C152 598 196 592 222 560C250 525 272 470 300 430C360 418 430 440 500 440C570 440 640 418 700 430C728 470 750 525 778 560C804 592 848 598 882 568C920 535 938 470 940 400C942 320 930 230 922 170C914 120 892 80 854 62C812 42 768 46 738 62C670 74 590 78 500 78ZM366 98L634 98C648.359 98 660 109.641 660 124L660 226C660 240.359 648.359 252 634 252L366 252C351.641 252 340 240.359 340 226L340 124C340 109.641 351.641 98 366 98ZM173 148L219 148L219 189L260 189L260 235L219 235L219 276L173 276L173 235L132 235L132 189L173 189L173 148ZM804 121C818.912 121 831 133.088 831 148C831 162.912 818.912 175 804 175C789.088 175 777 162.912 777 148C777 133.088 789.088 121 804 121ZM804 249C818.912 249 831 261.088 831 276C831 290.912 818.912 303 804 303C789.088 303 777 290.912 777 276C777 261.088 789.088 249 804 249ZM740 185C754.912 185 767 197.088 767 212C767 226.912 754.912 239 740 239C725.088 239 713 226.912 713 212C713 197.088 725.088 185 740 185ZM868 185C882.912 185 895 197.088 895 212C895 226.912 882.912 239 868 239C853.088 239 841 226.912 841 212C841 197.088 853.088 185 868 185ZM338 276C374.451 276 404 305.549 404 342C404 378.451 374.451 408 338 408C301.549 408 272 378.451 272 342C272 305.549 301.549 276 338 276ZM338 298C313.699 298 294 317.699 294 342C294 366.301 313.699 386 338 386C362.301 386 382 366.301 382 342C382 317.699 362.301 298 338 298ZM662 276C698.451 276 728 305.549 728 342C728 378.451 698.451 408 662 408C625.549 408 596 378.451 596 342C596 305.549 625.549 276 662 276ZM662 298C637.699 298 618 317.699 618 342C618 366.301 637.699 386 662 386C686.301 386 706 366.301 706 342C706 317.699 686.301 298 662 298ZM500 319C509.389 319 517 326.611 517 336C517 345.389 509.389 353 500 353C490.611 353 483 345.389 483 336C483 326.611 490.611 319 500 319Z"/></svg>
           <span>Control4Free</span>
         </div>
-        <span class="conn" id="conn" data-conn="connecting" role="status" aria-live="polite"><span class="dot"></span><span id="connText">Connecting</span></span>
+        <span class="conn" id="conn" data-conn="connecting" role="status" aria-live="polite"><span class="dot"></span><span id="connText">Connecting</span><span class="conn-detail" id="connDetail"></span></span>
       </div>
       <div class="tb-group">
         <button class="icon-btn" type="button" id="openSettings" aria-label="Settings">
@@ -1244,11 +1252,13 @@
       return store.get('address', '');
     }
 
-    function setConnState(state, text) {
+    // `detail` (the address) is dropped on narrow screens, the rest never is.
+    function setConnState(state, text, detail) {
       conn.state = state;
       $('#conn').dataset.conn = state;
       $('#padView').dataset.conn = state;
       $('#connText').textContent = text;
+      $('#connDetail').textContent = detail || '';
       renderPadLabel();
     }
 
@@ -1265,7 +1275,8 @@
         return;
       }
       if (!servedByConsole) store.set('address', conn.address);
-      setConnState('connecting', conn.everOpened ? 'Waiting for Control4Free on the PS4' : 'Connecting to ' + conn.address);
+      if (conn.everOpened) setConnState('connecting', 'Waiting for Control4Free on the PS4');
+      else setConnState('connecting', 'Connecting', ' to ' + conn.address);
       let ws;
       try {
         ws = new WebSocket('ws://' + conn.address);
@@ -1278,7 +1289,7 @@
       ws.onopen = () => {
         conn.retry = 0;
         conn.everOpened = true;
-        setConnState('open', 'Connected to ' + conn.address);
+        setConnState('open', 'Connected', ' to ' + conn.address);
         $('#addressForm').hidden = servedByConsole;
         $('#addressHint').classList.remove('error');
         call('info', []).then(info => {
@@ -1306,7 +1317,7 @@
         stopAllRumble();
         const wait = Math.min(5000, 800 * Math.pow(1.6, conn.retry++));
         if (!conn.everOpened && !servedByConsole) {
-          setConnState('closed', 'Can\'t reach ' + conn.address);
+          setConnState('closed', 'Can\'t reach', ' ' + conn.address);
           $('#addressForm').hidden = false;
           $('#addressHint').textContent = 'Can\'t reach the console. Load the Control4Free payload, then check the address.';
           $('#addressHint').classList.add('error');
@@ -2299,7 +2310,7 @@
       if (s.state === 'ready') return 'Signed in on the PS4';
       if (s.state === 'paused') return 'Input paused';
       if (s.state === 'error') return 'Input error — disconnect and reconnect';
-      return 'Touch, keyboard, or a controller on this device';
+      return 'Touch, keyboard, or a gamepad on this device';
     }
 
     function stateItem(cls, text) {
@@ -2405,9 +2416,11 @@
       const s = status[primaryPad];
       document.documentElement.style.setProperty('--accent', css(s.color));
       const label = $('#padLabel');
-      label.textContent = 'Controller ' + (primaryPad + 1) + (s.known && s.name ? ' · ' + s.name : '');
+      // The console's name for it, when it says more than the number does.
+      const title = 'Controller ' + (primaryPad + 1);
+      label.textContent = title + (s.known && s.name && s.name !== title ? ' · ' + s.name : '');
       const state = padState(s);
-      const extra = conn.state !== 'open' ? $('#connText').textContent
+      const extra = conn.state !== 'open' ? $('#connText').textContent + $('#connDetail').textContent
         : state === 'ready' ? 'Signed in on the PS4'
         : state === 'connecting' ? 'Connecting to the PS4'
         : state === 'select' ? 'Choose your user on TV with D-pad and Cross'

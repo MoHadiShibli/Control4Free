@@ -30,11 +30,12 @@ from the launcher app or the controller page, or turn the console off.
 Being open to your network is not the same as being open to the internet. These
 are the limits the code does enforce.
 
-**A website you visit cannot drive your console.** A page on the internet can send
-requests to your PS4, so the service refuses the ones that matter:
+**Websites are kept out, with one deliberate gap.** A page on the internet that you
+visit can make your browser send requests to your PS4, so the service refuses the
+ones that matter:
 
-- A WebSocket handshake carrying an `Origin` that is not the page's own address is
-  refused with 403. A site's script cannot open the control socket.
+- A WebSocket handshake carrying another site's `Origin` is refused with 403, so an
+  ordinary page's script cannot open the control socket.
 - The page is only served for a literal IP address or `localhost` in the `Host`
   header, so a domain name that resolves to your console (DNS rebinding) gets 403.
 - The launcher's own `GET /api/status` and `POST /api/stop` require the header
@@ -43,6 +44,14 @@ requests to your PS4, so the service refuses the ones that matter:
   which this service never answers.
 - The page is served with a Content-Security-Policy that keeps it to its own
   resources.
+
+The gap: a handshake with `Origin: null` is accepted. That is what a browser sends
+for a controller page opened from a saved file, and the saved file is how gamepads
+work in browsers that only allow the Gamepad API on secure pages. A website can
+produce the same `Origin: null` from a sandboxed frame, so a page you have open
+while on your home network could take a free controller and press buttons, as
+anyone on your network can. It cannot take a controller someone is using, sign in
+as a user, or see your screen.
 
 **One controller has one owner.** A slot is claimed by one WebSocket connection.
 Another device asking for the same slot is refused (409), and input never claims a

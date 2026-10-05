@@ -1,7 +1,8 @@
 /* Control4Free -- the virtual device (VDA) lifecycle.
  *
  * One C4fVirtualPad is one virtual DualShock 4 as the system sees it. The call
- * order and its reasons came from the spike (tag spike-final, dev notes).
+ * order and its reasons came from a staged diagnostic build, in the git history
+ * before 1.0.0.
  *
  * No function here blocks or waits, so the service can keep answering everyone
  * else while a controller is being created.

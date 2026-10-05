@@ -496,7 +496,7 @@ void c4fDrawLauncher(uint32_t *pixels, const C4fLauncherScreen *s)
         c4fText(&c, C4F_FONT_LIGHT, 28, fieldX + 28, fieldY + fieldHeight / 2 + 10, C4F_MUTED,
                 "Connect the PS4 to your home network");
     c4fTextWrapped(&c, C4F_FONT_LIGHT, 24, fieldX, fieldY + fieldHeight + 44, fieldWidth, 36, 2, C4F_MUTED,
-                   "Use the same network as the PS4. Touch, a keyboard and controllers connected to the phone "
+                   "Use the same network as the PS4. Touch, a keyboard and gamepads connected to the phone "
                    "or PC all work.");
 
     /* The last result along the bottom of the tile. */

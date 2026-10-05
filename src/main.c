@@ -6,8 +6,8 @@
  * virtual-device API, the one Remote Play goes through. Phones and PCs drive
  * the controllers from a page the payload serves on port 4264 (web.c).
  *
- * The staged spike that established the call order is in git history, tag
- * spike-final.
+ * The staged diagnostic build that worked out the call order is in the git
+ * history before 1.0.0.
  */
 
 #include <fcntl.h>
