@@ -36,8 +36,9 @@ sees a real controller, so it works wherever a DualShock does:
 - **The gamepads you already have.** Connect one to the phone or PC and give it a controller. One computer
   can run all four.
 - **A keyboard**, with keys you can change.
-- **Rumble and light bar.** When a game rumbles, your phone buzzes (Android) and your gamepad rumbles. The
-  page glows in the controller's light-bar colour, the one the PS4 or the game sets.
+- **Rumble and light bar.** When a game rumbles, your phone buzzes (Android) and your gamepad rumbles, if the
+  browser can rumble it (Xbox pads in Chrome and Edge). The page glows in the controller's light-bar colour,
+  the one the PS4 or the game sets.
 - **Fast.** Input reaches the console the moment it arrives, at a DualShock 4's own rate while you play.
 - **An app on the PS4** that shows the address and a QR code, how many controllers are connected, and starts
   or stops Control4Free.

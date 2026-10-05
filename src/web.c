@@ -82,6 +82,9 @@ typedef struct {
     C4fWebPad pads[C4F_MAX_PADS];
     int klogFd, stop, changed, creationBlocked, feedbackMissing;
     unsigned rumbleChanges;   /* since the last heartbeat, to tell a silent game from a silent phone */
+    /* What reading rumble and light bar costs, since the last heartbeat. Every
+     * microsecond here is one an arriving input could have to wait. */
+    uint64_t feedbackCalls, feedbackUs, feedbackMaxUs;
     char klogLine[1024];
     size_t klogUsed;
     C4fAdd add;
@@ -241,6 +244,13 @@ static void c4fReportPads(C4fWeb *app)
     }
 }
 
+static uint64_t c4fTimeUs(void)
+{
+    struct timespec t;
+    clock_gettime(CLOCK_MONOTONIC, &t);
+    return (uint64_t)t.tv_sec * 1000000 + (uint64_t)t.tv_nsec / 1000;
+}
+
 /* Reads back what the game wants from each controller. Rumble goes to the
  * controller's owner, whose page drives the phone's vibration and any gamepad
  * playing as it; the light bar goes into the status everyone sees. */
@@ -254,7 +264,11 @@ static void c4fPollFeedback(C4fWeb *app, uint64_t now)
 
         if (!p->active || now < p->feedbackAt) continue;
         p->feedbackAt = now + C4F_FEEDBACK_MS;
+        uint64_t started = c4fTimeUs();
         ret = c4fVirtualPadFeedback(&p->device, &f);
+        uint64_t took = c4fTimeUs() - started;
+        app->feedbackCalls++; app->feedbackUs += took;
+        if (took > app->feedbackMaxUs) app->feedbackMaxUs = took;
         if (ret == -1) {
             c4fLog("scePadVirtualDeviceGetRemoteSetting is not exported: no rumble or light bar\n");
             app->feedbackMissing = 1;
@@ -746,9 +760,14 @@ int c4fWebRun(int klogFd)
         if (now >= app->heartbeatAt) {
             int active = 0;
             for (int i = 0; i < C4F_MAX_PADS; i++) active += app->pads[i].active;
-            c4fLog("heartbeat: listener=%d controllers=%d klog=%d connecting=%d rumble-changes=%u\n",
-                   app->net.fd >= 0, active, app->klogFd >= 0, app->add.state, app->rumbleChanges);
+            c4fLog("heartbeat: listener=%d controllers=%d klog=%d connecting=%d rumble-changes=%u "
+                   "feedback-reads=%llu avg=%lluus max=%lluus\n",
+                   app->net.fd >= 0, active, app->klogFd >= 0, app->add.state, app->rumbleChanges,
+                   (unsigned long long)app->feedbackCalls,
+                   (unsigned long long)(app->feedbackCalls ? app->feedbackUs / app->feedbackCalls : 0),
+                   (unsigned long long)app->feedbackMaxUs);
             app->rumbleChanges = 0;
+            app->feedbackCalls = app->feedbackUs = app->feedbackMaxUs = 0;
             app->heartbeatAt = now + 60000;
         }
         if (app->changed || now >= app->broadcastAt) {

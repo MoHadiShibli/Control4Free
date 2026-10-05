@@ -2357,6 +2357,16 @@
       });
     }
 
+    // Whether this browser can rumble this gamepad. Chrome and Edge can rumble
+    // Xbox pads, but often not a DualSense; Firefox none. Saying so on the row
+    // beats a gamepad that silently never rumbles.
+    function canRumble(gp) {
+      const a = gp && gp.vibrationActuator;
+      if (!a || typeof a.playEffect !== 'function') return false;
+      if (Array.isArray(a.effects)) return a.effects.includes('dual-rumble');
+      return !a.type || a.type === 'dual-rumble';
+    }
+
     function renderGamepads() {
       const list = $('#gamepadList');
       list.textContent = '';
@@ -2377,7 +2387,8 @@
         const name = (src.gp && src.gp.id || 'Gamepad').replace(/\s*\(.*?\)\s*/g, ' ').trim();
         text.appendChild(el('div', 'gp-name', name || 'Gamepad'));
         const mapped = src.gp && src.gp.mapping === 'standard';
-        text.appendChild(el('div', 'gp-sub', 'Gamepad ' + (index + 1) + (mapped ? '' : ' · buttons may be mixed up')));
+        text.appendChild(el('div', 'gp-sub', 'Gamepad ' + (index + 1) + (mapped ? '' : ' · buttons may be mixed up') +
+                                              (canRumble(src.gp) ? '' : ' · no rumble in this browser')));
         row.appendChild(text);
         const seg = el('div', 'seg');
         seg.setAttribute('role', 'radiogroup');

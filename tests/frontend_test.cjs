@@ -110,4 +110,17 @@ function padStatus(fields) {
   fs = await fullScreen({ enabled: false });
   assert.equal(fs.button.hidden, true);
   console.log('PASS full screen: real where allowed, a home-screen hint on iPhone, gone when standalone');
+
+  // Which gamepads the page says it can rumble.
+  const rumbleCtx = {};
+  vm.createContext(rumbleCtx);
+  vm.runInContext(extract('    function canRumble(gp)', '    function renderGamepads()'), rumbleCtx);
+  const can = gp => vm.runInContext('canRumble(gp)', Object.assign(rumbleCtx, { gp }));
+  const play = () => Promise.resolve();
+  assert.equal(can({ vibrationActuator: { playEffect: play, effects: ['dual-rumble', 'trigger-rumble'] } }), true);
+  assert.equal(can({ vibrationActuator: { playEffect: play, type: 'dual-rumble' } }), true, 'older Chrome');
+  assert.equal(can({ vibrationActuator: null }), false, 'Chrome with a DualSense');
+  assert.equal(can({}), false, 'Firefox');
+  assert.equal(can({ vibrationActuator: { playEffect: play, effects: [] } }), false);
+  console.log('PASS gamepads that cannot rumble are named as such');
 })();
