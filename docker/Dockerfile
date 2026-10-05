@@ -26,6 +26,17 @@ RUN curl -fsSL -o /tmp/sdk.zip \
     && rm /tmp/sdk.zip \
     && chmod -R +x /opt/ps4-payload-sdk/bin
 
+# The payload's start-up code (crt1.o) comes from a later SDK commit than the
+# release: v0.9 has no kernel offsets for firmware 13.52 or 14.00, so a payload
+# built with it quits before main() on those consoles. Same exports, built with
+# the SDK's own crt/Makefile.
+ARG SDK_CRT_COMMIT=573b4a0d0d5fa8695cfeee5f5e2f0447c550035d
+RUN mkdir /tmp/sdk-src \
+    && curl -fsSL "https://github.com/ps4-payload-dev/sdk/archive/${SDK_CRT_COMMIT}.tar.gz" \
+        | tar xz -C /tmp/sdk-src --strip-components=1 \
+    && make -C /tmp/sdk-src/crt LLVM_CONFIG=llvm-config-18 DESTDIR=/opt/ps4-payload-sdk install \
+    && rm -rf /tmp/sdk-src
+
 # orbis-clang execs $SCRIPT_DIR/clang, and orbis-ld execs $SCRIPT_DIR/ld.lld.
 RUN ln -sf /usr/bin/clang-18 /opt/ps4-payload-sdk/bin/clang \
     && ln -sf /usr/bin/clang++-18 /opt/ps4-payload-sdk/bin/clang++ \
