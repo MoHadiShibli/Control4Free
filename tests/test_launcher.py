@@ -4,6 +4,7 @@ import os
 from pathlib import Path
 import re
 import socket
+import struct
 import subprocess
 import sys
 import tempfile
@@ -194,6 +195,28 @@ def main():
                 found.append(f'{source.relative_to(ROOT)}:{number}: {line.strip()}')
     assert not found, 'OpenOrbis Linux-valued constant used directly:\n' + '\n'.join(found)
     print('PASS no OpenOrbis constant with a Linux value is used directly', flush=True)
+
+    # The package's param.sfo, as the PS4 reads it (built by `make -C launcher`).
+    sfo = ROOT / 'build/launcher/pkg/sce_sys/param.sfo'
+    if not sfo.exists():
+        print('SKIP param.sfo checks: build the package first (make -C launcher)', flush=True)
+        return
+    data = sfo.read_bytes()
+    magic, _, keys, values, count = struct.unpack_from('<4sIIII', data)
+    assert magic == b'\0PSF', magic
+    fields = {}
+    for i in range(count):
+        key_at, kind, length, _, value_at = struct.unpack_from('<HHIII', data, 20 + 16 * i)
+        name = data[keys + key_at:data.index(b'\0', keys + key_at)].decode()
+        raw = data[values + value_at:values + value_at + length]
+        fields[name] = struct.unpack('<I', raw)[0] if kind == 0x0404 else raw.rstrip(b'\0').decode()
+    version = (ROOT / 'VERSION').read_text().strip()
+    major, minor = version.split('.')[:2]
+    # Listed under Applications rather than Games, as Apollo Save Tool is.
+    assert (fields['CATEGORY'], fields['APP_TYPE'], fields['ATTRIBUTE']) == ('gde', 1, 32), fields
+    assert fields['TITLE_ID'] == 'CFRE00001' and fields['TITLE'] == 'Control4Free', fields
+    assert fields['APP_VER'] == fields['VERSION'] == f'{int(major):02d}.{int(minor):02d}', fields
+    print('PASS param.sfo: an application, its title, and the version from VERSION', flush=True)
 
 
 if __name__ == '__main__':

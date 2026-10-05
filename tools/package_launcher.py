@@ -127,9 +127,14 @@ def main():
     pkgtool = binary / 'PkgTool.Core'
     sfo = 'sce_sys/param.sfo'
     run(pkgtool, 'sfo_new', sfo)
+    # Listed under Applications, not Games: the values Apollo Save Tool ships with
+    # (bucanero/apollo-ps4, built with the same OpenOrbis tools), which lists there
+    # and starts fine. CATEGORY gde is "Non-Game Mini App"; gd, which we had, is
+    # "Game Digital Application". APP_TYPE must stay 1: with 4 ("Freemium") the PS4
+    # refused to start the app (CE-39929-2, firmware 10.01, 2026-10-05).
     entries = {
         'APP_TYPE': ('Integer', 4, '1'), 'APP_VER': ('Utf8', 8, SFO_VERSION),
-        'ATTRIBUTE': ('Integer', 4, '0'), 'CATEGORY': ('Utf8', 4, 'gd'),
+        'ATTRIBUTE': ('Integer', 4, '32'), 'CATEGORY': ('Utf8', 4, 'gde'),
         'CONTENT_ID': ('Utf8', 48, CONTENT_ID), 'DOWNLOAD_DATA_SIZE': ('Integer', 4, '0'),
         'SYSTEM_VER': ('Integer', 4, '0'), 'TITLE': ('Utf8', 128, 'Control4Free'),
         'TITLE_ID': ('Utf8', 12, TITLE_ID), 'VERSION': ('Utf8', 8, SFO_VERSION),
