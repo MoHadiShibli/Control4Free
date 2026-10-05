@@ -30,21 +30,32 @@ static long c4fGoldHen(uint64_t command, void *data)
     return failed ? -ret : ret;
 }
 
+long c4fGoldHenCommand(unsigned long command, void *data)
+{
+    /* Without GoldHEN the call does not exist: get an error, not SIGSYS. The
+     * kernel's SIGSYS is FreeBSD's 12; OpenOrbis's header has Linux's 31. */
+    signal(12, SIG_IGN);
+    return c4fGoldHen(command, data);
+}
+
 int c4fSandboxLeave(void)
 {
     static C4fJailbreak backup;
     if (c4fOut) return 0;
-    /* Without GoldHEN the call does not exist: get an error, not SIGSYS. The
-     * kernel's SIGSYS is FreeBSD's 12; OpenOrbis's header has Linux's 31. */
-    signal(12, SIG_IGN);
     memset(&backup, 0, sizeof(backup));
-    long ret = c4fGoldHen(2, &backup);
+    long ret = c4fGoldHenCommand(2, &backup);
     if (ret != 0) { errno = ret < 0 ? (int)-ret : EPERM; return -1; }
     c4fOut = 1;
     return 0;
 }
 #else
-/* Host tests: there is no sandbox. */
+/* Host tests: there is no sandbox, and no GoldHEN. */
+long c4fGoldHenCommand(unsigned long command, void *data)
+{
+    (void)command; (void)data;
+    return -ENOSYS;
+}
+
 int c4fSandboxLeave(void)
 {
     if (getenv("C4F_TEST_NO_GOLDHEN")) { errno = ENOSYS; return -1; }

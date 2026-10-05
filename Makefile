@@ -3,6 +3,7 @@
 # Build:
 #   make                 # build/control4free.elf
 #   make C4F_PROBE=1     # plus the rumble/light-bar research probe (dev only)
+#   make C4F_DIAG=1      # diagnostic build for a console it fails on
 #   make clean
 #
 # A build needs the ps4-payload-sdk; docker/Dockerfile has it, and
@@ -27,6 +28,15 @@ ifdef C4F_PROBE
     EXTRA_CFLAGS := -DC4F_PROBE_SETTING
     ELF    := build/$(NAME)-probe.elf
     OBJDIR := build/probe
+endif
+
+# Diagnostic build: logs what the SDK found in the kernel and the host process,
+# and says on screen that it started. The launcher's C4F_DIAG build carries it.
+ifdef C4F_DIAG
+    EXTRA_CFLAGS += -DC4F_DIAG
+    VERSION := $(VERSION)-diag
+    ELF    := build/$(NAME)-diag.elf
+    OBJDIR := build/diag
 endif
 
 OBJECTS := $(SOURCES:src/%.c=$(OBJDIR)/%.o) $(OBJDIR)/client.o $(OBJDIR)/assets.o $(OBJDIR)/qrcodegen.o

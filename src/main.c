@@ -100,6 +100,44 @@ static void c4fRestoreCredentials(void)
     c4fLogCredentials("restored", g_pid);
 }
 
+#ifdef C4F_DIAG
+#include <signal.h>
+#include <string.h>
+
+/* Diagnostic build: what the SDK's start-up code found in the kernel, and
+ * which process PayLoader runs us in, from GoldHEN's SDK call (syscall 500,
+ * command 4; struct proc_info of the GoldHEN Plugins SDK). */
+typedef struct {
+    int pid;
+    char name[40], path[64], titleId[16], contentId[64], version[6];
+    uint64_t baseAddress;
+} __attribute__((packed)) C4fProcInfo;
+
+static void c4fDiagHost(pid_t pid)
+{
+    C4fProcInfo info;
+    struct sigaction ignore, previous;
+
+    c4fLog("diag: kernel image base=0x%lx size=0x%lx allproc=0x%lx prison0=0x%lx rootvnode=0x%lx targetid=0x%lx\n",
+           (unsigned long)KERNEL_ADDRESS_IMAGE_BASE, (unsigned long)KERNEL_IMAGE_SIZE,
+           (unsigned long)KERNEL_ADDRESS_ALLPROC, (unsigned long)KERNEL_ADDRESS_PRISON0,
+           (unsigned long)KERNEL_ADDRESS_ROOTVNODE, (unsigned long)KERNEL_ADDRESS_TARGETID);
+    c4fLog("diag: proc=0x%lx ucred=0x%lx\n", (unsigned long)kernel_get_proc(pid),
+           (unsigned long)kernel_get_proc_ucred(pid));
+
+    /* Without GoldHEN the call does not exist: get an error, not SIGSYS. */
+    memset(&info, 0, sizeof(info));
+    memset(&ignore, 0, sizeof(ignore));
+    ignore.sa_handler = SIG_IGN;
+    sigaction(SIGSYS, &ignore, &previous);
+    int ret = syscall(500, 4, &info);
+    sigaction(SIGSYS, &previous, NULL);
+    info.name[sizeof(info.name) - 1] = info.path[sizeof(info.path) - 1] = info.titleId[sizeof(info.titleId) - 1] = 0;
+    c4fLog("diag: GoldHEN process info = %d: pid=%d name=%s path=%s title=%s\n",
+           ret, info.pid, info.name, info.path, info.titleId);
+}
+#endif
+
 static int c4fFinish(int status)
 {
     c4fRestoreCredentials();
@@ -127,6 +165,10 @@ int main(void)
     }
     c4fLogOpen();
     c4fLog("Control4Free %s: pid=%d firmware=0x%08x\n", C4F_VERSION, pid, kernel_get_fw_version());
+#ifdef C4F_DIAG
+    c4fNotify("Control4Free diagnostic build started (firmware %08x)", kernel_get_fw_version());
+    c4fDiagHost(pid);
+#endif
 
     c4fLogCredentials("on entry", pid);
     if (c4fRaiseCredentials(pid) != 0) return c4fFinish(1);

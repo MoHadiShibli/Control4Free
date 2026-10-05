@@ -16,6 +16,9 @@
 #include "sandbox.h"
 #include "screen.h"
 #include "service.h"
+#ifdef C4F_DIAG
+#include "diag.h"
+#endif
 
 #define C4F_BUNDLED_PAYLOAD "/app0/assets/control4free.elf"
 
@@ -66,6 +69,9 @@ static void *c4fWorker(void *)
             } else {
                 c4fLauncherSetHost(NULL);
             }
+#ifdef C4F_DIAG
+            if (command == C4F_DO_START || command == C4F_DO_SET_UP) c4fDiagBeforeStart();
+#endif
             if (command == C4F_DO_START) {
                 size_t payloadSize;
                 const unsigned char *payload = c4fAutorunBundled(&payloadSize);
@@ -73,6 +79,9 @@ static void *c4fWorker(void *)
             }
             if (command == C4F_DO_STOP) result = c4fLauncherStop(message, sizeof(message));
             if (command == C4F_DO_SET_UP) result = c4fSetUp(message, sizeof(message));
+#ifdef C4F_DIAG
+            if (command == C4F_DO_START || command == C4F_DO_SET_UP) c4fDiagAfterStart(result, message);
+#endif
             if (command == C4F_DO_AUTORUN_ON) result = c4fAutorunEnable(message, sizeof(message));
             if (command == C4F_DO_AUTORUN_OFF) result = c4fAutorunDisable(message, sizeof(message));
             if (first || command >= C4F_DO_SET_UP) autorun = c4fAutorunCheck(autorunNote, sizeof(autorunNote));
@@ -98,6 +107,15 @@ static void *c4fWorker(void *)
             snprintf(c4fScreen.address, sizeof(c4fScreen.address), "%s", address);
             /* A queued click while a periodic probe was in flight remains busy. */
             if (!c4fCommand) c4fScreen.busy = 0;
+#ifdef C4F_DIAG
+            C4fLauncherScreen copy = c4fScreen;
+            pthread_mutex_unlock(&c4fMutex);
+            C4fDiagState diag = { running, status.controllers, autorun, copy.locked, copy.busy, copy.confirmStop,
+                                  status.version, problem, copy.message, copy.address, copy.autorunNote };
+            unsigned generation = c4fDiagRefresh(&diag);
+            pthread_mutex_lock(&c4fMutex);
+            c4fScreen.diagGeneration = generation;
+#endif
             pthread_mutex_unlock(&c4fMutex);
             first = 0; nextCheck = c4fLauncherTimeMs() + 2000;
         }
@@ -175,7 +193,12 @@ int main(void)
     if (c4fAutorunLoadBundled(C4F_BUNDLED_PAYLOAD)) printf("[c4f-launcher] bundled payload unreadable\n");
     /* The sandbox refuses connections to the console itself (EACCES), so the
      * app could reach neither Control4Free nor PayLoader from inside it. */
-    if (c4fSandboxLeave()) printf("[c4f-launcher] could not leave the sandbox, errno %d\n", errno);
+    int sandbox = c4fSandboxLeave(), sandboxError = errno;
+    if (sandbox) printf("[c4f-launcher] could not leave the sandbox, errno %d\n", sandboxError);
+#ifdef C4F_DIAG
+    c4fDiagStart(sandbox, sandboxError);
+    for (int i = 0; i < C4F_DIAG_PAGES; i++) c4fScreen.diagScroll[i] = i ? C4F_DIAG_END : 0;
+#endif
     pthread_t worker;
     int workerStarted = pthread_create(&worker, NULL, c4fWorker, NULL) == 0;
     if (!workerStarted || pad < 0) {
@@ -220,11 +243,28 @@ int main(void)
                          off ? "Turning auto-start off..." : "Turning auto-start on...");
             } else if ((pressed & ORBIS_PAD_BUTTON_SQUARE) && c4fScreen.running == 1) c4fScreen.confirmStop = 1;
         }
+#ifdef C4F_DIAG
+        /* Pages and scrolling work while busy too. */
+        int page = c4fScreen.diagPage;
+        if (pressed & (ORBIS_PAD_BUTTON_R1 | ORBIS_PAD_BUTTON_RIGHT)) c4fScreen.diagPage = (page + 1) % C4F_DIAG_PAGES;
+        if (pressed & (ORBIS_PAD_BUTTON_L1 | ORBIS_PAD_BUTTON_LEFT)) c4fScreen.diagPage = (page + C4F_DIAG_PAGES - 1) % C4F_DIAG_PAGES;
+        if (pressed & (ORBIS_PAD_BUTTON_UP | ORBIS_PAD_BUTTON_DOWN)) {
+            int max = c4fDiagMaxScroll(page), at = c4fScreen.diagScroll[page];
+            if (at >= C4F_DIAG_END) at = max;
+            at += pressed & ORBIS_PAD_BUTTON_UP ? -10 : 10;
+            c4fScreen.diagScroll[page] = at >= max ? C4F_DIAG_END : at < 0 ? 0 : at;
+        }
+        if (pressed & ORBIS_PAD_BUTTON_OPTIONS) c4fDiagCapture(4000);
+#endif
         C4fLauncherScreen snapshot = c4fScreen;
         pthread_mutex_unlock(&c4fMutex);
         /* Redraw only when something changed, then copy it to each buffer once. */
         if (!drawn || memcmp(&snapshot, &drawnState, sizeof(snapshot))) {
+#ifdef C4F_DIAG
+            c4fDrawDiag(canvas, &snapshot);
+#else
             c4fDrawLauncher(canvas, &snapshot);
+#endif
             drawnState = snapshot; drawn = 1; shown[0] = shown[1] = 0;
         }
         if (!shown[buffer]) { memcpy(c4fBuffers[buffer], canvas, frameBytes); shown[buffer] = 1; }
@@ -243,6 +283,9 @@ int main(void)
     }
     pthread_mutex_lock(&c4fMutex); c4fQuit = 1; pthread_mutex_unlock(&c4fMutex);
     if (workerStarted) pthread_join(worker, NULL);
+#ifdef C4F_DIAG
+    c4fDiagStop();
+#endif
     if (pad >= 0) scePadClose(pad);
     sceNetCtlTerm();
     c4fCloseVideo();

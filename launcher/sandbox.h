@@ -10,6 +10,9 @@ extern "C" {
 /* 0 when out of the sandbox (again: no-op); -1 with errno otherwise. */
 int c4fSandboxLeave(void);
 int c4fSandboxIsOut(void);
+/* GoldHEN's SDK call (syscall 500): its result, or -errno when the call
+ * failed or does not exist. */
+long c4fGoldHenCommand(unsigned long command, void *data);
 
 #ifdef __cplusplus
 }

@@ -95,9 +95,17 @@ def render(args, path, width, height):
 
 
 def main():
+    global OUT, STAGE, ART, FONTS
     parser = argparse.ArgumentParser()
     parser.add_argument('--sdk', required=True, type=Path)
-    sdk = parser.parse_args().sdk
+    # The diagnostic build (make -C launcher C4F_DIAG=1): its own folder, payload,
+    # title and file name, so it can never be mistaken for a release.
+    parser.add_argument('--diag', action='store_true')
+    args = parser.parse_args()
+    sdk = args.sdk
+    suffix = '-diag' if args.diag else ''
+    OUT = ROOT / f'build/launcher{suffix}'
+    STAGE, ART, FONTS = OUT / 'pkg', OUT / 'launcher-art', OUT / 'fonts.c'
     binary = sdk / 'bin/linux'
     # Start clean, so nothing left over from an older build gets packaged.
     shutil.rmtree(STAGE, ignore_errors=True)
@@ -106,7 +114,7 @@ def main():
     run = lambda *args: subprocess.run([str(arg) for arg in args], cwd=STAGE, check=True)
     run(binary / 'create-fself', '-in=' + str(OUT / 'launcher.elf'), '-out=' + str(OUT / 'launcher.oelf'),
         '--eboot', 'eboot.bin', '--paid', '0x3800000000000011')
-    shutil.copyfile(ROOT / 'build/control4free.elf', STAGE / 'assets/control4free.elf')
+    shutil.copyfile(ROOT / f'build/control4free{suffix}.elf', STAGE / 'assets/control4free.elf')
     shutil.copyfile(sdk / 'samples/graphics/sce_sys/about/right.sprx', STAGE / 'sce_sys/about/right.sprx')
     # OpenOrbis's stub modules. Its CHANGELOG (v0.5) says homebrew packages
     # should carry them in sce_module/, and every sample does.
@@ -136,7 +144,8 @@ def main():
         'APP_TYPE': ('Integer', 4, '1'), 'APP_VER': ('Utf8', 8, SFO_VERSION),
         'ATTRIBUTE': ('Integer', 4, '32'), 'CATEGORY': ('Utf8', 4, 'gde'),
         'CONTENT_ID': ('Utf8', 48, CONTENT_ID), 'DOWNLOAD_DATA_SIZE': ('Integer', 4, '0'),
-        'SYSTEM_VER': ('Integer', 4, '0'), 'TITLE': ('Utf8', 128, 'Control4Free'),
+        'SYSTEM_VER': ('Integer', 4, '0'),
+        'TITLE': ('Utf8', 128, 'Control4Free (diagnostic)' if args.diag else 'Control4Free'),
         'TITLE_ID': ('Utf8', 12, TITLE_ID), 'VERSION': ('Utf8', 8, SFO_VERSION),
     }
     for key, (kind, size, value) in entries.items():
@@ -163,7 +172,7 @@ def main():
     shutil.copyfile(project, OUT / 'launcher.gp4')
     run(pkgtool, 'pkg_build', project, OUT)
     generated = OUT / (CONTENT_ID + '.pkg')
-    target = ROOT / f'build/Control4Free-{VERSION}.pkg'
+    target = ROOT / f'build/Control4Free-{VERSION}{suffix}.pkg'
     shutil.copyfile(generated, target)
     print(f'Built {target} ({target.stat().st_size:,} bytes)', flush=True)
 
