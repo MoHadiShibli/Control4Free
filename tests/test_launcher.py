@@ -2,6 +2,7 @@
 import json
 import os
 from pathlib import Path
+import re
 import socket
 import subprocess
 import sys
@@ -176,6 +177,23 @@ def main():
     shipped = ROOT / 'client/icon-192.png'
     assert fresh.read_bytes() == shipped.read_bytes(),         f'{shipped} is out of date: run tools/make_icons.py'
     print('PASS native screen states and icon rendered from the shipped drawing code', flush=True)
+
+    # OpenOrbis's headers give a few constants their Linux values, and the PS4's
+    # FreeBSD kernel reads those as something else: MSG_NOSIGNAL (0x4000, not
+    # 0x20000), SIGSYS (31, not 12) and CLOCK_MONOTONIC (1, which is CLOCK_VIRTUAL,
+    # not 4). Each has broken the app on the console once. Only a C4F_ definition
+    # that translates one, a comment, or a Linux-only guard may name them.
+    trap = re.compile(r'\b(CLOCK_MONOTONIC|MSG_NOSIGNAL|SIGSYS)\b')
+    allowed = re.compile(r'^\s*(#define C4F_|/\*|\*|//)|__linux__')
+    found = []
+    for source in sorted(list((ROOT / 'launcher').glob('*.c')) + list((ROOT / 'launcher').glob('*.cpp'))):
+        lines = source.read_text().splitlines()
+        for number, line in enumerate(lines, 1):
+            guarded = number > 1 and '__linux__' in lines[number - 2]
+            if trap.search(line) and not allowed.search(line) and not guarded:
+                found.append(f'{source.relative_to(ROOT)}:{number}: {line.strip()}')
+    assert not found, 'OpenOrbis Linux-valued constant used directly:\n' + '\n'.join(found)
+    print('PASS no OpenOrbis constant with a Linux value is used directly', flush=True)
 
 
 if __name__ == '__main__':

@@ -21,6 +21,17 @@
 #define C4F_PAYLOADER_PORT 9090
 #endif
 
+/* OpenOrbis's time.h gives CLOCK_MONOTONIC the Linux value, 1. The PS4's kernel
+ * is FreeBSD's, and there 1 is CLOCK_VIRTUAL: this process's own CPU time, which
+ * an app that mostly sleeps hardly uses. The status check due every 2 seconds
+ * then never came round, and the screen kept its first reading until the app was
+ * reopened. 4 is FreeBSD's CLOCK_MONOTONIC, the value the payload's SDK uses. */
+#ifdef __FreeBSD__
+#define C4F_CLOCK_MONOTONIC 4
+#else
+#define C4F_CLOCK_MONOTONIC CLOCK_MONOTONIC
+#endif
+
 static char c4fHost[16];
 static char c4fProblem[128];
 static int c4fReached;
@@ -28,7 +39,7 @@ static int c4fReached;
 uint64_t c4fLauncherTimeMs(void)
 {
     struct timespec t;
-    clock_gettime(CLOCK_MONOTONIC, &t);
+    clock_gettime(C4F_CLOCK_MONOTONIC, &t);
     return (uint64_t)t.tv_sec * 1000 + t.tv_nsec / 1000000;
 }
 
