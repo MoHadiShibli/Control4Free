@@ -378,6 +378,7 @@ def main():
         c.wait_for(rumble(0, 200, 40))
         time.sleep(.05)
         assert c.request('status')['result']['pads'][0]['color'] == [255, 0, 0], 'player 2 red, at full'
+        assert 'web controller 1 light bar 40 00 00' in server.rows(), 'the colour is logged for diagnosis'
         watcher = Client()
         os.write(server.log, b'C4F-TEST-FEEDBACK 11030d 0 0 0 64 0\n')
         c.wait_for(rumble(0, 0, 0))

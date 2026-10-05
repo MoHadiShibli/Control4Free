@@ -81,6 +81,7 @@ typedef struct {
     C4fNet net;
     C4fWebPad pads[C4F_MAX_PADS];
     int klogFd, stop, changed, creationBlocked, feedbackMissing;
+    unsigned rumbleChanges;   /* since the last heartbeat, to tell a silent game from a silent phone */
     char klogLine[1024];
     size_t klogUsed;
     C4fAdd add;
@@ -264,8 +265,13 @@ static void c4fPollFeedback(C4fWeb *app, uint64_t now)
             p->feedbackFailed = 1;
             continue;
         }
-        if (!p->feedbackKnown || f.r != p->feedback.r || f.g != p->feedback.g || f.b != p->feedback.b)
+        if (!p->feedbackKnown || f.r != p->feedback.r || f.g != p->feedback.g || f.b != p->feedback.b) {
+            /* Rare: a sign-in, or a game setting its colour. */
+            c4fLog("web controller %d light bar %02x %02x %02x\n", i + 1, f.r, f.g, f.b);
             app->changed = 1;
+        }
+        if (p->feedbackKnown && (f.large != p->feedback.large || f.small != p->feedback.small))
+            app->rumbleChanges++;
         p->feedback = f;
         p->feedbackKnown = 1;
         if (p->owner && (!p->rumbleSentValid || f.large != p->rumbleSent[0] || f.small != p->rumbleSent[1])) {
@@ -740,8 +746,9 @@ int c4fWebRun(int klogFd)
         if (now >= app->heartbeatAt) {
             int active = 0;
             for (int i = 0; i < C4F_MAX_PADS; i++) active += app->pads[i].active;
-            c4fLog("heartbeat: listener=%d controllers=%d klog=%d connecting=%d\n",
-                   app->net.fd >= 0, active, app->klogFd >= 0, app->add.state);
+            c4fLog("heartbeat: listener=%d controllers=%d klog=%d connecting=%d rumble-changes=%u\n",
+                   app->net.fd >= 0, active, app->klogFd >= 0, app->add.state, app->rumbleChanges);
+            app->rumbleChanges = 0;
             app->heartbeatAt = now + 60000;
         }
         if (app->changed || now >= app->broadcastAt) {
