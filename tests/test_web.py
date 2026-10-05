@@ -323,6 +323,30 @@ def main():
     finally:
         server.close()
 
+    # A controller must survive the moment it is created. A claim finishes inside a
+    # main-loop iteration and stamps its clock after the iteration read its own; on
+    # the console the gap is InsertData and klog work, here C4F_TEST_SLOW_MS. Those
+    # unsigned stamps compared directly wrapped, and the idle reaper deleted every
+    # controller in the claim at once, reporting it as unused (console, 1.0.0 dev).
+    server = Server(C4F_TEST_SLOW_MS='3')
+    try:
+        c = server.c
+        for round in range(4):
+            assert c.request('claim', [0])['result']['pads'][0]['mine']
+            time.sleep(.05)
+            state = c.request('status')['result']['pads'][0]
+            assert state['open'] and state['mine'], f'round {round}: the new controller went away: {state}'
+            # Adding a second one refreshes both: neither may go.
+            assert c.request('claim', [0, 1])['result']['pads'][1]['mine']
+            time.sleep(.05)
+            pads = c.request('status')['result']['pads']
+            assert all(pads[i]['open'] and pads[i]['mine'] for i in (0, 1)), f'round {round}: {pads[:2]}'
+            c.request('claim', [])
+        assert not any('removed after' in r for r in server.rows()),             [r for r in server.rows() if 'removed after' in r]
+        print('PASS a new controller is not mistaken for an idle one', flush=True)
+    finally:
+        server.close()
+
     # Two claims cannot create at once: the second is refused, not queued.
     server = Server(C4F_TEST_ADD_DELAY='600')
     try:

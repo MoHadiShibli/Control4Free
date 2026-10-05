@@ -164,6 +164,17 @@ static void c4fStatus(C4fWeb *app, C4fNetClient *c, const C4fRequest *request)
     snprintf(json+pos, sizeof(json)-pos, "]}}"); c4fNetText(c, json);
 }
 
+/* How long ago `then` was, and never more than that. These are unsigned
+ * milliseconds, and a stamp can be taken later in a loop iteration than the
+ * iteration's own `now`: a claim that finishes inside the iteration stamps
+ * lastInput from the clock, while the reaper below still holds the `now` it read
+ * at the top. Subtracting those directly wrapped to about 49 days and deleted a
+ * controller the moment it was created. */
+static uint64_t c4fSince(uint64_t now, uint64_t then)
+{
+    return now > then ? now - then : 0;
+}
+
 static void c4fNeutralize(C4fWebPad *p)
 {
     p->head = p->count = 0;
@@ -189,7 +200,7 @@ static void c4fReportPad(C4fWeb *app, C4fWebPad *p, int index, uint64_t now)
     }
     ret = c4fVirtualPadInsert(&p->device, &p->current);
     p->reports++; p->lastReport = now;
-    p->nextReport = now + (now - p->lastInput < C4F_ACTIVE_MS ? C4F_REPORT_FAST_MS : C4F_REPORT_MS);
+    p->nextReport = now + (c4fSince(now, p->lastInput) < C4F_ACTIVE_MS ? C4F_REPORT_FAST_MS : C4F_REPORT_MS);
     if (ret < 0 && !p->error) {
         p->error = ret; app->changed = 1;
         c4fNeutralize(p);
@@ -203,7 +214,7 @@ static void c4fReportPads(C4fWeb *app)
     for (int i = 0; i < C4F_MAX_PADS; i++) {
         C4fWebPad *p = &app->pads[i];
         if (!p->active) continue;
-        if (p->owner && now-p->lastInput >= C4F_STALE_MS && !p->stale) {
+        if (p->owner && c4fSince(now, p->lastInput) >= C4F_STALE_MS && !p->stale) {
             c4fNeutralize(p); p->stale = 1; app->changed = 1;
         }
         if (now < p->nextReport) continue;
@@ -422,7 +433,7 @@ static void c4fAdvanceAdd(C4fWeb *app, uint64_t now, long klogBytes)
         /* A fresh reader can replay a backlog, and an old device-added line in it
          * would hand us a DeviceId that is not ours. Wait for the log to go quiet
          * first, but not for ever: a busy console is still a usable one. */
-        if (now - app->add.quietAt < 150 && now < app->add.deadline) return;
+        if (c4fSince(now, app->add.quietAt) < 150 && now < app->add.deadline) return;
         snprintf(app->add.marker, sizeof(app->add.marker), "c4f-klog-mark-%llu",
                  (unsigned long long)now);
         app->add.markerSeen = 0;
@@ -546,7 +557,7 @@ static void c4fUpdate(C4fWeb *app, C4fNetClient *c, C4fRequest *r)
     p->lastInput = now; c4fEnqueue(p, &data);
     /* Out at once, unless a report has only just gone. Holding a new sample back
      * for the next tick would add lag for nothing. */
-    if (now - p->lastReport >= C4F_REPORT_FAST_MS) c4fReportPad(app, p, (int)r->args[0], now);
+    if (c4fSince(now, p->lastReport) >= C4F_REPORT_FAST_MS) c4fReportPad(app, p, (int)r->args[0], now);
 }
 
 static void c4fWebEvent(C4fNetClient *c, int event, const char *text, size_t len, void *context)
@@ -654,11 +665,16 @@ int c4fWebRun(int klogFd)
         c4fProbeSetting(app, now);
 #endif
         c4fAdvanceAdd(app, now, klogBytes);
+        now = c4fTimeMs();
         for (int i = 0; i < C4F_MAX_PADS; i++) {
             C4fWebPad *p = &app->pads[i];
             if (app->add.created & (1u << i)) continue;   /* mid-claim, not abandoned */
-            if (p->active && ((!p->owner && now-p->detachedAt > C4F_RELEASE_MS) || (p->owner && now-p->lastInput > C4F_RELEASE_MS))) {
+            if (p->active && ((!p->owner && c4fSince(now, p->detachedAt) > C4F_RELEASE_MS) ||
+                              (p->owner && c4fSince(now, p->lastInput) > C4F_RELEASE_MS))) {
                 C4fNetClient *owner = p->owner;
+                c4fLog("web controller %d removed after %llu ms %s\n", i + 1,
+                       (unsigned long long)c4fSince(now, owner ? p->lastInput : p->detachedAt),
+                       owner ? "without input" : "with nobody connected");
                 c4fRemove(app, p);
                 if (owner) c4fError(owner, NULL, 408, "That controller was disconnected after sitting unused. Select it again to play.");
             }
@@ -685,7 +701,7 @@ int c4fWebRun(int klogFd)
             C4fWebPad *p = &app->pads[i];
             if (!p->active) continue;
             anyActive = 1;
-            if (now - p->lastInput < C4F_ACTIVE_MS) moving = 1;
+            if (c4fSince(now, p->lastInput) < C4F_ACTIVE_MS) moving = 1;
         }
         int wait = moving ? 2 : anyActive || app->add.state ? 8 : 50;
         if (app->net.fd < 0) usleep(8000);

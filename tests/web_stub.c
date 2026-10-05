@@ -16,6 +16,8 @@
  *   C4F_TEST_ADD_DELAY   milliseconds before the device-added line turns up
  *   C4F_FAIL_ADD         AddDevice runs but its line never arrives
  *   C4F_FAIL_INPUT       InsertData fails while a button is held
+ *   C4F_TEST_SLOW_MS     milliseconds each new device takes to adopt, the way
+ *                        real console work spends time inside one loop iteration
  */
 #include <stdio.h>
 #include <stdarg.h>
@@ -137,6 +139,8 @@ int32_t c4fVirtualPadAdd(int32_t vdaUser)
 
 void c4fVirtualPadAdopt(C4fVirtualPad *p, int32_t user, int32_t vdaUser, uint64_t deviceId)
 {
+    const char *slow = getenv("C4F_TEST_SLOW_MS");
+    if (slow) usleep((unsigned)atoi(slow) * 1000);
     memset(p, 0, sizeof(*p));
     p->deviceId = deviceId; p->handle = (int32_t)(deviceId & 0xffffffffu);
     p->userId = user; p->vdaUserId = vdaUser; p->owned = 1;
