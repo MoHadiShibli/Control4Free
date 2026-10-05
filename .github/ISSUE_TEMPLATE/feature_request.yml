@@ -1,0 +1,16 @@
+name: Feature request
+description: An idea to make Control4Free better
+labels: [enhancement]
+body:
+  - type: textarea
+    id: idea
+    attributes:
+      label: What would you like?
+      description: Describe the idea and the problem it solves.
+    validations:
+      required: true
+  - type: textarea
+    id: games
+    attributes:
+      label: Games it matters for (optional)
+      description: Game names and title IDs, if it's about specific games.

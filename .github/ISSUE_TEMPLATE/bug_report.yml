@@ -1,0 +1,49 @@
+name: Bug report
+description: Something doesn't work as it should
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting! First, please check the [troubleshooting guide](https://github.com/MoHadiShibli/Control4Free/blob/main/docs/troubleshooting.md): most setup problems are covered there.
+  - type: input
+    id: version
+    attributes:
+      label: Control4Free version
+      description: Shown at the bottom of the controller page and of the app, for example "Control4Free 1.0.0".
+    validations:
+      required: true
+  - type: input
+    id: console
+    attributes:
+      label: Firmware and GoldHEN version
+      placeholder: "Firmware 10.01, GoldHEN v2.4b18.10"
+    validations:
+      required: true
+  - type: input
+    id: client
+    attributes:
+      label: Phone or computer, and browser
+      placeholder: "Android phone, Chrome"
+    validations:
+      required: true
+  - type: input
+    id: where
+    attributes:
+      label: Where it happened
+      description: The home screen, the sign-in screen, a game (name and title ID, like CUSA00001), or the app.
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened?
+      description: What did you do, what did you expect, and what happened instead?
+    validations:
+      required: true
+  - type: textarea
+    id: log
+    attributes:
+      label: Log (optional)
+      description: |
+        `/data/control4free/control4free.log` on the PS4, over GoldHEN's FTP server (port 2121). If the problem was before a restart, it's in `control4free.log.previous`.
+        The log contains your console's network address: remove it if you prefer.
+      render: text

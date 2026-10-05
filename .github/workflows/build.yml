@@ -56,4 +56,9 @@ jobs:
         if: startsWith(github.ref, 'refs/tags/v')
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh release create "${GITHUB_REF#refs/tags/}" artifacts/* --verify-tag --notes-file CHANGELOG.md
+        run: |
+          # The release notes are this version's section of the changelog.
+          version=$(cat VERSION)
+          awk -v head="## $version " 'index($0, head) == 1 { keep = 1; next } /^## / { keep = 0 } keep' CHANGELOG.md > notes.md
+          test -s notes.md || { echo "CHANGELOG.md has no section for $version"; exit 1; }
+          gh release create "${GITHUB_REF#refs/tags/}" artifacts/* --verify-tag --title "Control4Free $version" --notes-file notes.md

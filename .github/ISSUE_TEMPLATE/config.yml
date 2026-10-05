@@ -1,0 +1,8 @@
+blank_issues_enabled: true
+contact_links:
+  - name: Installation and troubleshooting
+    url: https://github.com/MoHadiShibli/Control4Free/blob/main/docs/troubleshooting.md
+    about: Setting up, playing, and fixes for the most common problems.
+  - name: Report a security problem
+    url: https://github.com/MoHadiShibli/Control4Free/security
+    about: Please report vulnerabilities privately, not in a public issue.

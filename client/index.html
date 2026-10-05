@@ -1192,10 +1192,10 @@
       set(key, value) { try { localStorage.setItem('c4f.' + key, JSON.stringify(value)); } catch (e) { /* private mode */ } },
     };
 
-    // Settings of this device (the console's settings live on the console)
+    // Settings of this device. They stay in this browser.
     const DEVICE_SETTINGS = [
       ['keepAwake', 'Keep the screen on', 'While this page drives a controller, the screen doesn\'t turn off.', true],
-      ['haptics', 'Vibration', 'Buzz this device when you press a button or the game rumbles (Android).', 'vibrate' in navigator],
+      ['haptics', 'Vibration', 'Buzz this device when you press a button (Android).', 'vibrate' in navigator],
       ['floating', 'Floating sticks', 'A stick starts wherever your thumb lands inside its area.', false],
       ['tapClick', 'Tap the touchpad to click', 'A quick tap presses the touchpad button. Hold still to keep it pressed.', true],
       ['stickClick', 'Double-tap a stick for L3 / R3', 'Tap a stick, then touch it again right away to press it in. Hold the second touch to keep it pressed. Off: L3 and R3 get their own buttons.', true],

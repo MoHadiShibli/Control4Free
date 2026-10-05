@@ -31,6 +31,13 @@
   `Roboto-Light.ttf` `a08729d794801eaa158c53b1558f4cc351c3b1791eb3d22faf7058b2b7df9c8c`,
   `Roboto-Regular.ttf` `f3edb8058e523f5612bfd99d0745e661568ad85e1b6217bc62f786fabae624c6`.
 
+- The on-screen DualShock 4 buttons in `client/index.html` are drawn after the
+  [DualShock 4 layout diagram](https://commons.wikimedia.org/wiki/File:Dualshock_4_Layout.svg)
+  by Tokyoship, licensed under CC BY 3.0
+  (https://creativecommons.org/licenses/by/3.0/).
+- The package settings that file the app under Applications (`CATEGORY`,
+  `ATTRIBUTE`) follow Apollo Save Tool (https://github.com/bucanero/apollo-ps4).
+
 These license notices are also included inside the package.
 
 The HTTP/WebSocket transport in `src/net.c` is a new implementation.
