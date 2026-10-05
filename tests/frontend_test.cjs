@@ -66,4 +66,48 @@ function padStatus(fields) {
     { buttons: 0, lx: 128, ly: 128, rx: 128, ry: 128, l2: 0, r2: 0, touches: [] });
   assert.equal(src.pad, 0, 'the controller assignment is kept');
   console.log('PASS failed Gamepad polling blanks every source');
+
+  // The full-screen button, in the three places it behaves differently.
+  const fsSource = extract('    // Full screen. Safari on iPhone', '    // Options menu');
+  async function fullScreen({ standalone, displayMode = false, enabled }) {
+    const button = { hidden: false, handlers: {}, addEventListener(type, fn) { this.handlers[type] = fn; } };
+    const ctx = {
+      button, toasts: [], requested: 0,
+      navigator: standalone === undefined ? {} : { standalone },
+      window: {},
+      matchMedia: () => ({ matches: displayMode }),
+      screen: {},
+      document: {
+        fullscreenEnabled: enabled,
+        documentElement: { requestFullscreen() { ctx.requested++; return Promise.resolve(); } },
+      },
+      $: () => button,
+      toast(message) { ctx.toasts.push(message); },
+    };
+    ctx.window.matchMedia = ctx.matchMedia;
+    vm.createContext(ctx);
+    vm.runInContext(fsSource, ctx);
+    if (!button.hidden) await button.handlers.click();
+    return ctx;
+  }
+  // Safari on iPhone: no page full screen, so the button explains the home screen.
+  let fs = await fullScreen({ standalone: false, enabled: false });
+  assert.equal(fs.button.hidden, false);
+  assert.equal(fs.requested, 0);
+  assert.match(fs.toasts[0], /Add to Home Screen/);
+  // Opened from the iPhone home screen: already without bars, nothing to offer.
+  fs = await fullScreen({ standalone: true, enabled: false });
+  assert.equal(fs.button.hidden, true);
+  // Installed elsewhere (display-mode standalone): same.
+  fs = await fullScreen({ displayMode: true, enabled: true });
+  assert.equal(fs.button.hidden, true);
+  // A browser that allows it: the button really goes full screen.
+  fs = await fullScreen({ enabled: true });
+  assert.equal(fs.button.hidden, false);
+  assert.equal(fs.requested, 1);
+  assert.deepEqual(fs.toasts, []);
+  // Neither possible nor iOS: no button that would do nothing.
+  fs = await fullScreen({ enabled: false });
+  assert.equal(fs.button.hidden, true);
+  console.log('PASS full screen: real where allowed, a home-screen hint on iPhone, gone when standalone');
 })();

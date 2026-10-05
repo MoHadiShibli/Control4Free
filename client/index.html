@@ -2505,12 +2505,24 @@
     $('#backBtn').addEventListener('click', closePad);
     $('#portraitOk').addEventListener('click', () => padView.classList.add('portrait-ok'));
 
-    const fsSupported = !!(document.documentElement.requestFullscreen || document.documentElement.webkitRequestFullscreen);
-    $('#fsBtn').hidden = !fsSupported;
+    // Full screen. Safari on iPhone lets only video go full screen, whatever the
+    // page asks for; the way to lose its bars there is to open the page from the
+    // Home Screen, where it runs on its own. So on iPhone the button says how, and
+    // once the page runs that way (or is installed elsewhere) there is nothing left
+    // for it to do and it goes away.
+    const runsStandalone = navigator.standalone === true ||
+      !!(window.matchMedia && matchMedia('(display-mode: standalone), (display-mode: fullscreen)').matches);
+    const fsEnabled = !!(document.fullscreenEnabled || document.webkitFullscreenEnabled);
+    const homeScreenOnly = !fsEnabled && 'standalone' in navigator;   // Safari on iPhone
+    $('#fsBtn').hidden = runsStandalone || !(fsEnabled || homeScreenOnly);
     $('#fsBtn').addEventListener('click', async () => {
+      if (homeScreenOnly) {
+        toast('iPhone does not let pages go full screen. Tap Share, then Add to Home Screen, and open Control4Free from its icon to play without Safari\'s bars.');
+        return;
+      }
       try {
-        if (document.fullscreenElement) {
-          await document.exitFullscreen();
+        if (document.fullscreenElement || document.webkitFullscreenElement) {
+          await (document.exitFullscreen ? document.exitFullscreen() : document.webkitExitFullscreen());
         } else {
           const root = document.documentElement;
           await (root.requestFullscreen ? root.requestFullscreen() : root.webkitRequestFullscreen());
