@@ -36,6 +36,8 @@ sees a real controller, so it works wherever a DualShock does:
 - **The gamepads you already have.** Connect one to the phone or PC and give it a controller. One computer
   can run all four.
 - **A keyboard**, with keys you can change.
+- **Rumble and light bar.** When a game rumbles, your phone buzzes (Android) and your gamepad rumbles. The
+  page glows in the controller's light-bar colour, the one the PS4 or the game sets.
 - **Fast.** Input reaches the console the moment it arrives, at a DualShock 4's own rate while you play.
 - **An app on the PS4** that shows the address and a QR code, how many controllers are connected, and starts
   or stops Control4Free.
@@ -47,7 +49,7 @@ sees a real controller, so it works wherever a DualShock does:
 
 ## Quick start
 
-1. Download `Control4Free-1.0.0.pkg` from the [latest release](https://github.com/MoHadiShibli/Control4Free/releases/latest).
+1. Download `Control4Free-<version>.pkg` from the [latest release](https://github.com/MoHadiShibli/Control4Free/releases/latest).
 2. Install it with GoldHEN's Package Installer: **Settings → Debug Settings → Game → Package Installer**, from a
    USB drive or `/data/pkg/`.
 3. Open **Control4Free** from **Library → Applications** and press **Cross**. It sets up auto-start and
@@ -85,8 +87,10 @@ New to GoldHEN packages? The **[installation guide](docs/installation.md)** walk
 
 ## Limitations
 
-- **No rumble, light bar or motion yet.** The PS4 does send rumble and light-bar changes to the virtual
-  controllers; passing them to the phone is planned for 1.1.
+- **No motion controls.** Browsers only give phone motion sensors to secure (`https`) pages, and the
+  console's page is plain `http`.
+- **iPhones don't vibrate.** Safari doesn't let pages use the phone's vibration. A gamepad connected to the
+  iPhone can still rumble, if the browser supports it.
 - **One controller is added at a time.** If two people pick at once, the second is asked to try again a
   moment later.
 - **Rest mode signs everyone out**, so controllers have to be picked again after the PS4 wakes up, just like

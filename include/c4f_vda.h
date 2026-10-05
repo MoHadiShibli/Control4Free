@@ -11,6 +11,7 @@
 #ifndef C4F_VDA_H
 #define C4F_VDA_H
 
+#include <stddef.h>
 #include <stdint.h>
 #include "c4f_sce.h"
 
@@ -58,6 +59,20 @@ int32_t c4fVirtualPadAdd(int32_t vdaUser);
 
 /* Completes a pad from the DeviceId that came out of the log. */
 void c4fVirtualPadAdopt(C4fVirtualPad *out, int32_t userId, int32_t vdaUser, uint64_t deviceId);
+
+/* ---- what the game asks of a controller ---- */
+
+typedef struct {
+    uint8_t large, small;   /* rumble motors, 0..255 */
+    uint8_t r, g, b;        /* light bar; the PS4 uses 0x40 for full */
+} C4fPadFeedback;
+
+/* Reads the buffer scePadVirtualDeviceGetRemoteSetting fills (feedback.c). */
+void c4fPadFeedbackParse(const uint8_t *buf, size_t size, C4fPadFeedback *out);
+
+/* The rumble and light bar the system wants on this controller right now.
+ * Returns 0, the call's error code, or -1 if the call isn't exported. */
+int32_t c4fVirtualPadFeedback(const C4fVirtualPad *pad, C4fPadFeedback *out);
 
 /* A neutral sample: sticks centred, identity quaternion, connected. */
 void c4fPadDataNeutral(ScePadData *data);

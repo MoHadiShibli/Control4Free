@@ -1195,7 +1195,7 @@
     // Settings of this device. They stay in this browser.
     const DEVICE_SETTINGS = [
       ['keepAwake', 'Keep the screen on', 'While this page drives a controller, the screen doesn\'t turn off.', true],
-      ['haptics', 'Vibration', 'Buzz this device when you press a button (Android).', 'vibrate' in navigator],
+      ['haptics', 'Vibration', 'Buzz this device when you press a button or the game rumbles (Android).', 'vibrate' in navigator],
       ['floating', 'Floating sticks', 'A stick starts wherever your thumb lands inside its area.', false],
       ['tapClick', 'Tap the touchpad to click', 'A quick tap presses the touchpad button. Hold still to keep it pressed.', true],
       ['stickClick', 'Double-tap a stick for L3 / R3', 'Tap a stick, then touch it again right away to press it in. Hold the second touch to keep it pressed. Off: L3 and R3 get their own buttons.', true],
@@ -2342,7 +2342,7 @@
         const states = el('span', 'tile-state');
         if (state === 'ready') states.appendChild(stateItem('live', 'Connected'));
         else if (state === 'connecting') states.appendChild(stateItem('wait', 'Connecting'));
-        else if (state === 'select') states.appendChild(stateItem('wait', 'Choose user on TV'));
+        else if (state === 'select') states.appendChild(stateItem('wait', 'Choose user on PS4'));
         else if (state === 'paused') states.appendChild(stateItem('wait', 'Paused'));
         else if (state === 'error') states.appendChild(stateItem('', 'Error'));
         else if (state === 'free') states.appendChild(stateItem('', 'Free'));
@@ -2423,7 +2423,7 @@
       const extra = conn.state !== 'open' ? $('#connText').textContent + $('#connDetail').textContent
         : state === 'ready' ? 'Signed in on the PS4'
         : state === 'connecting' ? 'Connecting to the PS4'
-        : state === 'select' ? 'Choose your user on TV with D-pad and Cross'
+        : state === 'select' ? 'Choose your user on the PS4 with D-pad and Cross'
         : state === 'noslot' ? 'No free player slot'
         : state === 'disabled' ? 'Turned off' : '';
       if (extra) label.appendChild(el('span', 'muted', extra));
@@ -2473,7 +2473,7 @@
         return;
       } else if (!store.get('padTips', false)) {
         store.set('padTips', true);
-        toast('Choose your user on the TV with D-pad and Cross. Use the ☰ button for layout and settings.');
+        toast('Choose your user on the PS4 with D-pad and Cross. Use the ☰ button for layout and settings.');
       }
       if (primaryPad >= 0 && primaryPad !== pad) {
         const old = primaryPad;

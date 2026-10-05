@@ -40,7 +40,7 @@ Controllers are numbered 0 to 3 in the protocol and 1 to 4 on screen.
 
 | Method | Params | Reply |
 |---|---|---|
-| `info` | `[]` | `{"version": "1.0.0", "protocol": 2, "pads": 4}` |
+| `info` | `[]` | `{"version": "1.1.0", "protocol": 2, "pads": 4}` |
 | `status` | `[]` | A status object, below. |
 | `claim` | the controllers this connection wants, for example `[0]` or `[0, 2]` | A status object, once every controller in the claim exists. |
 | `u` | input, below | None. |
@@ -93,7 +93,7 @@ a connection claims them again; the page does so when it reconnects.
 
 ```json
 {
-  "version": "1.0.0",
+  "version": "1.1.0",
   "protocol": 2,
   "pads": [
     {"pad": 0, "name": "Controller 1", "enabled": true, "open": true, "connected": true, "clients": 1,
@@ -108,15 +108,17 @@ a connection claims them again; the page does so when it reconnects.
 | `connected` | A connection owns it and is sending input. |
 | `clients` | 1 if a connection owns it, else 0. |
 | `mine` | This connection owns it. |
-| `state` | `free`, `connecting`, `select` (waiting for a user on the TV), `ready` (signed in), `paused` (no input lately, or nobody connected), or `error` (the console refused input). |
+| `state` | `free`, `connecting`, `select` (waiting for a user to be chosen on the PS4), `ready` (signed in), `paused` (no input lately, or nobody connected), or `error` (the console refused input). |
 | `uid` | The signed-in user's ID in hex, or `unassigned-…` before sign-in. |
-| `color` | The controller's colour on the page. |
+| `color` | The light bar's colour, brightened so its strongest channel is 255; the controller's own colour until one is set. |
 | `reports` | Samples given to the console so far. |
 | `error` | The console's error code for the last refused sample, or 0. |
 
 ### Messages from the service
 
 - `{"method": "s", "params": <status>}`: the status, whenever something changes and at least once a second.
+- `{"method": "v", "params": [pad, large, small]}`: rumble, 0 to 255 for each motor, sent to the controller's
+  owner when it changes and when a connection takes the controller over. `[pad, 0, 0]` stops it.
 - `{"method": "error", "params": {"message": "…"}}`: a problem that isn't the reply to a request: a controller
   removed for sitting unused, a request that couldn't be parsed, or an error for a request sent without an
   `id`.
@@ -141,7 +143,7 @@ if they carry an `Origin`, an `Upgrade`, a body or `Transfer-Encoding`. A browse
 cross-origin after a CORS preflight, which the service never answers, so websites can't use these.
 
 ```
-GET /api/status   →  {"application": "Control4Free", "api": 1, "version": "1.0.0", "controllers": 2, "stopping": false}
+GET /api/status   →  {"application": "Control4Free", "api": 1, "version": "1.1.0", "controllers": 2, "stopping": false}
 POST /api/stop    →  {"application": "Control4Free", "stopping": true}
 ```
 

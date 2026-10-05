@@ -19,7 +19,7 @@ VERSION := $(shell cat VERSION)
 NAME    := control4free
 ELF     := build/$(NAME).elf
 OBJDIR  := build/payload
-SOURCES := src/main.c src/log.c src/vda.c src/klog_line.c src/web.c src/net.c
+SOURCES := src/main.c src/log.c src/vda.c src/klog_line.c src/feedback.c src/web.c src/net.c
 
 # Research build: logs what scePadVirtualDeviceGetRemoteSetting returns. Its ELF
 # gets its own name, so it can never be mistaken for a release.

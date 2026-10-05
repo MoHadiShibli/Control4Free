@@ -54,7 +54,7 @@ controller. If it still doesn't, disconnect the controller from the page's menu 
 **The screen went away without a user.** PS cancels it. Pick the controller again and use only the D-pad and
 Cross until you're signed in.
 
-**The page keeps saying "Choose user on TV" after signing in.** The page learns about sign-ins from the PS4's
+**The page keeps saying "Choose user on PS4" after signing in.** The page learns about sign-ins from the PS4's
 kernel log. If a klog viewer was connected at that moment, it missed it. Play on: the controller works either
 way.
 
@@ -66,8 +66,9 @@ that takes over a signed-in user's controller can stop games from reading Contro
 **Buttons feel slow.** The number next to the version at the bottom of the home screen is the round trip to
 the console. Above about 30 ms, your Wi-Fi is the slow part: move closer to the router or use 5 GHz.
 
-**No vibration from the game.** Rumble isn't passed to the phone or gamepad yet. It's planned for the next
-version.
+**No vibration from the game.** Check **Vibration** is on in the settings. Only Android phones can vibrate:
+Safari on iPhone doesn't let pages do it. For a gamepad, use a browser that supports controller rumble, such as
+Chrome or Edge, and keep the page's window in front. Not every game rumbles.
 
 ## Gamepads
 

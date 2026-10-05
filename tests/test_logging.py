@@ -14,6 +14,8 @@ def main():
     subprocess.run(flags + ['src/klog_line.c', 'tests/device_id_test.c',
                            '-o', 'build/device-id-host-test'], check=True)
     subprocess.run(['build/device-id-host-test'], check=True, timeout=5)
+    subprocess.run(flags + ['src/feedback.c', 'tests/feedback_test.c', '-o', 'build/feedback-host-test'], check=True)
+    subprocess.run(['build/feedback-host-test'], check=True, timeout=5)
 
 
 if __name__ == '__main__':

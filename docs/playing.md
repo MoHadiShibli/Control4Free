@@ -17,7 +17,7 @@ The home screen shows all four controllers live:
 |---|---|
 | **Free** | Nobody is using it. Pick it to play. |
 | **Connecting** | The PS4 is setting it up. Takes a moment. |
-| **Choose user on TV** | Waiting for someone to pick a user on the PS4's screen. |
+| **Choose user on PS4** | Waiting for someone to pick a user on the PS4's screen. |
 | **Connected** | Signed in and ready. |
 | **Paused** | Its phone stopped sending input, for example because the screen locked. |
 | **This device** / **+1 device** | Who's driving it: this browser, or other ones. |
@@ -77,7 +77,7 @@ way.
 | Setting | What it does |
 |---|---|
 | **Keep the screen on** | The phone's screen doesn't turn off while the page drives a controller. |
-| **Vibration** | The phone buzzes briefly when you press a button (Android). |
+| **Vibration** | The phone buzzes when the game rumbles, and briefly when you press a button (Android). |
 | **Floating sticks** | A stick starts wherever your thumb lands in its area. |
 | **Tap the touchpad to click** | A quick tap presses the touchpad button. |
 | **Double-tap a stick for L3 / R3** | Off: L3 and R3 get their own buttons. |
@@ -99,6 +99,19 @@ for the PS4 in your router so it doesn't change.
 
 **Full screen**: the **⛶** button in the corner. Safari on iPhone doesn't let pages go full screen, so there
 it explains how to use the home screen instead.
+
+## Rumble and light bar
+
+When a game rumbles the controller, the device driving it feels it:
+
+- **an Android phone** buzzes, with **Vibration** turned on in the settings. Safari on iPhone doesn't let pages
+  vibrate the phone;
+- **a gamepad** playing as that controller rumbles, in browsers that support it (Chrome and Edge do, with
+  Xbox and DualSense pads).
+
+The page also glows in the controller's **light-bar colour**: the player colour the PS4 gives each user, or
+whatever colour the game sets. Until one is set, a controller shows its own colour (1 blue, 2 red, 3 green,
+4 pink).
 
 ## Leaving
 

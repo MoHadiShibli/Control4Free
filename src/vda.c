@@ -147,6 +147,18 @@ void c4fVirtualPadAdopt(C4fVirtualPad *out, int32_t userId, int32_t vdaUser, uin
            (unsigned long long)deviceId, (uint32_t)out->handle);
 }
 
+int32_t c4fVirtualPadFeedback(const C4fVirtualPad *pad, C4fPadFeedback *out)
+{
+    uint8_t buf[256];   /* the call's size is unknown; it has only ever used 17 */
+
+    (void)memset(out, 0, sizeof(*out));
+    if (!scePadVirtualDeviceGetRemoteSetting) return -1;
+    (void)memset(buf, 0, sizeof(buf));
+    int32_t ret = scePadVirtualDeviceGetRemoteSetting(pad->handle, buf);
+    if (ret == 0) c4fPadFeedbackParse(buf, sizeof(buf), out);
+    return ret;
+}
+
 void c4fPadDataNeutral(ScePadData *data)
 {
     (void)memset(data, 0, sizeof(*data));

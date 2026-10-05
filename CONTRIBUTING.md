@@ -65,7 +65,7 @@ address, or add `?host=<ps4-ip>:4264` to the page's URL.
 Match the code around your change:
 - C with GNU extensions (gnu11), 4-space indent, `camelCase` functions with a `c4f` prefix, `C4f` types and
   `C4F_` macros;
-- log with `c4fLog`. `c4fNotify` shows a notification on the TV: keep those rare;
+- log with `c4fLog`. `c4fNotify` shows a notification on the PS4's screen: keep those rare;
 - comments explain *why*, not *what*;
 - only button bits confirmed on hardware go in `include/c4f_sce.h`;
 - the page is one file with no build step and no libraries: keep it that way;

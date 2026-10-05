@@ -30,6 +30,9 @@
 #define C4F_RELEASE_MS 15000
 #endif
 #define C4F_QUEUE_SIZE 32
+/* How often each controller's rumble and light bar are read back. Games pulse
+ * rumble for a few tens of milliseconds, so this has to stay well under 100. */
+#define C4F_FEEDBACK_MS 16
 
 typedef struct {
     C4fVirtualPad device;
@@ -39,6 +42,11 @@ typedef struct {
     uint64_t lastInput, lastReport, nextReport, detachedAt, reports;
     int active, stale, error, assigned;
     uint32_t userId;
+    /* What the game wants this controller to do, and what its owner was told. */
+    C4fPadFeedback feedback;
+    int feedbackKnown, rumbleSentValid, feedbackFailed;
+    uint8_t rumbleSent[2];
+    uint64_t feedbackAt;
 } C4fWebPad;
 
 /* Creating a controller means issuing AddDevice and then finding its DeviceId in
@@ -72,7 +80,7 @@ typedef struct {
 typedef struct {
     C4fNet net;
     C4fWebPad pads[C4F_MAX_PADS];
-    int klogFd, stop, changed, creationBlocked;
+    int klogFd, stop, changed, creationBlocked, feedbackMissing;
     char klogLine[1024];
     size_t klogUsed;
     C4fAdd add;
@@ -154,12 +162,22 @@ static void c4fStatus(C4fWeb *app, C4fNetClient *c, const C4fRequest *request)
         C4fWebPad *p = &app->pads[i];
         const char *state = p->error ? "error" : app->add.state && (app->add.pending & (1u << i)) ? "connecting"
                           : !p->active ? "free" : !p->owner || p->stale ? "paused" : p->assigned ? "ready" : "select";
-        unsigned colors[4][3] = {{32,96,255},{255,48,64},{48,200,96},{255,80,180}};
+        static const unsigned colors[4][3] = {{32,96,255},{255,48,64},{48,200,96},{255,80,180}};
+        unsigned rgb[3] = { colors[i][0], colors[i][1], colors[i][2] };
+        if (p->active && p->feedbackKnown) {
+            /* The PS4 sets player colours at a quarter strength (0x40), which on a
+             * screen reads as near black: keep the hue, brighten it to full. An
+             * unlit bar keeps the controller's own colour. */
+            unsigned l[3] = { p->feedback.r, p->feedback.g, p->feedback.b };
+            unsigned top = l[0] > l[1] ? l[0] : l[1];
+            if (l[2] > top) top = l[2];
+            if (top) for (int k = 0; k < 3; k++) rgb[k] = l[k] * 255 / top;
+        }
         pos += (size_t)snprintf(json+pos, sizeof(json)-pos,
             "%s{\"pad\":%d,\"name\":\"Controller %d\",\"enabled\":true,\"open\":%s,\"connected\":%s,\"clients\":%d,\"mine\":%s,\"state\":\"%s\",\"uid\":\"%s%08x\",\"color\":[%u,%u,%u],\"reports\":%llu,\"error\":%d}",
             i ? "," : "", i, i+1, p->active ? "true" : "false", p->owner && !p->stale ? "true" : "false", p->owner ? 1 : 0,
             p->owner == c ? "true" : "false", state, p->assigned ? "" : "unassigned-", p->userId,
-            colors[i][0], colors[i][1], colors[i][2], (unsigned long long)p->reports, p->error);
+            rgb[0], rgb[1], rgb[2], (unsigned long long)p->reports, p->error);
     }
     snprintf(json+pos, sizeof(json)-pos, "]}}"); c4fNetText(c, json);
 }
@@ -219,6 +237,44 @@ static void c4fReportPads(C4fWeb *app)
         }
         if (now < p->nextReport) continue;
         c4fReportPad(app, p, i, now);
+    }
+}
+
+/* Reads back what the game wants from each controller. Rumble goes to the
+ * controller's owner, whose page drives the phone's vibration and any gamepad
+ * playing as it; the light bar goes into the status everyone sees. */
+static void c4fPollFeedback(C4fWeb *app, uint64_t now)
+{
+    if (app->feedbackMissing) return;
+    for (int i = 0; i < C4F_MAX_PADS; i++) {
+        C4fWebPad *p = &app->pads[i];
+        C4fPadFeedback f;
+        int32_t ret;
+
+        if (!p->active || now < p->feedbackAt) continue;
+        p->feedbackAt = now + C4F_FEEDBACK_MS;
+        ret = c4fVirtualPadFeedback(&p->device, &f);
+        if (ret == -1) {
+            c4fLog("scePadVirtualDeviceGetRemoteSetting is not exported: no rumble or light bar\n");
+            app->feedbackMissing = 1;
+            return;
+        }
+        if (ret != 0) {
+            if (!p->feedbackFailed) c4fLog("web controller %d GetRemoteSetting = 0x%08x\n", i + 1, (uint32_t)ret);
+            p->feedbackFailed = 1;
+            continue;
+        }
+        if (!p->feedbackKnown || f.r != p->feedback.r || f.g != p->feedback.g || f.b != p->feedback.b)
+            app->changed = 1;
+        p->feedback = f;
+        p->feedbackKnown = 1;
+        if (p->owner && (!p->rumbleSentValid || f.large != p->rumbleSent[0] || f.small != p->rumbleSent[1])) {
+            char message[64];
+            snprintf(message, sizeof(message), "{\"method\":\"v\",\"params\":[%d,%u,%u]}", i, f.large, f.small);
+            if (c4fNetText(p->owner, message) == 0) {
+                p->rumbleSent[0] = f.large; p->rumbleSent[1] = f.small; p->rumbleSentValid = 1;
+            }
+        }
     }
 }
 
@@ -371,7 +427,7 @@ static void c4fApplyClaim(C4fWeb *app, C4fNetClient *c, unsigned wanted, C4fRequ
     for (int i = 0; i < C4F_MAX_PADS; i++) {
         C4fWebPad *p = &app->pads[i];
         if (wanted & (1u << i)) {
-            if (p->owner != c) c4fNeutralize(p);
+            if (p->owner != c) { c4fNeutralize(p); p->rumbleSentValid = 0; }
             p->owner = c; p->detachedAt = 0; p->lastInput = c4fTimeMs(); p->stale = 0;
         } else if (p->owner == c) c4fRemove(app, p);
     }
@@ -661,6 +717,7 @@ int c4fWebRun(int klogFd)
         }
         long klogBytes = c4fReadKlog(app);
         c4fReportPads(app);
+        c4fPollFeedback(app, now);
 #ifdef C4F_PROBE_SETTING
         c4fProbeSetting(app, now);
 #endif

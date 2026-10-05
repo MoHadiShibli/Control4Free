@@ -6,7 +6,9 @@
  * marker verification and DeviceId matching, and only scePad is absent.
  *
  * A test injects its own kernel lines by writing them to the pipe named in
- * C4F_TEST_KLOG_FD; they are relayed into the log. The line C4F-TEST-CLOSE-KLOG
+ * C4F_TEST_KLOG_FD; they are relayed into the log, except two commands: the line
+ * C4F-TEST-FEEDBACK <handle> <large> <small> <r> <g> <b> sets what the "game"
+ * wants of that controller (handle in hex), and C4F-TEST-CLOSE-KLOG
  * kills the log instead, as GoldHEN taking the device would.
  *
  * Environment switches:
@@ -16,6 +18,7 @@
  *   C4F_TEST_ADD_DELAY   milliseconds before the device-added line turns up
  *   C4F_FAIL_ADD         AddDevice runs but its line never arrives
  *   C4F_FAIL_INPUT       InsertData fails while a button is held
+ *   C4F_TEST_NO_FEEDBACK  the rumble/light-bar call isn't exported
  *   C4F_TEST_SLOW_MS     milliseconds each new device takes to adopt, the way
  *                        real console work spends time inside one loop iteration
  */
@@ -32,6 +35,35 @@
 
 static unsigned nextId = 0x11030d;
 static int logRead = -1, logWrite = -1;
+
+/* What the "game" wants of each controller, by handle. */
+static struct { unsigned handle; C4fPadFeedback feedback; } feedbacks[8];
+static pthread_mutex_t feedbackLock = PTHREAD_MUTEX_INITIALIZER;
+
+static void setFeedback(const char *line)
+{
+    unsigned handle, v[5];
+    if (sscanf(line, "C4F-TEST-FEEDBACK %x %u %u %u %u %u", &handle, &v[0], &v[1], &v[2], &v[3], &v[4]) != 6) return;
+    pthread_mutex_lock(&feedbackLock);
+    for (int i = 0; i < 8; i++) {
+        if (feedbacks[i].handle && feedbacks[i].handle != handle) continue;
+        feedbacks[i].handle = handle;
+        feedbacks[i].feedback = (C4fPadFeedback){ (uint8_t)v[0], (uint8_t)v[1], (uint8_t)v[2], (uint8_t)v[3], (uint8_t)v[4] };
+        break;
+    }
+    pthread_mutex_unlock(&feedbackLock);
+}
+
+int32_t c4fVirtualPadFeedback(const C4fVirtualPad *p, C4fPadFeedback *out)
+{
+    memset(out, 0, sizeof(*out));
+    if (getenv("C4F_TEST_NO_FEEDBACK")) return -1;
+    pthread_mutex_lock(&feedbackLock);
+    for (int i = 0; i < 8; i++)
+        if (feedbacks[i].handle == (unsigned)p->handle) *out = feedbacks[i].feedback;
+    pthread_mutex_unlock(&feedbackLock);
+    return 0;
+}
 static pthread_mutex_t logLock = PTHREAD_MUTEX_INITIALIZER;
 
 /* The write end is non-blocking: a log nobody drains drops lines instead of
@@ -69,6 +101,16 @@ static void *relay(void *arg)
         ssize_t n = read(source, buf, sizeof(buf) - 1);
         if (n <= 0) return NULL;
         buf[n] = 0;
+        if (strstr(buf, "C4F-TEST-FEEDBACK")) {
+            char *save = NULL;
+            for (char *line = strtok_r(buf, "\n", &save); line; line = strtok_r(NULL, "\n", &save)) {
+                char copy[sizeof(buf) + 1];
+                if (!strncmp(line, "C4F-TEST-FEEDBACK", 17)) { setFeedback(line); continue; }
+                snprintf(copy, sizeof(copy), "%s\n", line);
+                logLine(copy);
+            }
+            continue;
+        }
         if (strstr(buf, "C4F-TEST-CLOSE-KLOG")) {
             pthread_mutex_lock(&logLock);
             if (logWrite >= 0) { close(logWrite); logWrite = -1; }

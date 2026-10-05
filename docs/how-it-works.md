@@ -50,7 +50,7 @@ If no line arrives, it stops creating controllers until it's restarted, rather t
 it can no longer address.
 
 The device is created for user 1, so it arrives with no user, and the PS4 asks *"Who's using this
-controller?"*. The service never presses anything itself: the choice is made at the TV. When a user is picked,
+controller?"*. The service never presses anything itself: the choice is made on the PS4. When a user is picked,
 the login manager logs `DEVICE_OWNER_CHANGED [DeviceId:…][UserId:…]`, which is how the page learns the
 controller is signed in.
 
@@ -79,6 +79,18 @@ turns it into a `ScePadData` sample and hands it to `scePadVirtualDeviceInsertDa
 
 When a page stops sending, its buttons are released at once; after 3 seconds the controller goes neutral, and
 after 15 it's removed. A page that reconnects within 15 seconds gets its controller back.
+
+## Rumble and light bar
+
+A game talks to a virtual controller the way it talks to a real one, and the system keeps what it asked for.
+`scePadVirtualDeviceGetRemoteSetting` reads it back, in the layout of a DualShock 4's own output report: the
+two motors, then the light bar's red, green and blue. The service reads it every 16 ms for each controller,
+because games pulse rumble for only tens of milliseconds:
+
+- a change in rumble is sent to the controller's owner, whose page buzzes the phone and rumbles any gamepad
+  playing as that controller. Someone who takes a controller over is told its current state at once;
+- the light bar goes into the status every page sees. The PS4 sets player colours at a quarter of full
+  brightness, so the page brightens them to full and keeps the hue.
 
 ## Rest mode and failures
 

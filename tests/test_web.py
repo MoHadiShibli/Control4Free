@@ -30,6 +30,7 @@ class Client:
     def __init__(self, port=4264):
         self.sock = socket.create_connection(('127.0.0.1', port), timeout=3)
         self.buf = b''
+        self.pushed = []   # messages the service sent on its own, oldest first
         key = 'dGhlIHNhbXBsZSBub25jZQ=='
         self.sock.sendall((f'GET /ws HTTP/1.1\r\nHost: 127.0.0.1:{port}\r\nOrigin: http://127.0.0.1:{port}\r\n'
                            f'Connection: Upgrade\r\nUpgrade: websocket\r\nSec-WebSocket-Key: {key}\r\nSec-WebSocket-Version: 13\r\n\r\n').encode())
@@ -76,6 +77,24 @@ class Client:
             msg = json.loads(text)
             if msg.get('id') == ident:
                 return msg
+            if 'id' not in msg:
+                self.pushed.append(msg)
+
+    def wait_for(self, match, timeout=2):
+        """The first pushed message `match` accepts, seen already or still to come."""
+        end = time.monotonic() + timeout
+        while True:
+            for i, msg in enumerate(self.pushed):
+                if match(msg):
+                    del self.pushed[:i + 1]
+                    return msg
+            self.pushed.clear()
+            assert time.monotonic() < end, 'the expected message never came'
+            op, text = self.receive()
+            if op == 1:
+                msg = json.loads(text)
+                if 'id' not in msg:
+                    self.pushed.append(msg)
 
     def input(self, pad, buttons=0, lx=128, ly=128, rx=128, ry=128, l2=0, r2=0, touch=()):
         params = [pad, buttons, lx, ly, rx, ry, l2, r2, len(touch)]
@@ -344,6 +363,59 @@ def main():
             c.request('claim', [])
         assert not any('removed after' in r for r in server.rows()),             [r for r in server.rows() if 'removed after' in r]
         print('PASS a new controller is not mistaken for an idle one', flush=True)
+    finally:
+        server.close()
+
+    # Rumble goes to the controller's owner; the light bar, brightened, to everyone.
+    def rumble(pad, large, small):
+        return lambda m: m.get('method') == 'v' and m['params'] == [pad, large, small]
+    server = Server()
+    try:
+        c = server.c
+        assert c.request('claim', [0])['result']['pads'][0]['mine']
+        assert c.request('status')['result']['pads'][0]['color'] == [32, 96, 255], 'unlit: its own colour'
+        os.write(server.log, b'C4F-TEST-FEEDBACK 11030d 200 40 64 0 0\n')
+        c.wait_for(rumble(0, 200, 40))
+        time.sleep(.05)
+        assert c.request('status')['result']['pads'][0]['color'] == [255, 0, 0], 'player 2 red, at full'
+        watcher = Client()
+        os.write(server.log, b'C4F-TEST-FEEDBACK 11030d 0 0 0 64 0\n')
+        c.wait_for(rumble(0, 0, 0))
+        time.sleep(.05)
+        assert watcher.request('status')['result']['pads'][0]['color'] == [0, 255, 0], 'everyone sees it'
+        os.write(server.log, b'C4F-TEST-FEEDBACK 11030d 0 0 32 0 32\n')
+        time.sleep(.1)
+        assert c.request('status')['result']['pads'][0]['color'] == [255, 0, 255], 'pink keeps its hue'
+        assert not any(m.get('method') == 'v' for m in watcher.pushed), 'rumble went to a non-owner'
+        # Rumble holds while the game holds it; one message per change, not per poll.
+        os.write(server.log, b'C4F-TEST-FEEDBACK 11030d 90 0 32 0 32\n')
+        c.wait_for(rumble(0, 90, 0))
+        time.sleep(.3)
+        c.request('status')
+        assert not any(m.get('method') == 'v' for m in c.pushed), 'unchanged rumble was sent again'
+        # Whoever takes the controller over is told the current state at once.
+        c.close()
+        server.c = c = Client()
+        assert c.request('claim', [0])['result']['pads'][0]['mine']
+        c.wait_for(rumble(0, 90, 0))
+        # And told when it stops, so a page never keeps buzzing on old news.
+        os.write(server.log, b'C4F-TEST-FEEDBACK 11030d 0 0 0 0 0\n')
+        c.wait_for(rumble(0, 0, 0))
+        time.sleep(.05)
+        assert c.request('status')['result']['pads'][0]['color'] == [32, 96, 255], 'unlit again: its own colour'
+        watcher.close()
+        print('PASS rumble to the owner on change, the light bar to everyone, the state to a new owner', flush=True)
+    finally:
+        server.close()
+
+    # Without the call, controllers work as before.
+    server = Server(C4F_TEST_NO_FEEDBACK='1')
+    try:
+        assert server.c.request('claim', [0, 1])['result']['pads'][1]['mine']
+        time.sleep(.1)
+        assert server.c.request('status')['result']['pads'][0]['color'] == [32, 96, 255]
+        assert len([r for r in server.rows() if 'not exported' in r]) == 1
+        print('PASS no rumble call: logged once, controllers unaffected', flush=True)
     finally:
         server.close()
 

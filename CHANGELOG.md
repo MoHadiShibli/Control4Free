@@ -3,6 +3,19 @@
 Versions follow [Semantic Versioning](https://semver.org): PATCH for fixes, MINOR for features that break
 nothing, MAJOR for anything people rely on that changes.
 
+## 1.1.0 — 2026-10-05
+
+Rumble and the light bar.
+
+- When a game rumbles a controller, the device driving it feels it: an Android phone buzzes, and a gamepad
+  playing as that controller rumbles in browsers that support it, such as Chrome and Edge. Safari on iPhone
+  doesn't let pages vibrate the phone.
+- The page glows in the controller's light-bar colour, the player colour the PS4 gives each user or whatever
+  the game sets, brightened from the quarter strength the PS4 uses.
+- The page says "Choose user on PS4" rather than "on TV": not everyone plays on a TV.
+- The status reports the light bar's colour in `color`, and the service sends rumble as
+  `{"method": "v", "params": [pad, large, small]}`. See [docs/protocol.md](docs/protocol.md).
+
 ## 1.0.0 — 2026-10-05
 
 First release.
