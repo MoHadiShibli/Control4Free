@@ -675,7 +675,15 @@
     .corner-btn:hover { background: rgba(32, 39, 53, .9); color: #fff; }
     .corner-btn:active { transform: scale(.92); }
     .corner-btn.left { left: max(8px, env(safe-area-inset-left)); }
-    .corner-btn.right { right: max(8px, env(safe-area-inset-right)); }
+    .corner-group {
+      position: absolute;
+      z-index: 2;
+      top: max(8px, env(safe-area-inset-top));
+      right: max(8px, env(safe-area-inset-right));
+      display: flex;
+      gap: 8px;
+    }
+    .corner-group .corner-btn { position: static; }
     .corner-btn svg { width: 18px; height: 18px; }
 
     /* Layout editor: drag controls on a grid, change the selected one from the bar */
@@ -1012,11 +1020,12 @@
     <button class="corner-btn left" id="backBtn" type="button" aria-label="Back to the controllers">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg>
     </button>
-    <button class="corner-btn right" id="fsBtn" type="button" aria-label="Full screen">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/></svg>
-    </button>
-
-    <button class="corner-btn" style="right:70px" id="padMenuBtn" type="button" aria-label="Controller menu">☰</button>
+    <div class="corner-group">
+      <button class="corner-btn" id="padMenuBtn" type="button" aria-label="Controller menu">☰</button>
+      <button class="corner-btn" id="fsBtn" type="button" aria-label="Full screen">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/></svg>
+      </button>
+    </div>
     <div class="pad-area">
       <button class="ctl trigger" data-ctl="l2" data-btn="L2" type="button"><span class="trigger-fill" data-fill="L2"></span><span class="engraved">L2</span><span class="keyhint" data-hint="L2"></span></button>
       <button class="ctl bumper" data-ctl="l1" data-btn="L1" type="button"><span class="engraved">L1</span><span class="keyhint" data-hint="L1"></span></button>
