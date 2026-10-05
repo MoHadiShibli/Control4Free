@@ -34,8 +34,8 @@ Open **Control4Free** and press **Cross**. The app:
 1. copies the service to `/data/payloads/control4free.elf`;
 2. adds it to GoldHEN's AutoRun list, `/data/GoldHEN/payloads.ini`, so GoldHEN starts it every time it
    loads;
-3. starts it straight away if GoldHEN's **PayLoader** is on. If it isn't, restart the PS4 and run the
-   jailbreak: AutoRun starts Control4Free from then on.
+3. starts it straight away if GoldHEN's **PayLoader** is on. If it isn't, turn PayLoader on in GoldHEN's
+   settings and press **Cross** again. AutoRun also starts Control4Free each time GoldHEN loads.
 
 Once it's running, the app shows the address to open, for example `http://192.168.1.20:4264`, and a QR code
 for your phone's camera. The PS4 also shows the address in a notification when the service starts.

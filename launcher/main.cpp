@@ -57,7 +57,7 @@ static void *c4fWorker(void *)
         if (quit) return NULL;
         if (command || c4fLauncherTimeMs() >= nextCheck) {
             char message[160] = {0}, address[64] = {0};
-            int result = 0;
+            [[maybe_unused]] int result = 0; /* read by the diagnostic build */
             /* The console's own address: shown for the phone or PC, and the
              * app's second way to reach Control4Free from its sandbox. */
             OrbisNetCtlInfo info;
@@ -89,7 +89,6 @@ static void *c4fWorker(void *)
             int running = c4fLauncherProbe(&status);
             const char *problem = c4fLauncherProblem();
             pthread_mutex_lock(&c4fMutex);
-            if (result == -2) c4fScreen.locked = 1;
             if (command) {
                 snprintf(c4fScreen.message, sizeof(c4fScreen.message), "%s", message);
             } else if (!c4fScreen.locked &&

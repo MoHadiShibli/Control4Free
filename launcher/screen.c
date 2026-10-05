@@ -428,10 +428,10 @@ static C4fLook c4fLookFor(const C4fLauncherScreen *s, char *meta, size_t metaSiz
                      "is running, stop it on its controller page or restart the PS4.",
                      "Not responding", C4F_BAD, C4F_BAD, 0 };
     if (s->locked) {
-        look.pill = look.meta = "Restart needed";
-        look.title = "Restart the PS4";
-        look.subtitle = "Control4Free was sent but never answered. Restart the console before you try again, so "
-                        "two copies never run at once.";
+        look.pill = look.meta = "App error";
+        look.title = "Reopen the app";
+        look.subtitle = "The app could not start properly. Close it with the PS button and open it again. "
+                        "Control4Free itself is not affected.";
     } else if (s->busy) {
         look = (C4fLook){ "Working", "Please wait", s->message, "Checking", C4F_WARN, C4F_ACCENT, 0 };
     } else if (s->running == 1) {

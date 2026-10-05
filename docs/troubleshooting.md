@@ -91,8 +91,9 @@ run the jailbreak: with auto-start on, Control4Free starts by itself.
 **"Control4Free is not responding."** Wait a few seconds after the PS4 wakes from rest mode, then press
 **Cross** again. If it stays stuck, restart the PS4 and run the jailbreak.
 
-**"Sent, but Control4Free never answered."** or **"The transfer to PayLoader broke off."** Restart the PS4
-before trying again. The app won't send a second copy until then, so two can't end up running.
+**"Sent, but Control4Free did not start."** or **"The transfer to PayLoader broke off."** Press **Cross** to
+try again. Two copies can't end up running: a second one quits at once. If it never starts, open an issue
+with your firmware and GoldHEN versions.
 
 **"Something answers on port 4264 but not the way this app expects."** or **"No answer the app
 understands."** Something else is answering on port 4264, often an older version of Control4Free. Stop it

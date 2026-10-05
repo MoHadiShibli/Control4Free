@@ -242,7 +242,7 @@ int c4fLauncherStart(const unsigned char *payload, size_t payloadSize, char *mes
     if (fd < 0) { snprintf(message, size, "PayLoader did not answer (errno %d). Turn it on in GoldHEN, then press Cross again.", errno); return -1; }
     int failed = c4fSendAll(fd, payload, payloadSize, c4fLauncherTimeMs() + 10000);
     shutdown(fd, SHUT_WR); close(fd);
-    if (failed) { snprintf(message, size, "The transfer to PayLoader broke off. Restart the PS4 before you try again."); return -2; }
+    if (failed) { snprintf(message, size, "The transfer to PayLoader broke off. Press Cross to try again."); return -2; }
     uint64_t deadline;
     deadline = c4fLauncherTimeMs() + 20000;
     while (c4fLauncherTimeMs() < deadline) {
@@ -251,8 +251,10 @@ int c4fLauncherStart(const unsigned char *payload, size_t payloadSize, char *mes
         }
         usleep(250000);
     }
-    snprintf(message, size, "Sent, but Control4Free never answered (%s). Restart the PS4 before you try again.", c4fProblem);
-    return -2; /* Caller locks further sends until restart, avoiding duplicates. */
+    snprintf(message, size, "Sent, but Control4Free did not start (%s). Press Cross to try again.", c4fProblem);
+    /* Sending again is safe: a copy that did start holds the payload's
+     * instance lock, so a second one quits at once. */
+    return -2;
 }
 
 int c4fLauncherStop(char *message, size_t size)

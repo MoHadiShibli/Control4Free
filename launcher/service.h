@@ -21,6 +21,7 @@ int c4fLauncherProbe(C4fServiceStatus *status);
 /* Whether the last probe connected anywhere, so "no answer" can be told apart
  * from "cannot reach". */
 int c4fLauncherReached(void);
+/* 0 running, -1 not sent, -2 sent but Control4Free did not answer. */
 int c4fLauncherStart(const unsigned char *payload, size_t payloadSize, char *message, size_t size);
 int c4fLauncherStop(char *message, size_t size);
 #ifdef __cplusplus

@@ -66,7 +66,7 @@ int main(int argc, char **argv)
         s.running = -1; s.busy = 1; s.autorun = C4F_AUTORUN_UNKNOWN; message = "Setting up Control4Free. Please wait...";
     } else if (!strcmp(state, "locked")) {
         s.running = -1; s.locked = 1;
-        message = "Sent, but Control4Free never answered (127.0.0.1 no reply). Restart the PS4 before you try again.";
+        message = "Could not initialize launcher. Close with PS and retry.";
     } else if (!strcmp(state, "unknown")) {
         s.running = -1; s.autorun = C4F_AUTORUN_UNKNOWN;
         snprintf(s.autorunNote, sizeof(s.autorunNote), "GoldHEN did not let the app check (errno 78)");
