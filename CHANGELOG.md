@@ -3,6 +3,19 @@
 Versions follow [Semantic Versioning](https://semver.org): PATCH for fixes, MINOR for features that break
 nothing, MAJOR for anything people rely on that changes.
 
+## 1.1.1 — 2026-10-07
+
+Fixes.
+
+- Control4Free starts on firmware 13.52. Before, it stopped before doing anything on that firmware:
+  GoldHEN said the payload launched, but the app said it never answered. The payload's start-up code now
+  comes from a newer ps4-payload-sdk that knows 13.52's kernel.
+- When a start fails, press **Cross** to try again. The app no longer asks you to restart the PS4: a second
+  copy of Control4Free quits on its own, so two can't end up running.
+- Each release now includes a diagnostic package, `Control4Free-<version>-diag.pkg`. Its app shows what the
+  PS4 reports (firmware, GoldHEN, the logs, each connection from a phone or PC) on pages you can screenshot
+  for a bug report. See [Reporting a problem](docs/troubleshooting.md#reporting-a-problem).
+
 ## 1.1.0 — 2026-10-06
 
 Rumble and the light bar.
