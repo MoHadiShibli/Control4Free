@@ -1,8 +1,8 @@
 # Troubleshooting
 
 Find the message you see, or the symptom, below. If nothing here helps,
-[open an issue](https://github.com/MoHadiShibli/Control4Free/issues/new/choose) with the log described at the
-end of this page.
+[open an issue](https://github.com/MoHadiShibli/Control4Free/issues/new/choose) with a diagnostic report, as
+described at the [end of this page](#reporting-a-problem).
 
 ## On the controller page
 
@@ -107,10 +107,30 @@ the app and open it again; if that doesn't help, restart the PS4 and run the jai
 **Control4Free is listed under Games instead of Applications.** That's a package from before 1.0.0. Delete the
 app and install the current package.
 
-## The log
+## Reporting a problem
 
-The service writes a log to `/data/control4free/control4free.log` on the PS4, and keeps the previous run in
-`control4free.log.previous`. Turn on GoldHEN's FTP server and download them from port 2121, or connect to
-GoldHEN's log server on port 3232 and look for lines starting with `[c4f]`.
+Every release comes with a diagnostic package, `Control4Free-<version>-diag.pkg`. It's the same Control4Free,
+except that its app shows on screen what the PS4 reports, so you can send screenshots instead of digging out
+log files. Please use it before you open an issue:
 
-The log contains your console's network address. Remove it before posting the log if you prefer.
+1. Download `Control4Free-<version>-diag.pkg` from the
+   [latest release](https://github.com/MoHadiShibli/Control4Free/releases/latest) and install it over the app.
+   It replaces the app and shows up as **Control4Free (diagnostic)**.
+2. Open it. If it doesn't say RUNNING, press **Cross** and wait until the top stops saying "WORKING" (up to
+   30 seconds).
+3. Make the problem happen again, for example open the page on your phone or pick a controller. Then go back
+   to the app.
+4. Press **R1** to go through its 5 pages, and take a screenshot of each one: press **SHARE**, then
+   **Triangle**. To copy them to a USB stick, open **Capture Gallery**, press **OPTIONS** and choose **Copy
+   to USB Storage Device**.
+5. [Open an issue](https://github.com/MoHadiShibli/Control4Free/issues/new/choose) and attach the
+   screenshots.
+
+The app also saves the same report as text: `control4free-diag.txt` on a USB stick that was plugged in, and
+`/data/control4free/diag-report.txt` on the PS4. You can attach that instead of the screenshots. The report
+shows your console's local network address. It only works inside your home network, but you can blur it.
+
+When you're done, install the normal package again over the diagnostic one.
+
+The service's own log is `/data/control4free/control4free.log` on the PS4, with the previous run in
+`control4free.log.previous`, readable over GoldHEN's FTP server (port 2121). The diagnostic app shows both.

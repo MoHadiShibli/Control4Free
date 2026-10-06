@@ -40,10 +40,11 @@ body:
     validations:
       required: true
   - type: textarea
-    id: log
+    id: diagnostics
     attributes:
-      label: Log (optional)
+      label: Diagnostic report
       description: |
-        `/data/control4free/control4free.log` on the PS4, over GoldHEN's FTP server (port 2121). If the problem was before a restart, it's in `control4free.log.previous`.
-        The log contains your console's network address: remove it if you prefer.
-      render: text
+        Install the diagnostic package, `Control4Free-<version>-diag.pkg` from the [latest release](https://github.com/MoHadiShibli/Control4Free/releases/latest), over the app. Open **Control4Free (diagnostic)**, make the problem happen again, then attach a screenshot of each of its 5 pages here (**R1** changes the page). Or attach the report it saves: `control4free-diag.txt` on a USB stick that was plugged in, or `/data/control4free/diag-report.txt` over GoldHEN's FTP server. [Step by step](https://github.com/MoHadiShibli/Control4Free/blob/main/docs/troubleshooting.md#reporting-a-problem).
+        The report shows your console's local network address. It only works inside your home network, but you can blur it.
+    validations:
+      required: true

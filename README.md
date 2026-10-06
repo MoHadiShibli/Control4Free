@@ -104,8 +104,10 @@ New to GoldHEN packages? The **[installation guide](docs/installation.md)** walk
 
 ## Support
 
-Found a bug? [Open an issue](https://github.com/MoHadiShibli/Control4Free/issues/new/choose); I maintain this
-project and read every report. If Control4Free is useful to you, you can help keep it going on
+Found a bug? Install the diagnostic package from the latest release first, then
+[open an issue](https://github.com/MoHadiShibli/Control4Free/issues/new/choose) with its screenshots (see
+[Reporting a problem](docs/troubleshooting.md#reporting-a-problem)). I maintain this project and read every
+report. If Control4Free is useful to you, you can help keep it going on
 [Ko-fi](https://ko-fi.com/mohadishibli).
 
 ## Credits

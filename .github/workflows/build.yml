@@ -1,7 +1,8 @@
 name: build
 
-# Builds both toolchain images, the payload, the installable package, and runs
-# every host test. On a vX.Y.Z tag it also publishes the release.
+# Builds both toolchain images, the payload, the installable package and its
+# diagnostic version, and runs every host test. On a vX.Y.Z tag it also
+# publishes the release.
 on:
   push:
     branches: [main, next]
@@ -23,10 +24,10 @@ jobs:
           docker build -t control4free-build -f docker/Dockerfile docker
           docker build -t control4free-launcher-build -f docker/Dockerfile.launcher docker
 
-      - name: Build the payload and the package
+      - name: Build the payload, the package and the diagnostic package
         run: |
           docker run --rm --network none -v "$PWD:/src" -w /src \
-            control4free-launcher-build bash -lc 'make && make -C launcher'
+            control4free-launcher-build bash -lc 'make && make -C launcher && make C4F_DIAG=1 && make -C launcher C4F_DIAG=1'
 
       - name: Host tests
         run: |
@@ -37,7 +38,7 @@ jobs:
         run: |
           version=$(cat VERSION)
           mkdir -p artifacts
-          cp build/control4free.elf "build/Control4Free-$version.pkg" artifacts/
+          cp build/control4free.elf "build/Control4Free-$version.pkg" "build/Control4Free-$version-diag.pkg" artifacts/
           cd artifacts && sha256sum * > SHA256SUMS && cat SHA256SUMS
 
       - uses: actions/upload-artifact@v4
