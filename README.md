@@ -82,8 +82,9 @@ New to GoldHEN packages? The **[installation guide](docs/installation.md)** walk
 
 ## Requirements and compatibility
 
-- A PS4 with GoldHEN. Tested on firmware 10.01 with GoldHEN v2.4b18.10. Auto-start and starting Control4Free
-  from GoldHEN's menu need v2.4b18.10 or later.
+- A PS4 with GoldHEN. Tested on firmware 10.01, 13.02, 13.04 and 13.52, with GoldHEN v2.4b18.10 and
+  v2.4b18.12; 13.52 needs Control4Free 1.1.1 or later. Auto-start and starting Control4Free from GoldHEN's
+  menu need v2.4b18.10 or later.
 - A phone, tablet or computer with a browser, on the same network as the PS4.
 - Turn off other GoldHEN controller plugins in games you play with Control4Free. A plugin that takes over a
   signed-in user's controller can stop games from reading the virtual ones.

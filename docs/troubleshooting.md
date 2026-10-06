@@ -7,8 +7,10 @@ described at the [end of this page](#reporting-a-problem).
 ## On the controller page
 
 **"Signing a controller in needs the PS4's kernel log, and something else has it."**
-A klog viewer is connected to GoldHEN's log server (port 3232). Close it and pick the controller again. Only
-signing a controller in needs the log, so this never interrupts play.
+A klog viewer is connected to GoldHEN's log server (port 3232). Close it and pick the controller again. A
+diagnostic app from a test build before 1.1.1 can also hold the log while it sits in the background: close it
+(press **PS**, highlight the app, press **OPTIONS**, choose **Close Application**) and update. Only signing a
+controller in needs the log, so this never interrupts play.
 
 **"Another controller is being connected; try again in a moment."**
 Controllers are added one at a time. Wait a second and pick yours again. Everyone already playing carries on
@@ -116,8 +118,9 @@ log files. Please use it before you open an issue:
 1. Download `Control4Free-<version>-diag.pkg` from the
    [latest release](https://github.com/MoHadiShibli/Control4Free/releases/latest) and install it over the app.
    It replaces the app and shows up as **Control4Free (diagnostic)**.
-2. Open it. If it doesn't say RUNNING, press **Cross** and wait until the top stops saying "WORKING" (up to
-   30 seconds).
+2. Open it. If it says RUNNING, the normal version is still the one running: press **Square**, then **Cross**
+   to stop it. Then press **Cross** to start the diagnostic version, and wait until the top stops saying
+   "WORKING" (up to 30 seconds).
 3. Make the problem happen again, for example open the page on your phone or pick a controller. Then go back
    to the app.
 4. Press **R1** to go through its 5 pages, and take a screenshot of each one: press **SHARE**, then
@@ -130,7 +133,9 @@ The app also saves the same report as text: `control4free-diag.txt` on a USB sti
 `/data/control4free/diag-report.txt` on the PS4. You can attach that instead of the screenshots. The report
 shows your console's local network address. It only works inside your home network, but you can blur it.
 
-When you're done, install the normal package again over the diagnostic one.
+When you're done, install the normal package again over the diagnostic one, open it, press **Square**, then
+**Cross** to stop the diagnostic version, and **Cross** to start the normal one. That also puts the normal
+one back on auto-start.
 
 The service's own log is `/data/control4free/control4free.log` on the PS4, with the previous run in
 `control4free.log.previous`, readable over GoldHEN's FTP server (port 2121). The diagnostic app shows both.

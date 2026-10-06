@@ -10,8 +10,9 @@ Control4Free comes in two pieces:
 
 ## Requirements
 
-- A PS4 with [GoldHEN](https://github.com/GoldHEN/GoldHEN). Tested on firmware 10.01 with GoldHEN v2.4b18.10.
-  Auto-start and GoldHEN's Payloader LaunchPad need v2.4b18.10 or later.
+- A PS4 with [GoldHEN](https://github.com/GoldHEN/GoldHEN). Tested on firmware 10.01, 13.02, 13.04 and 13.52,
+  with GoldHEN v2.4b18.10 and v2.4b18.12; 13.52 needs Control4Free 1.1.1 or later. Auto-start and GoldHEN's
+  Payloader LaunchPad need v2.4b18.10 or later.
 - **Debug Settings** turned on in GoldHEN, for the Package Installer.
 - A phone, tablet or computer with a modern browser, on the same network as the PS4.
 
@@ -42,11 +43,17 @@ for your phone's camera. The PS4 also shows the address in a notification when t
 
 AutoRun keeps other entries in `payloads.ini` as they are.
 
+## After a restart
+
+Run the GoldHEN jailbreak as usual. With auto-start on, Control4Free starts by itself and shows its address in
+a notification, so you don't need to open the app. If you do open it and press **PS** to go back to the home
+screen, that's fine too: the app doesn't get in the way of Control4Free.
+
 ## The app's buttons
 
 | Button | What it does |
 |---|---|
-| **Cross** | Starts Control4Free when it isn't running. Until auto-start is on, it sets that up first. |
+| **Cross** | Starts Control4Free when it isn't running. Until auto-start is on with this app's version, it sets that up first. |
 | **Triangle** | Turns auto-start on or off. After you install a newer package, it updates the auto-start copy. |
 | **Square**, then **Cross** | Stops Control4Free and disconnects every controller. |
 | **Circle** | Closes the app. Control4Free keeps running without it. |
@@ -54,10 +61,13 @@ AutoRun keeps other entries in `payloads.ini` as they are.
 ## Updating
 
 1. Install the new package over the old one. Delete the old app first if the installer refuses.
+   You don't need to stop Control4Free first: deleting or replacing the app leaves the running service and
+   its auto-start copy alone.
 2. Open Control4Free. It says the auto-start copy is older than the one in the app: press **Triangle** to
    update it.
 3. The old version is still the one running. Press **Square**, then **Cross** to stop it, and **Cross**
-   again to start the new one (this needs GoldHEN's PayLoader). Or restart the PS4 and run the jailbreak.
+   again to start the new one (this needs GoldHEN's PayLoader). Or restart the PS4 and run the jailbreak:
+   auto-start then starts the new one.
 
 Your controller layouts and keys live in each phone's browser, so they survive updates.
 
@@ -85,6 +95,10 @@ It runs until the PS4 restarts.
 1. In the app, press **Triangle** to turn auto-start off, then **Square** and **Cross** to stop the service.
 2. Delete the app from the Library.
 3. Delete `/data/payloads/control4free.elf`, and `/data/control4free/` if you want the logs gone too.
+
+Do step 1 before deleting the app. Deleting the app alone doesn't stop the service, and GoldHEN keeps
+starting it after every restart. If the app is already gone, either install it again and start from step 1,
+or remove the `control4free.elf` line from `/data/GoldHEN/payloads.ini` by hand and restart the PS4.
 
 ## Files on the console
 
