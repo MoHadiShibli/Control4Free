@@ -2,9 +2,10 @@
  *
  * Everything is shown on pages a user can screenshot, and also saved to
  * /data/control4free/diag-report.txt (and a USB stick when one is plugged in).
- * The kernel log is read only in short windows (start-up, and around a start)
- * because it has a single reader, and Control4Free needs it to sign a
- * controller in. */
+ * The kernel log has a single reader, and Control4Free needs it to sign a
+ * controller in. So the app reads it only in short windows, and never while
+ * Control4Free runs: an app suspended in the background keeps its descriptor
+ * open, and every controller would then fail to sign in (seen on 13.52). */
 #include "diag.h"
 #include <errno.h>
 #include <fcntl.h>
@@ -53,6 +54,7 @@ static pthread_mutex_t c4fLock = PTHREAD_MUTEX_INITIALIZER;
 static pthread_t c4fKlogReader;
 static int c4fReaderStarted, c4fQuit;
 static uint64_t c4fBootMs, c4fCaptureUntil;
+static int c4fServiceUp, c4fRefreshed;
 
 /* Pages, rebuilt by the launcher's worker and drawn by its main loop. */
 static char *c4fPages[C4F_DIAG_PAGES];
@@ -222,7 +224,7 @@ static void *c4fKlogThread(void *unused)
     char line[C4F_KLOG_WIDTH * 2];
     for (;;) {
         pthread_mutex_lock(&c4fLock);
-        int quit = c4fQuit, want = c4fLauncherTimeMs() < c4fCaptureUntil;
+        int quit = c4fQuit, want = !c4fServiceUp && c4fLauncherTimeMs() < c4fCaptureUntil;
         pthread_mutex_unlock(&c4fLock);
         if (quit) break;
         if (want && fd < 0) {
@@ -303,7 +305,8 @@ void c4fDiagStart(int sandboxResult, int sandboxError)
     else snprintf(c4fBundled, sizeof(c4fBundled), "could not be read");
     c4fWriteAll(C4F_DIAG_KLOG, "", 0);
     c4fReaderStarted = pthread_create(&c4fKlogReader, NULL, c4fKlogThread, NULL) == 0;
-    c4fDiagCapture(4000); /* the backlog: GoldHEN, AutoRun and earlier runs */
+    /* The backlog (GoldHEN, AutoRun, earlier runs) is read at the first
+     * refresh, once it is known whether Control4Free runs. */
 }
 
 void c4fDiagStop(void)
@@ -332,7 +335,8 @@ void c4fDiagAfterStart(int result, const char *message)
     c4fStartTook = c4fLauncherTimeMs() - c4fStartedAt;
     snprintf(c4fStartMessage, sizeof(c4fStartMessage), "%s", message);
     c4fLastReport = 0; /* save the report straight away */
-    c4fDiagCapture(3000);
+    if (result) c4fDiagCapture(3000);
+    else { pthread_mutex_lock(&c4fLock); c4fCaptureUntil = 0; pthread_mutex_unlock(&c4fLock); }
 }
 
 /* ---- pages ---- */
@@ -426,7 +430,8 @@ static char *c4fSummary(const C4fDiagState *s)
     unsigned long long bytes = c4fKlogBytes;
     pthread_mutex_unlock(&c4fLock);
     c4fAdd(&t, "  kernel log: read %u time(s), %llu bytes, %u lines", opens, bytes, total);
-    if (error == 16) c4fAdd(&t, "; BUSY: a klog viewer is connected to GoldHEN (port 3232). Close it, press Options.\n");
+    if (s->running == 1) c4fAdd(&t, "; not read while Control4Free runs, which needs it to sign controllers in\n");
+    else if (error == 16) c4fAdd(&t, "; BUSY: a klog viewer is connected to GoldHEN (port 3232). Close it, press Options.\n");
     else if (error) c4fAdd(&t, "; last error errno %d\n", error);
     else c4fAdd(&t, "\n");
     c4fAdd(&t, "  report: %s\n", c4fReportNote[0] ? c4fReportNote : "not saved yet");
@@ -497,6 +502,11 @@ static void c4fSaveReport(void)
 
 unsigned c4fDiagRefresh(const C4fDiagState *state)
 {
+    pthread_mutex_lock(&c4fLock);
+    c4fServiceUp = state->running == 1;
+    if (c4fServiceUp) c4fCaptureUntil = 0;
+    pthread_mutex_unlock(&c4fLock);
+    if (!c4fRefreshed++ && state->running != 1) c4fDiagCapture(4000);
     char *pages[C4F_DIAG_PAGES] = {
         c4fSummary(state), c4fLogPage(C4F_DIAG_LOG), c4fLogPage(C4F_DIAG_LOG ".previous"),
         c4fKlogPage(1), c4fKlogPage(0),
