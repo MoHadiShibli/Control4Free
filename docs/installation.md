@@ -10,11 +10,31 @@ Control4Free comes in two pieces:
 
 ## Requirements
 
-- A PS4 with [GoldHEN](https://github.com/GoldHEN/GoldHEN). Tested on firmware 10.01, 13.02, 13.04 and 13.52,
-  with GoldHEN v2.4b18.10 and v2.4b18.12; 13.52 needs Control4Free 1.1.1 or later. Auto-start and GoldHEN's
-  Payloader LaunchPad need v2.4b18.10 or later.
+- A PS4 with [GoldHEN](https://github.com/GoldHEN/GoldHEN) v2.4b18.10 or later. Older GoldHEN versions don't
+  run ELF payloads like Control4Free reliably, and have no auto-start. See [Compatibility](#compatibility) for
+  each firmware.
 - **Debug Settings** turned on in GoldHEN, for the Package Installer.
 - A phone, tablet or computer with a modern browser, on the same network as the PS4.
+
+## Compatibility
+
+Every firmware GoldHEN supports has a GoldHEN version of v2.4b18.10 or later, so updating GoldHEN is all it
+takes. **Tested** means someone confirmed it on a console; the other rows have GoldHEN support and support in
+Control4Free's start-up code, but nobody has tried them yet.
+
+| Firmware | GoldHEN | Status |
+|---|---|---|
+| 10.01 | v2.4b18.10 or later | **Tested** (v2.4b18.10) |
+| 13.02, 13.04 | v2.4b18.12 or later | **Tested** (v2.4b18.12) |
+| 13.52 | v2.4b18.11 or later | **Tested** (v2.4b18.12), with Control4Free 1.1.1 or later |
+| 13.50 | v2.4b18.12 or later | Not tested |
+| 13.00 | v2.4b18.10 or later | Not tested |
+| 12.00, 12.02, 12.50, 12.52 | v2.4b18.10 or later | Not tested |
+| 5.05, 6.71, 6.72, 7.0x, 7.5x, 8.0x, 8.5x, 9.0x, 9.5x, 9.60, 10.00, 10.50, 10.70, 10.71, 11.0x, 11.5x | v2.4b18.10 or later | Not tested |
+
+The older a firmware, the less certain it is that the PS4's virtual-controller API behaves as on the tested
+ones. If you try an untested firmware, an issue saying whether it worked helps others, with a
+[diagnostic report](troubleshooting.md#reporting-a-problem) if it didn't.
 
 ## Install the app
 
