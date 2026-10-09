@@ -239,10 +239,10 @@ int c4fLauncherStart(const unsigned char *payload, size_t payloadSize, char *mes
     const char *targets[2];
     int count = c4fTargets(targets), fd = -1;
     for (int i = 0; i < count && fd < 0; i++) fd = c4fConnect(targets[i], C4F_PAYLOADER_PORT);
-    if (fd < 0) { snprintf(message, size, "PayLoader did not answer (errno %d). Turn it on in GoldHEN, then press Cross again.", errno); return -1; }
+    if (fd < 0) { snprintf(message, size, "PayLoader did not answer (errno %d). Turn it on in GoldHEN, then choose Start in Actions or press Cross.", errno); return -1; }
     int failed = c4fSendAll(fd, payload, payloadSize, c4fLauncherTimeMs() + 10000);
     shutdown(fd, SHUT_WR); close(fd);
-    if (failed) { snprintf(message, size, "The transfer to PayLoader broke off. Press Cross to try again."); return -2; }
+    if (failed) { snprintf(message, size, "The transfer to PayLoader broke off. Choose Start in Actions or press Cross to retry."); return -2; }
     uint64_t deadline;
     deadline = c4fLauncherTimeMs() + 20000;
     while (c4fLauncherTimeMs() < deadline) {
@@ -251,7 +251,7 @@ int c4fLauncherStart(const unsigned char *payload, size_t payloadSize, char *mes
         }
         usleep(250000);
     }
-    snprintf(message, size, "Sent, but Control4Free did not start (%s). Press Cross to try again.", c4fProblem);
+    snprintf(message, size, "Sent, but Control4Free did not start (%s). Choose Start in Actions or press Cross to retry.", c4fProblem);
     /* Sending again is safe: a copy that did start holds the payload's
      * instance lock, so a second one quits at once. */
     return -2;
@@ -261,7 +261,7 @@ int c4fLauncherStop(char *message, size_t size)
 {
     C4fServiceStatus status;
     int probe = c4fLauncherProbe(&status);
-    if (probe == 0) { snprintf(message, size, "Stopped. Press Cross to start it again."); return 0; }
+    if (probe == 0) { snprintf(message, size, "Stopped. Choose Start in Actions or press Cross to start it again."); return 0; }
     if (probe != 1 && !c4fReached) { snprintf(message, size, "The app cannot reach Control4Free (%s). Stop it on its controller page.", c4fProblem); return -1; }
     if (probe != 1) { snprintf(message, size, "This copy does not answer the app (%s). Stop it on its controller page.", c4fProblem); return -1; }
     char reply[256];
@@ -269,7 +269,7 @@ int c4fLauncherStop(char *message, size_t size)
     if (ret != 1) { snprintf(message, size, "Stop was not confirmed (%s). Check the controller page.", c4fProblem); return -1; }
     uint64_t deadline = c4fLauncherTimeMs() + 5000;
     while (c4fLauncherTimeMs() < deadline) {
-        if (c4fLauncherProbe(&status) == 0) { snprintf(message, size, "Stopped. Press Cross to start it again."); return 0; }
+        if (c4fLauncherProbe(&status) == 0) { snprintf(message, size, "Stopped. Choose Start in Actions or press Cross to start it again."); return 0; }
         usleep(100000);
     }
     snprintf(message, size, "Still stopping. Wait a moment, then try again."); return -1;

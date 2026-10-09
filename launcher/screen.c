@@ -9,6 +9,7 @@
 #include "autorun.h"
 #include "draw.h"
 #include "logo.h"
+#include "navigation.h"
 #include "qrcodegen.h"
 
 /* Page CSS pixels to TV pixels. */
@@ -443,16 +444,88 @@ static C4fLook c4fLookFor(const C4fLauncherScreen *s, char *meta, size_t metaSiz
                           meta, C4F_OK, C4F_ACCENT, 1 };
     } else if (s->running == 0 && s->autorun == C4F_AUTORUN_ON) {
         look = (C4fLook){ "Stopped", "Start Control4Free",
-                          "It starts with GoldHEN after each restart. To start it now, turn on GoldHEN's PayLoader "
-                          "and press Cross.",
+                          "It starts with GoldHEN after each restart. Turn on GoldHEN's PayLoader, then choose "
+                          "Start Control4Free in Actions or press Cross.",
                           "Not running", C4F_FAINT, C4F_FAINT, 0 };
     } else if (s->running == 0) {
         look = (C4fLook){ "Stopped", "Set up Control4Free",
-                          "Press Cross once. GoldHEN will start Control4Free each time it loads, and it starts "
-                          "right away if GoldHEN's PayLoader is on.",
+                          "Choose Set up and start in Actions, or press Cross. GoldHEN will start Control4Free "
+                          "each time it loads; it starts now if GoldHEN's PayLoader is on.",
                           "Not running", C4F_FAINT, C4F_FAINT, 0 };
     }
     return look;
+}
+
+/* The TV remote and controller share a visible action menu. Keep its rendering
+ * here so the normal and diagnostic screens use the same focus and confirmation. */
+void c4fDrawActionOverlay(uint32_t *pixels, const C4fLauncherScreen *s)
+{
+    if (!s->confirmStop && !s->actionMenu) return;
+    C4fCanvas c = { pixels, C4F_SCREEN_WIDTH, C4F_SCREEN_HEIGHT };
+    const float dw = 980;
+    const float dx = (c.w - dw) / 2;
+    int diagnostic = 0;
+#ifdef C4F_DIAG
+    diagnostic = 1;
+#endif
+    C4fLauncherAction actions[7];
+    int count = s->confirmStop ? 0 : c4fActionList(s, diagnostic, actions, 7);
+    const float dh = s->confirmStop ? (s->confirmMenu ? 410 : 330) : 220 + count * 72;
+    const float dy = (c.h - dh) / 2;
+    c4fFillRect(&c, 0, 0, c.w, c.h, C4F_RGBA(2, 11, 31, .65f));
+    c4fShadowRoundRect(&c, dx, dy, dw, dh, 6 * C4F_S, 0, 16 * C4F_S,
+                       34 * C4F_S, -18 * C4F_S, C4F_RGBA(0, 0, 0, .9f));
+    c4fPanel(&c, dx, dy, dw, dh, C4F_RGBA(2, 11, 31, .97f), C4F_LINE);
+    c4fBandRoundRect(&c, dx, dy, dw, dh, 6 * C4F_S, 3 * C4F_S, C4F_ACCENT);
+
+    if (s->confirmStop) {
+        c4fText(&c, C4F_FONT_LIGHT, 48, dx + 48, dy + 92, C4F_TEXT, "Stop Control4Free?");
+        c4fTextWrapped(&c, C4F_FONT_LIGHT, 26, dx + 48, dy + 148, dw - 96, 39, 2, C4F_MUTED,
+                       "Every controller disconnects. You can start Control4Free again from this screen.");
+        if (!s->confirmMenu) {
+            static const C4fHint hints[2] = { { C4F_KEY_CROSS, "Stop" }, { C4F_KEY_CIRCLE, "Cancel" } };
+            c4fHints(&c, dx + dw - 48, dy + dh - 58, hints, 2);
+            return;
+        }
+        const float bw = 240, gap = 24, by = dy + 235;
+        for (int i = 0; i < 2; i++) {
+            float bx = dx + dw - 48 - 2 * bw - gap + i * (bw + gap);
+            int focused = s->confirmChoice == i;
+            c4fFillRoundRect(&c, bx, by, bw, 64, 6 * C4F_S,
+                            focused ? C4F_RGBA(40, 103, 205, .85f) : C4F_TILE);
+            c4fInsetRoundRect(&c, bx, by, bw, 64, 6 * C4F_S,
+                             focused ? 3 : 1 * C4F_S, focused ? C4F_ACCENT : C4F_LINE);
+            c4fTextCentered(&c, C4F_FONT_REGULAR, 30, bx + bw / 2, by + 42,
+                            focused ? C4F_TEXT : C4F_MUTED, i ? "Stop" : "Cancel");
+        }
+        c4fText(&c, C4F_FONT_LIGHT, 23, dx + 48, dy + dh - 48, C4F_MUTED,
+                "Arrows / D-pad: select    OK / Cross: confirm    Back / Circle: cancel");
+        return;
+    }
+
+    c4fText(&c, C4F_FONT_LIGHT, 48, dx + 48, dy + 84, C4F_TEXT, "Actions");
+    c4fText(&c, C4F_FONT_LIGHT, 24, dx + 48, dy + 125, C4F_MUTED,
+            s->busy ? "Working... You can return to the screen." : "Use arrows or the D-pad to choose an action.");
+    int focus = 0;
+    for (int i = 0; i < count; i++) if ((int)actions[i] == s->actionFocus) focus = i;
+    for (int i = 0; i < count; i++) {
+        const float rx = dx + 32, ry = dy + 153 + i * 72, rw = dw - 64;
+        int focused = i == focus;
+        c4fFillRoundRect(&c, rx, ry, rw, 64, 6 * C4F_S,
+                        focused ? C4F_RGBA(40, 103, 205, .85f) : C4F_RGBA(255, 255, 255, .04f));
+        c4fInsetRoundRect(&c, rx, ry, rw, 64, 6 * C4F_S,
+                         focused ? 3 : 1 * C4F_S, focused ? C4F_ACCENT : C4F_LINE_SOFT);
+        c4fText(&c, C4F_FONT_REGULAR, 30, rx + 24, ry + 42,
+                focused ? C4F_TEXT : C4F_MUTED, c4fActionLabel(s, actions[i]));
+        if (focused) {
+            float cx = rx + rw - 30, cy = ry + 32;
+            c4fSegment(&c, cx - 5, cy - 9, cx + 4, cy, 3, C4F_TEXT);
+            c4fSegment(&c, cx + 4, cy, cx - 5, cy + 9, 3, C4F_TEXT);
+        }
+    }
+    static const C4fHint hints[2] = { { C4F_KEY_CROSS, "Select" }, { C4F_KEY_CIRCLE, "Back" } };
+    c4fText(&c, C4F_FONT_LIGHT, 23, dx + 48, dy + dh - 32, C4F_MUTED, "TV remote: OK select / Back return");
+    c4fHints(&c, dx + dw - 48, dy + dh - 40, hints, 2);
 }
 
 void c4fDrawLauncher(uint32_t *pixels, const C4fLauncherScreen *s)
@@ -529,7 +602,7 @@ void c4fDrawLauncher(uint32_t *pixels, const C4fLauncherScreen *s)
     if (mismatch) {
         snprintf(versions, sizeof(versions), "Installed %s; running %s", C4F_LAUNCHER_VERSION, s->runningVersion);
         panelTitle = versions;
-        panelText = "To apply this app's version now, press Square, confirm the stop with Cross, then press Cross to start. This disconnects all players.";
+        panelText = "Choose Stop in Actions, confirm, then Start to apply this app's version. Square, Cross, then Cross also works. All players disconnect.";
         panelDot = C4F_WARN;
     } else if (s->autorun == C4F_AUTORUN_ON) {
         panelTitle = "Starts by itself with GoldHEN";
@@ -538,12 +611,11 @@ void c4fDrawLauncher(uint32_t *pixels, const C4fLauncherScreen *s)
         panelDot = C4F_OK;
     } else if (s->autorun == C4F_AUTORUN_OUTDATED) {
         panelTitle = "Auto-start uses an older Control4Free";
-        panelText = "Press Triangle to switch GoldHEN's auto-start to this version. It takes effect after the "
-                    "next restart.";
+        panelText = "Choose Update auto-start in Actions or press Triangle. GoldHEN uses this version after the next restart.";
         panelDot = C4F_WARN;
     } else if (s->autorun == C4F_AUTORUN_OFF) {
         panelTitle = "Auto-start is off";
-        panelText = "Press Triangle and GoldHEN starts Control4Free each time it loads, with no PC needed.";
+        panelText = "Choose Turn auto-start on in Actions or press Triangle. GoldHEN then starts Control4Free each time it loads.";
     } else {
         panelTitle = "Auto-start status unknown";
         panelText = s->autorunNote[0] ? s->autorunNote : "Checking with GoldHEN...";
@@ -557,6 +629,8 @@ void c4fDrawLauncher(uint32_t *pixels, const C4fLauncherScreen *s)
                    panelText);
 
     /* .home-foot and the button guide. */
+    if (!s->confirmStop && !s->actionMenu)
+        c4fText(&c, C4F_FONT_LIGHT, 23, left, 973, C4F_MUTED, "TV remote: OK opens actions / arrows select / Back returns");
     c4fText(&c, C4F_FONT_LIGHT, 20, left, 1030, C4F_FAINT, "Control4Free " C4F_LAUNCHER_VERSION);
     if (!s->confirmStop && !s->busy) {
         C4fHint hints[4];
@@ -579,18 +653,7 @@ void c4fDrawLauncher(uint32_t *pixels, const C4fLauncherScreen *s)
         c4fHints(&c, right, 1022, hints, n);
     }
 
-    if (s->confirmStop) {
-        const float dw = 980, dh = 330, dx = (c.w - dw) / 2, dy = (c.h - dh) / 2;
-        static const C4fHint hints[2] = { { C4F_KEY_CROSS, "Stop" }, { C4F_KEY_CIRCLE, "Cancel" } };
-        c4fFillRect(&c, 0, 0, c.w, c.h, C4F_RGBA(2, 11, 31, .6f));
-        c4fShadowRoundRect(&c, dx, dy, dw, dh, 6 * C4F_S, 0, 16 * C4F_S, 34 * C4F_S, -18 * C4F_S, C4F_RGBA(0, 0, 0, .9f));
-        /* A little more opaque than --panel-strong, so the tiles do not ghost through. */
-        c4fPanel(&c, dx, dy, dw, dh, C4F_RGBA(2, 11, 31, .94f), C4F_LINE);
-        c4fText(&c, C4F_FONT_LIGHT, 48, dx + 48, dy + 96, C4F_TEXT, "Stop Control4Free?");
-        c4fTextWrapped(&c, C4F_FONT_LIGHT, 26, dx + 48, dy + 152, dw - 96, 39, 2, C4F_MUTED,
-                       "Every controller disconnects. You can start Control4Free again from this screen.");
-        c4fHints(&c, dx + dw - 48, dy + dh - 58, hints, 2);
-    }
+    c4fDrawActionOverlay(pixels, s);
 }
 
 void c4fDrawIcon(uint32_t *pixels, int size)

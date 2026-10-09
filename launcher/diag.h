@@ -15,7 +15,7 @@ extern "C" {
 
 typedef struct {
     int running, controllers, autorun, locked, busy, confirmStop;
-    const char *version, *problem, *message, *address, *autorunNote;
+    const char *version, *problem, *message, *address, *autorunNote, *inputNote;
 } C4fDiagState;
 
 /* Records what is known at start-up and reads the kernel log's backlog. */

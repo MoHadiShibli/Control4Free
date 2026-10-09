@@ -31,17 +31,30 @@ def embed_fonts():
                     f'c4fFontLight={sources[0]}', f'c4fFontRegular={sources[1]}'], check=True)
 
 
-def build_art_tool():
+def build_art_tool(diagnostic=False):
     """Host build of the launcher's drawing code, for the icon and previews."""
     embed_fonts()
+    art_version = VERSION + ('-diag' if diagnostic else '')
     flags = ['clang-18', '-std=gnu11', '-O2', '-D_DEFAULT_SOURCE', f'-I{ROOT}/launcher',
              f'-I{ROOT}/vendor/stb', f'-I{ROOT}/vendor/qrcodegen',
-             f'-DC4F_LAUNCHER_VERSION="{VERSION}"']
+             f'-DC4F_LAUNCHER_VERSION="{art_version}"']
+    extra_sources = []
+    extra_flags = []
+    art = ART
+    if diagnostic:
+        # Preview only: discard native startup/storage paths and retain the real
+        # diagnostic drawing function. Existing host declarations provide types;
+        # no console APIs or diagnostic file operations are called by this tool.
+        flags += ['-DC4F_DIAG', '-ffunction-sections', '-fdata-sections', f'-I{ROOT}/tests/include']
+        extra_sources = [str(ROOT / 'launcher/diag.c')]
+        extra_flags = ['-Wl,--gc-sections', '-pthread']
+        art = ART.with_name(ART.name + '-diag')
     stb = OUT / 'stb_truetype-host.o'
     subprocess.run([*flags, '-w', '-c', str(ROOT / 'launcher/stb_truetype.c'), '-o', str(stb)], check=True)
     subprocess.run([*flags, '-Wall', '-Wextra', '-Werror', str(ROOT / 'tools/launcher_art.c'),
-                    str(ROOT / 'launcher/screen.c'), str(ROOT / 'launcher/draw.c'), str(ROOT / 'launcher/logo.c'),
-                    str(ROOT / 'vendor/qrcodegen/qrcodegen.c'), str(FONTS), str(stb), '-lm', '-o', str(ART)],
+                    str(ROOT / 'launcher/screen.c'), str(ROOT / 'launcher/navigation.c'),
+                    str(ROOT / 'launcher/draw.c'), str(ROOT / 'launcher/logo.c'), *extra_sources,
+                    str(ROOT / 'vendor/qrcodegen/qrcodegen.c'), str(FONTS), str(stb), '-lm', *extra_flags, '-o', str(art)],
                    check=True)
 
 
@@ -86,10 +99,11 @@ def write_png(path, width, height, rgba, alpha=False):
                            chunk(b'IDAT', zlib.compress(b''.join(rows), 9)) + chunk(b'IEND', b''))
 
 
-def render(args, path, width, height):
+def render(args, path, width, height, diagnostic=False):
     """Draw with the art tool (build_art_tool first) and save a PNG."""
-    raw = OUT / 'art.rgba'
-    subprocess.run([str(ART), *args, str(raw)], check=True)
+    raw = OUT / ('art-diag.rgba' if diagnostic else 'art.rgba')
+    art = ART.with_name(ART.name + '-diag') if diagnostic else ART
+    subprocess.run([str(art), *args, str(raw)], check=True)
     write_png(path, width, height, raw.read_bytes())
     raw.unlink()
 

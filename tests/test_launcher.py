@@ -47,6 +47,14 @@ def one_reply(address, reply, check=None):
 
 def main():
     web.build()
+    # The launcher's own input reader and action navigation, with only the
+    # native PS4 pad calls replaced. This also exercises a remote-only launch.
+    for diagnostic in (False, True):
+        binary = 'build/launcher-input-diag-host-test' if diagnostic else 'build/launcher-input-host-test'
+        subprocess.run(['clang-18', '-std=gnu11', '-D_DEFAULT_SOURCE', '-Wall', '-Wextra', '-Werror',
+                        *(['-DC4F_DIAG'] if diagnostic else []), '-Ilauncher', 'launcher/input.c',
+                        'launcher/navigation.c', 'tests/launcher_input_test.c', '-o', binary], check=True)
+        subprocess.run([binary], check=True)
     subprocess.run(['clang-18', '-std=gnu11', '-D_DEFAULT_SOURCE', '-Wall', '-Wextra', '-Werror',
                     '-ffunction-sections', '-fdata-sections', '-Ilauncher', '-Itests/include',
                     'tests/diag_test.c', '-Wl,--gc-sections,--wrap=write,--wrap=fsync', '-pthread',
@@ -177,9 +185,16 @@ def main():
     sys.path.insert(0, str(ROOT / 'tools'))
     import package_launcher as package
     package.build_art_tool()
-    for state in ('setup', 'running', 'stopped', 'outdated', 'mismatch', 'confirm', 'busy', 'locked', 'unknown'):
+    for state in ('setup', 'running', 'stopped', 'outdated', 'mismatch', 'confirm', 'busy', 'locked', 'unknown',
+                  'remote-actions-stopped', 'remote-actions-running', 'remote-confirm-cancel',
+                  'remote-confirm-stop', 'remote-actions-busy', 'remote-actions-unavailable'):
         png = ROOT / f'build/launcher-preview-{state}.png'
         package.render(['screen', state], png, 1920, 1080)
+        assert png.stat().st_size > 50000, png
+    package.build_art_tool(diagnostic=True)
+    for state in ('remote-actions-diag', 'remote-confirm-diag'):
+        png = ROOT / f'build/launcher-preview-{state}.png'
+        package.render(['screen', state], png, 1920, 1080, diagnostic=True)
         assert png.stat().st_size > 50000, png
     package.render(['icon', '512'], ROOT / 'build/launcher-icon.png', 512, 512)
     assert subprocess.run([str(package.ART), 'screen', 'nonsense', '/dev/null']).returncode != 0

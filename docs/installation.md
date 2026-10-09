@@ -78,6 +78,9 @@ screen, that's fine too: the app doesn't get in the way of Control4Free.
 | **Square**, then **Cross** | Stops Control4Free and disconnects every controller. |
 | **Circle** | Closes the app. Control4Free keeps running without it. |
 
+TV-remote navigation is being tested in the development app. See the
+[HDMI-CEC test guide](hdmi-cec.md); the published package does not yet include it.
+
 ## Updating
 
 1. Install the new package over the old one. Delete the old app first if the installer refuses.

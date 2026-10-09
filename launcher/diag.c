@@ -396,6 +396,7 @@ static char *c4fSummary(const C4fDiagState *s)
     c4fAdd(&t, "\nThis app\n");
     c4fAdd(&t, "  version %s, bundled payload %s, open for %llu s\n", C4F_LAUNCHER_VERSION, c4fBundled,
            (unsigned long long)((c4fLauncherTimeMs() - c4fBootMs) / 1000));
+    c4fAdd(&t, "  input: %s\n", s->inputNote && s->inputNote[0] ? s->inputNote : "waiting");
 
     c4fAdd(&t, "\nService (port 4264)\n");
     if (s->running == 1) c4fAdd(&t, "  running, version %s, %d controller(s)\n", s->version, s->controllers);
@@ -579,11 +580,12 @@ void c4fDrawDiag(uint32_t *pixels, const C4fLauncherScreen *s)
              __DATE__, __TIME__, page + 1, C4F_DIAG_PAGES, c4fPageNames[page]);
     c4fText(&c, C4F_FONT_REGULAR, C4F_D_TITLE, C4F_D_LEFT, 48, C4F_D_ACCENT, line);
     c4fText(&c, C4F_FONT_REGULAR, C4F_D_SIZE, C4F_D_LEFT, 84, C4F_D_FAINT,
-            "L1 / R1: change page    Up / Down: scroll    Options: read the kernel log again    "
-            "Cross: start    Triangle: auto-start on/off    Square: stop    Circle: close");
+            "Left / Right: page    Up / Down: scroll    TV remote OK: actions    "
+            "Cross: start    Triangle: auto-start    Square: stop    Circle: close");
     c4fText(&c, C4F_FONT_REGULAR, C4F_D_SIZE, C4F_D_LEFT, 114, C4F_D_WARN,
             "Please take a screenshot of EVERY page (hold SHARE, or press SHARE then Triangle) and send them all.");
-    if (s->confirmStop) snprintf(line, sizeof(line), "Press Cross to stop Control4Free, or Circle to cancel.");
+    if (s->confirmStop) snprintf(line, sizeof(line), "%s", s->confirmMenu ?
+        "Select Cancel or Stop with the arrows, then press OK." : "Press Cross to stop Control4Free, or Circle to cancel.");
     else snprintf(line, sizeof(line), "%s%s", s->busy ? "WORKING: " : "Now: ", s->message);
     c4fText(&c, C4F_FONT_REGULAR, C4F_D_SIZE, C4F_D_LEFT, 146, C4F_D_TEXT, line);
     c4fFillRect(&c, C4F_D_LEFT, 160, (int)width, 1, C4F_D_LINE);
@@ -591,7 +593,7 @@ void c4fDrawDiag(uint32_t *pixels, const C4fLauncherScreen *s)
     pthread_mutex_lock(&c4fLock);
     char *text = strdup(c4fPages[page] ? c4fPages[page] : "(not read yet)");
     pthread_mutex_unlock(&c4fLock);
-    if (!text) return;
+    if (!text) { c4fDrawActionOverlay(pixels, s); return; }
 
     /* Wrap every line, then show the window the scroll position picks. */
     int count = 0, capacity = 256;
@@ -626,8 +628,12 @@ void c4fDrawDiag(uint32_t *pixels, const C4fLauncherScreen *s)
     }
     snprintf(line, sizeof(line), "lines %d-%d of %d", count ? first + 1 : 0, first + visible < count ? first + visible : count, count);
     c4fText(&c, C4F_FONT_REGULAR, C4F_D_SIZE, C4F_D_LEFT, 1072, C4F_D_FAINT, line);
+    const char *remoteHint = "TV remote: OK actions / Back returns    L1 / R1: page    Options: kernel log";
+    c4fText(&c, C4F_FONT_REGULAR, C4F_D_SIZE, C4F_SCREEN_WIDTH - C4F_D_LEFT -
+            c4fTextWidth(C4F_FONT_REGULAR, C4F_D_SIZE, remoteHint), 1072, C4F_D_FAINT, remoteHint);
     free(rows);
     free(text);
+    c4fDrawActionOverlay(pixels, s);
 }
 
 int c4fDiagMaxScroll(int page)

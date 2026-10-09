@@ -1,13 +1,17 @@
 /* Renders launcher artwork on the build machine with the launcher's own drawing
  * code: the package icon, and screen states for review. Writes raw RGBA.
  *   launcher_art icon <size> <out.rgba>
- *   launcher_art screen <setup|running|stopped|outdated|confirm|busy|locked|unknown> <out.rgba> */
+ *   launcher_art screen <state> <out.rgba>
+ * Includes TV-remote action and confirmation states. */
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include "autorun.h"
 #include "logo.h"
 #include "screen.h"
+#ifdef C4F_DIAG
+#include "diag.h"
+#endif
 
 static int c4fWrite(const char *path, const uint32_t *pixels, size_t count)
 {
@@ -54,18 +58,20 @@ int main(int argc, char **argv)
     snprintf(s.address, sizeof(s.address), "http://192.168.1.20:4264");
     const char *state = argv[2], *message = "";
     s.autorun = C4F_AUTORUN_ON;
-    if (!strcmp(state, "running") || !strcmp(state, "confirm") || !strcmp(state, "outdated") || !strcmp(state, "mismatch")) {
+    if (!strcmp(state, "running") || !strcmp(state, "confirm") || !strcmp(state, "outdated") || !strcmp(state, "mismatch") ||
+        !strcmp(state, "remote-actions-running") || !strcmp(state, "remote-confirm-cancel") ||
+        !strcmp(state, "remote-confirm-stop") || !strcmp(state, "remote-confirm-diag")) {
         s.running = 1; s.controllers = 2; s.confirmStop = !strcmp(state, "confirm");
         if (!strcmp(state, "outdated")) s.autorun = C4F_AUTORUN_OUTDATED;
         if (!strcmp(state, "mismatch")) snprintf(s.runningVersion, sizeof(s.runningVersion), "older build");
         message = "Ready. Open the address on your phone or PC.";
     } else if (!strcmp(state, "setup")) {
         s.autorun = C4F_AUTORUN_OFF; message = "Not running.";
-    } else if (!strcmp(state, "stopped")) {
-        message = "Stopped. Press Cross to start it again.";
-    } else if (!strcmp(state, "busy")) {
+    } else if (!strcmp(state, "stopped") || !strcmp(state, "remote-actions-stopped") || !strcmp(state, "remote-actions-diag")) {
+        message = "Stopped. Choose Start in Actions or press Cross to start it again.";
+    } else if (!strcmp(state, "busy") || !strcmp(state, "remote-actions-busy")) {
         s.running = -1; s.busy = 1; s.autorun = C4F_AUTORUN_UNKNOWN; message = "Setting up Control4Free. Please wait...";
-    } else if (!strcmp(state, "locked")) {
+    } else if (!strcmp(state, "locked") || !strcmp(state, "remote-actions-unavailable")) {
         s.running = -1; s.locked = 1;
         message = "Could not initialize launcher. Close with PS and retry.";
     } else if (!strcmp(state, "unknown")) {
@@ -75,9 +81,22 @@ int main(int argc, char **argv)
     } else {
         return 2;
     }
+    if (!strncmp(state, "remote-actions-", 15)) {
+        s.actionMenu = 1;
+        s.actionFocus = !strcmp(state, "remote-actions-running") ? C4F_ACTION_STOP :
+                        !strcmp(state, "remote-actions-stopped") ? C4F_ACTION_START :
+                        !strcmp(state, "remote-actions-diag") ? C4F_ACTION_CAPTURE : C4F_ACTION_RESUME;
+    } else if (!strncmp(state, "remote-confirm-", 15)) {
+        s.confirmStop = s.confirmMenu = 1;
+        s.confirmChoice = !strcmp(state, "remote-confirm-stop");
+    }
     snprintf(s.message, sizeof(s.message), "%s", message);
     uint32_t *pixels = calloc((size_t)C4F_SCREEN_WIDTH * C4F_SCREEN_HEIGHT, sizeof(uint32_t));
     if (!pixels) return 2;
+#ifdef C4F_DIAG
+    c4fDrawDiag(pixels, &s);
+#else
     c4fDrawLauncher(pixels, &s);
+#endif
     return c4fWrite(argv[3], pixels, (size_t)C4F_SCREEN_WIDTH * C4F_SCREEN_HEIGHT);
 }

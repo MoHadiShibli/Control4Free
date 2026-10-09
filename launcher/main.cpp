@@ -13,6 +13,8 @@
 #include <orbis/UserService.h>
 #include <orbis/VideoOut.h>
 #include "autorun.h"
+#include "input.h"
+#include "navigation.h"
 #include "sandbox.h"
 #include "screen.h"
 #include "service.h"
@@ -111,7 +113,7 @@ static void *c4fWorker(void *)
             C4fLauncherScreen copy = c4fScreen;
             pthread_mutex_unlock(&c4fMutex);
             C4fDiagState diag = { running, status.controllers, autorun, copy.locked, copy.busy, copy.confirmStop,
-                                  status.version, problem, copy.message, copy.address, copy.autorunNote };
+                                  status.version, problem, copy.message, copy.address, copy.autorunNote, copy.inputNote };
             unsigned generation = c4fDiagRefresh(&diag);
             pthread_mutex_lock(&c4fMutex);
             c4fScreen.diagGeneration = generation;
@@ -166,6 +168,98 @@ static void c4fCloseVideo(void)
     if (c4fVideoSize) sceKernelReleaseDirectMemory(c4fVideoOffset, c4fVideoSize);
 }
 
+/* The pinned SDK omits this error from Pad.h. A handle already opened by the
+ * application can be borrowed, but must not be closed by our reader. */
+#define C4F_PAD_ERROR_ALREADY_OPENED 0x80920004u
+static_assert(C4F_INPUT_SYSTEM_USER == ORBIS_USER_SERVICE_USER_ID_SYSTEM, "system input user");
+static_assert(C4F_INPUT_PORT_STANDARD == ORBIS_PAD_PORT_TYPE_STANDARD, "standard input port");
+static_assert(C4F_INPUT_BUTTON_UP == ORBIS_PAD_BUTTON_UP, "Up button");
+static_assert(C4F_INPUT_BUTTON_RIGHT == ORBIS_PAD_BUTTON_RIGHT, "Right button");
+static_assert(C4F_INPUT_BUTTON_DOWN == ORBIS_PAD_BUTTON_DOWN, "Down button");
+static_assert(C4F_INPUT_BUTTON_LEFT == ORBIS_PAD_BUTTON_LEFT, "Left button");
+static_assert(C4F_INPUT_BUTTON_CROSS == ORBIS_PAD_BUTTON_CROSS, "OK button");
+static_assert(C4F_INPUT_BUTTON_CIRCLE == ORBIS_PAD_BUTTON_CIRCLE, "Back button");
+static_assert(C4F_INPUT_BUTTON_OPTIONS == ORBIS_PAD_BUTTON_OPTIONS, "Menu button");
+
+enum { C4F_INPUT_WAITING, C4F_INPUT_READY, C4F_INPUT_DISCONNECTED,
+       C4F_INPUT_OPEN_FAILED, C4F_INPUT_READ_FAILED, C4F_INPUT_USER_FAILED };
+
+typedef struct {
+    int initialized, handles[2], state[2];
+    uint32_t error[2], buttons[2];
+} C4fNativeInput;
+
+static const char *const c4fInputNames[] = { "DS4", "TV remote" };
+static const char *const c4fInputStates[] = {
+    "waiting", "ready", "disconnected", "open failed", "read failed", "user unavailable"
+};
+
+static void c4fNativeInputState(C4fNativeInput *input, int source, int state, int result)
+{
+    if (input->state[source] != state || input->error[source] != (uint32_t)result)
+        printf("[c4f-launcher] %s input: %s (0x%08x)\n",
+               c4fInputNames[source], c4fInputStates[state], (unsigned)result);
+    input->state[source] = state;
+    input->error[source] = (uint32_t)result;
+    if (state != C4F_INPUT_READY) input->buttons[source] = 0;
+}
+
+static int c4fNativeInitialUser(void *context, int32_t *user)
+{
+    int result = sceUserServiceGetInitialUser(user);
+    if (result) c4fNativeInputState((C4fNativeInput *)context, 0, C4F_INPUT_USER_FAILED, result);
+    return result;
+}
+
+static int c4fNativeOpen(void *context, int32_t user, int port, int *owned)
+{
+    C4fNativeInput *input = (C4fNativeInput *)context;
+    int source = port == ORBIS_PAD_PORT_TYPE_STANDARD ? 0 : 1;
+    *owned = 0;
+    if (!input->initialized) {
+        int result = scePadInit();
+        if (result) {
+            c4fNativeInputState(input, source, C4F_INPUT_OPEN_FAILED, result);
+            return -1;
+        }
+        input->initialized = 1;
+    }
+    int handle = scePadOpen(user, port, 0, NULL);
+    if ((uint32_t)handle == C4F_PAD_ERROR_ALREADY_OPENED)
+        handle = scePadGetHandle(user, port, 0);
+    else if (handle >= 0)
+        *owned = 1;
+    input->handles[source] = handle;
+    if (handle < 0) c4fNativeInputState(input, source, C4F_INPUT_OPEN_FAILED, handle);
+    return handle;
+}
+
+static int c4fNativeRead(void *context, int handle, uint32_t *buttons, int *connected)
+{
+    C4fNativeInput *input = (C4fNativeInput *)context;
+    int source = handle == input->handles[0] ? 0 : 1;
+    OrbisPadData sample;
+    memset(&sample, 0, sizeof(sample));
+    int result = scePadReadState(handle, &sample);
+    *buttons = result == 0 && sample.connected ? sample.buttons : 0;
+    *connected = result == 0 && sample.connected;
+    c4fNativeInputState(input, source, result ? C4F_INPUT_READ_FAILED :
+                       sample.connected ? C4F_INPUT_READY : C4F_INPUT_DISCONNECTED, result);
+    input->buttons[source] = *buttons;
+    return result;
+}
+
+static void c4fNativeClose(void *, int handle) { scePadClose(handle); }
+
+static void c4fNativeInputNote(const C4fNativeInput *input, char *note, size_t size)
+{
+    char source[2][72];
+    for (int i = 0; i < 2; i++)
+        snprintf(source[i], sizeof(source[i]), "%s: %s (0x%08x)", c4fInputNames[i],
+                 c4fInputStates[input->state[i]], input->error[i] ? input->error[i] : input->buttons[i]);
+    snprintf(note, size, "%s; %s", source[0], source[1]);
+}
+
 int main(void)
 {
     const size_t frameBytes = (size_t)C4F_SCREEN_WIDTH * C4F_SCREEN_HEIGHT * sizeof(uint32_t);
@@ -184,9 +278,11 @@ int main(void)
     OrbisUserServiceInitializeParams params = {};
     params.priority = ORBIS_KERNEL_PRIO_FIFO_LOWEST;
     sceUserServiceInitialize(&params);
-    int32_t user = -1, pad = -1;
-    if (scePadInit() == 0 && sceUserServiceGetInitialUser(&user) == 0)
-        pad = scePadOpen(user, ORBIS_PAD_PORT_TYPE_STANDARD, 0, NULL);
+    C4fNativeInput nativeInput = {};
+    nativeInput.handles[0] = nativeInput.handles[1] = -1;
+    C4fInputOps inputOps = { &nativeInput, c4fNativeInitialUser, c4fNativeOpen, c4fNativeRead, c4fNativeClose };
+    C4fInput inputs;
+    c4fInputInit(&inputs, &inputOps);
     c4fScreen.running = -1; c4fScreen.busy = 1; c4fScreen.autorun = C4F_AUTORUN_UNKNOWN;
     snprintf(c4fScreen.message, sizeof(c4fScreen.message), "Checking Control4Free...");
     /* Read before leaving the sandbox: /app0 is only visible from inside it. */
@@ -201,50 +297,60 @@ int main(void)
 #endif
     pthread_t worker;
     int workerStarted = pthread_create(&worker, NULL, c4fWorker, NULL) == 0;
-    if (!workerStarted || pad < 0) {
+    if (!workerStarted) {
         pthread_mutex_lock(&c4fMutex);
         c4fScreen.locked = 1;
         snprintf(c4fScreen.message, sizeof(c4fScreen.message), "Could not initialize launcher. Close with PS and retry.");
         pthread_mutex_unlock(&c4fMutex);
     }
     sceSystemServiceHideSplashScreen();
-    uint32_t previous = 0;
+    uint64_t lastInputAt = c4fLauncherTimeMs();
     int buffer = 0, done = 0, drawn = 0, shown[2] = { 0, 0 };
     int64_t frame = 1;
     C4fLauncherScreen drawnState;
     memset(&drawnState, 0, sizeof(drawnState));
     while (!done) {
-        OrbisPadData input;
-        memset(&input, 0, sizeof(input));
-        uint32_t buttons = pad >= 0 && scePadReadState(pad, &input) == 0 && input.connected ? input.buttons : 0;
-        uint32_t pressed = buttons & ~previous;
-        previous = buttons;
+        uint64_t now = c4fLauncherTimeMs();
+        /* A suspended app must not resume a pending confirmation or reuse a
+         * held navigation button. Do not guess unreversed focus API signatures. */
+        int resumed = now > lastInputAt && now - lastInputAt > 1000;
+        if (resumed) c4fInputReset(&inputs, now);
+        lastInputAt = now;
+        C4fInputFrame input;
+        c4fInputPoll(&inputs, now, &input);
         pthread_mutex_lock(&c4fMutex);
-        if (!c4fScreen.busy) {
-            if (pressed & ORBIS_PAD_BUTTON_CIRCLE) {
-                if (c4fScreen.confirmStop) c4fScreen.confirmStop = 0;
-                else done = 1;
-            } else if (pressed & ORBIS_PAD_BUTTON_CROSS) {
-                if (c4fScreen.confirmStop) {
-                    c4fCommand = C4F_DO_STOP; c4fScreen.confirmStop = 0; c4fScreen.busy = 1;
-                    snprintf(c4fScreen.message, sizeof(c4fScreen.message), "Stopping and releasing controllers...");
-                } else if (!c4fScreen.locked && c4fScreen.running != 1) {
-                    /* Until auto-start is on, Cross sets it up and starts it. */
-                    int setUp = c4fScreen.autorun != C4F_AUTORUN_ON;
-                    c4fCommand = setUp ? C4F_DO_SET_UP : C4F_DO_START; c4fScreen.busy = 1;
-                    snprintf(c4fScreen.message, sizeof(c4fScreen.message), "%s",
-                             setUp ? "Setting up Control4Free. Please wait..." : "Starting Control4Free. Please wait...");
-                }
-            } else if ((pressed & ORBIS_PAD_BUTTON_TRIANGLE) && !c4fScreen.confirmStop &&
-                       c4fScreen.autorun != C4F_AUTORUN_UNKNOWN) {
-                int off = c4fScreen.autorun == C4F_AUTORUN_ON;
-                c4fCommand = off ? C4F_DO_AUTORUN_OFF : C4F_DO_AUTORUN_ON; c4fScreen.busy = 1;
-                snprintf(c4fScreen.message, sizeof(c4fScreen.message), "%s",
-                         off ? "Turning auto-start off..." : "Turning auto-start on...");
-            } else if ((pressed & ORBIS_PAD_BUTTON_SQUARE) && c4fScreen.running == 1) c4fScreen.confirmStop = 1;
+        c4fNativeInputNote(&nativeInput, c4fScreen.inputNote, sizeof(c4fScreen.inputNote));
+        if (resumed) {
+            c4fScreen.actionMenu = c4fScreen.confirmStop = c4fScreen.confirmMenu = 0;
+            c4fScreen.actionFocus = C4F_ACTION_NONE;
+        }
+        uint32_t standardUnhandled = 0, remoteUnhandled = 0;
+#ifdef C4F_DIAG
+        const int diagnostic = 1;
+#else
+        const int diagnostic = 0;
+#endif
+        C4fLauncherAction action = c4fNavigate(&c4fScreen, input.standard.pressed, input.remote.pressed,
+                                              diagnostic, &standardUnhandled, &remoteUnhandled);
+        if (action == C4F_ACTION_CLOSE) done = 1;
+        else if (action == C4F_ACTION_START) {
+            /* Until auto-start is on, Start sets it up and starts it. */
+            int setUp = c4fScreen.autorun != C4F_AUTORUN_ON;
+            c4fCommand = setUp ? C4F_DO_SET_UP : C4F_DO_START; c4fScreen.busy = 1;
+            snprintf(c4fScreen.message, sizeof(c4fScreen.message), "%s",
+                     setUp ? "Setting up Control4Free. Please wait..." : "Starting Control4Free. Please wait...");
+        } else if (action == C4F_ACTION_STOP) {
+            c4fCommand = C4F_DO_STOP; c4fScreen.busy = 1;
+            snprintf(c4fScreen.message, sizeof(c4fScreen.message), "Stopping and releasing controllers...");
+        } else if (action == C4F_ACTION_AUTORUN) {
+            int off = c4fScreen.autorun == C4F_AUTORUN_ON;
+            c4fCommand = off ? C4F_DO_AUTORUN_OFF : C4F_DO_AUTORUN_ON; c4fScreen.busy = 1;
+            snprintf(c4fScreen.message, sizeof(c4fScreen.message), "%s",
+                     off ? "Turning auto-start off..." : "Turning auto-start on...");
         }
 #ifdef C4F_DIAG
         /* Pages and scrolling work while busy too. */
+        uint32_t pressed = standardUnhandled | remoteUnhandled;
         int page = c4fScreen.diagPage;
         if (pressed & (ORBIS_PAD_BUTTON_R1 | ORBIS_PAD_BUTTON_RIGHT)) c4fScreen.diagPage = (page + 1) % C4F_DIAG_PAGES;
         if (pressed & (ORBIS_PAD_BUTTON_L1 | ORBIS_PAD_BUTTON_LEFT)) c4fScreen.diagPage = (page + C4F_DIAG_PAGES - 1) % C4F_DIAG_PAGES;
@@ -254,7 +360,7 @@ int main(void)
             at += pressed & ORBIS_PAD_BUTTON_UP ? -10 : 10;
             c4fScreen.diagScroll[page] = at >= max ? C4F_DIAG_END : at < 0 ? 0 : at;
         }
-        if (pressed & ORBIS_PAD_BUTTON_OPTIONS) c4fDiagCapture(4000);
+        if (action == C4F_ACTION_CAPTURE || (pressed & ORBIS_PAD_BUTTON_OPTIONS)) c4fDiagCapture(4000);
 #endif
         C4fLauncherScreen snapshot = c4fScreen;
         pthread_mutex_unlock(&c4fMutex);
@@ -286,7 +392,7 @@ int main(void)
 #ifdef C4F_DIAG
     c4fDiagStop();
 #endif
-    if (pad >= 0) scePadClose(pad);
+    c4fInputClose(&inputs);
     sceNetCtlTerm();
     c4fCloseVideo();
     free(canvas);

@@ -3,9 +3,20 @@
 Versions follow [Semantic Versioning](https://semver.org): PATCH for fixes, MINOR for features that break
 nothing, MAJOR for anything people rely on that changes.
 
+## 1.2.1 — 2026-10-10
+
+HDMI-CEC navigation for the PS4 app.
+
+- Added a TV-remote reader and an Actions menu to the PS4 app for HDMI-CEC navigation with
+  arrows and OK. Includes input recovery, separate Stop confirmation and diagnostic navigation.
+  PS4 hardware reception remains unverified; this build is for testing before publication.
+  See the [HDMI-CEC test guide](docs/hdmi-cec.md).
+
 ## 1.2.0 — 2026-10-09
 
 Gamepad mapping.
+
+![DS4 Mapping with an example gamepad](https://raw.githubusercontent.com/MoHadiShibli/Control4Free/v1.2.0/docs/images/mapping.png)
 
 - Map a gamepad on a DualShock 4: each control shows what drives it and lights up when pressed.
   Click a control, then press the gamepad button for it. Map browser-exposed inputs from gamepads, wheels,

@@ -184,7 +184,7 @@ int c4fAutorunCheck(char *problem, size_t size)
             state = installedSize == c4fBundledSize && !memcmp(installed, c4fBundled, installedSize) ? C4F_AUTORUN_ON : C4F_AUTORUN_OUTDATED;
         else if (errno == ENOENT) {
             state = C4F_AUTORUN_OUTDATED;
-            snprintf(problem, size, "Enabled, but the payload is missing; Triangle repairs it");
+            snprintf(problem, size, "Enabled, but the payload is missing; choose Update auto-start in Actions or press Triangle");
         } else {
             state = C4F_AUTORUN_UNKNOWN;
             snprintf(problem, size, "Enabled, but the payload cannot be inspected (errno %d)", errno);
