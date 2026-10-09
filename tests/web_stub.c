@@ -35,6 +35,57 @@
 
 static unsigned nextId = 0x11030d;
 static int logRead = -1, logWrite = -1;
+static pthread_mutex_t userLock = PTHREAD_MUTEX_INITIALIZER;
+static int32_t loginUsers[4] = {0x1a2b3c4d, 0x1a2b3c4e, -1, -1}, loginResult;
+static struct { int32_t type; uint32_t user; } userEvents[32];
+static unsigned userHead, userCount;
+
+static void setUsers(const char *line)
+{
+    int result;
+    unsigned ids[4];
+    if (sscanf(line, "C4F-TEST-USERS %d %x %x %x %x", &result, &ids[0], &ids[1], &ids[2], &ids[3]) != 5) return;
+    pthread_mutex_lock(&userLock);
+    loginResult = result;
+    for (int i = 0; i < 4; i++) loginUsers[i] = (int32_t)ids[i];
+    pthread_mutex_unlock(&userLock);
+    printf("USERS %d\n", result);
+}
+
+static void addUserEvent(const char *line)
+{
+    int type;
+    unsigned user;
+    if (sscanf(line, "C4F-TEST-USER-EVENT %d %x", &type, &user) != 2) return;
+    pthread_mutex_lock(&userLock);
+    if (userCount < 32) {
+        unsigned pos = (userHead + userCount++) % 32;
+        userEvents[pos].type = type; userEvents[pos].user = user;
+    }
+    pthread_mutex_unlock(&userLock);
+    printf("USER-EVENT %d\n", type);
+}
+
+int32_t c4fLoginUsers(int32_t out[4])
+{
+    pthread_mutex_lock(&userLock);
+    int32_t ret = loginResult;
+    for (int i = 0; i < 4; i++) out[i] = ret == 0 ? loginUsers[i] : -1;
+    pthread_mutex_unlock(&userLock);
+    return ret;
+}
+
+int32_t c4fUserEvent(int32_t *type, uint32_t *user)
+{
+    pthread_mutex_lock(&userLock);
+    int32_t ret = userCount ? 0 : -1;
+    if (userCount) {
+        *type = userEvents[userHead].type; *user = userEvents[userHead].user;
+        userHead = (userHead + 1) % 32; userCount--;
+    }
+    pthread_mutex_unlock(&userLock);
+    return ret;
+}
 
 /* What the "game" wants of each controller, by handle. */
 static struct { unsigned handle; C4fPadFeedback feedback; } feedbacks[8];
@@ -101,11 +152,13 @@ static void *relay(void *arg)
         ssize_t n = read(source, buf, sizeof(buf) - 1);
         if (n <= 0) return NULL;
         buf[n] = 0;
-        if (strstr(buf, "C4F-TEST-FEEDBACK")) {
+        if (strstr(buf, "C4F-TEST-FEEDBACK") || strstr(buf, "C4F-TEST-USERS") || strstr(buf, "C4F-TEST-USER-EVENT")) {
             char *save = NULL;
             for (char *line = strtok_r(buf, "\n", &save); line; line = strtok_r(NULL, "\n", &save)) {
                 char copy[sizeof(buf) + 1];
                 if (!strncmp(line, "C4F-TEST-FEEDBACK", 17)) { setFeedback(line); continue; }
+                if (!strncmp(line, "C4F-TEST-USERS", 14)) { setUsers(line); continue; }
+                if (!strncmp(line, "C4F-TEST-USER-EVENT", 19)) { addUserEvent(line); continue; }
                 snprintf(copy, sizeof(copy), "%s\n", line);
                 logLine(copy);
             }

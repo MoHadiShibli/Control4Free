@@ -34,6 +34,7 @@
 /* How often each controller's rumble and light bar are read back. Games pulse
  * rumble for a few tens of milliseconds, so this has to stay well under 100. */
 #define C4F_FEEDBACK_MS 16
+#define C4F_USER_POLL_MS 250
 
 typedef struct {
     C4fVirtualPad device;
@@ -41,7 +42,7 @@ typedef struct {
     ScePadData current, queue[C4F_QUEUE_SIZE];
     unsigned head, count;
     uint64_t lastInput, lastReport, nextReport, detachedAt, reports;
-    int active, stale, error, assigned;
+    int active, stale, error, assigned, loginSeen;
     uint32_t userId;
     /* What the game wants this controller to do, and what its owner was told. */
     C4fPadFeedback feedback;
@@ -95,7 +96,8 @@ typedef struct {
     char klogLine[1024];
     size_t klogUsed;
     C4fAdd add;
-    uint64_t broadcastAt, stopAt, heartbeatAt;
+    uint64_t broadcastAt, stopAt, heartbeatAt, usersAt;
+    int usersFailed;
 } C4fWeb;
 
 typedef struct {
@@ -245,6 +247,60 @@ static void c4fRemove(C4fWeb *app, C4fWebPad *p)
         c4fVirtualPadRemove(&p->device);
     }
     memset(p, 0, sizeof(*p)); app->changed = 1;
+}
+
+static void c4fLogoutPad(C4fWeb *app, C4fWebPad *p, int index)
+{
+    C4fNetClient *owner = p->owner;
+    if (owner) {
+        char message[64];
+        snprintf(message, sizeof(message), "{\"method\":\"v\",\"params\":[%d,0,0]}", index);
+        c4fNetText(owner, message);
+    }
+    c4fLog("web controller %d disconnected after PS4 user logout\n", index + 1);
+    c4fRemove(app, p);
+    if (owner) c4fError(owner, NULL, 410, "The PS4 user signed out. Controller disconnected. Select it again to play.");
+}
+
+/* Assignment and name caches are not login state. UserService keeps working
+ * after we release /dev/klog. Logout events cover quick sign-in/sign-out;
+ * snapshots also recover a missed event. Never treat a failed snapshot or a
+ * user still entering the login list as logout. Foreground-user changes are
+ * irrelevant: several local users may play at once. */
+static void c4fPollUsers(C4fWeb *app, uint64_t now)
+{
+    if (now < app->usersAt) return;
+    app->usersAt = now + C4F_USER_POLL_MS;
+    for (int n = 0; n < 16; n++) {
+        int32_t type;
+        uint32_t user;
+        if (c4fUserEvent(&type, &user) != 0) break;
+        if (type != C4F_USER_EVENT_LOGOUT || user == 0xffffffffu) continue;
+        for (int i = 0; i < C4F_MAX_PADS; i++) {
+            C4fWebPad *p = &app->pads[i];
+            if (p->active && p->assigned && p->userId == user) c4fLogoutPad(app, p, i);
+        }
+    }
+    int assigned = 0;
+    for (int i = 0; i < C4F_MAX_PADS; i++) assigned |= app->pads[i].active && app->pads[i].assigned;
+    if (!assigned) return;
+    int32_t users[4];
+    int32_t ret = c4fLoginUsers(users);
+    if (ret != 0) {
+        if (!app->usersFailed) c4fLog("login session read failed (0x%08x); retaining controller assignments\n", (uint32_t)ret);
+        app->usersFailed = 1;
+        return;
+    }
+    if (app->usersFailed) c4fLog("login session reads recovered\n");
+    app->usersFailed = 0;
+    for (int i = 0; i < C4F_MAX_PADS; i++) {
+        C4fWebPad *p = &app->pads[i];
+        if (!p->active || !p->assigned) continue;
+        int present = 0;
+        for (int j = 0; j < 4; j++) if ((uint32_t)users[j] == p->userId) present = 1;
+        if (present) p->loginSeen = 1;
+        else if (p->loginSeen) c4fLogoutPad(app, p, i);
+    }
 }
 
 /* One report for one controller, taking the next queued sample if there is one. */
@@ -451,6 +507,8 @@ static void c4fKlogLine(C4fWeb *app, const char *line)
         for (int i = 0; i < C4F_MAX_PADS; i++) {
             C4fWebPad *p = &app->pads[i];
             if (p->active && p->device.deviceId == device) {
+                if (user == 0xffffffffu && p->assigned) { c4fLogoutPad(app, p, i); continue; }
+                if (user != p->userId) p->loginSeen = 0;
                 p->assigned = user != 0xffffffffu; p->userId = user; app->changed = 1;
                 p->userName[0] = 0; p->nameTries = 0; p->nameAt = 0;
                 c4fLog("web controller %d assignment confirmed=%d\n", i+1, p->assigned);
@@ -864,6 +922,7 @@ int c4fWebRun(int klogFd)
             } else c4fLog("listener recovered on port %d\n", C4F_WEB_PORT);
         }
         long klogBytes = c4fReadKlog(app);
+        c4fPollUsers(app, now);
         c4fReportPads(app);
         c4fPollFeedback(app, now);
         c4fLookUpNames(app, now);

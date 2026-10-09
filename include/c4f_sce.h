@@ -16,6 +16,11 @@
 int32_t sceUserServiceInitialize(void *params);
 /* The user's name as the PS4 shows it: an online ID, or a local account's name. */
 int32_t sceUserServiceGetUserName(int32_t userId, char *name, size_t size);
+typedef struct { int32_t userId[4]; } C4fUserServiceLoginList;
+typedef struct { int32_t event, userId; } C4fUserServiceEvent;
+int32_t sceUserServiceGetLoginUserIdList(C4fUserServiceLoginList *list);
+int32_t sceUserServiceGetEvent(C4fUserServiceEvent *event);
+#define C4F_USER_EVENT_LOGOUT 1
 
 #define C4F_USER_ID_INVALID (-1)
 

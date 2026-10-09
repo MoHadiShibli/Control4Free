@@ -170,6 +170,23 @@ int32_t c4fUserName(uint32_t userId, char *out, size_t size)
     return ret;
 }
 
+int32_t c4fLoginUsers(int32_t userIds[4])
+{
+    C4fUserServiceLoginList list = {{-1, -1, -1, -1}};
+    for (int i = 0; i < 4; i++) userIds[i] = C4F_USER_ID_INVALID;
+    int32_t ret = sceUserServiceGetLoginUserIdList(&list);
+    if (ret == 0) memcpy(userIds, list.userId, sizeof(list.userId));
+    return ret;
+}
+
+int32_t c4fUserEvent(int32_t *type, uint32_t *userId)
+{
+    C4fUserServiceEvent event = {-1, C4F_USER_ID_INVALID};
+    int32_t ret = sceUserServiceGetEvent(&event);
+    if (ret == 0) { *type = event.event; *userId = (uint32_t)event.userId; }
+    return ret;
+}
+
 void c4fPadDataNeutral(ScePadData *data)
 {
     (void)memset(data, 0, sizeof(*data));

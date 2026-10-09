@@ -9,7 +9,7 @@
   <a href="https://ko-fi.com/mohadishibli"><img src="https://img.shields.io/badge/Ko--fi-support%20this%20project-FF5E5B?logo=ko-fi&logoColor=white" alt="Support on Ko-fi"></a>
 </p>
 
-**Use your phone or PC as a PS4 controller everywhere: on the home screen, at sign-in, and in every game.**
+**Use your phone or PC as a PS4 controller: on the home screen, at sign-in, and in games.**
 
 Control4Free adds up to four extra DualShock 4 controllers to a jailbroken PS4. Open its page in a browser on
 your network, pick a controller, and choose who's playing on the PS4's own *"Who's using this controller?"*
@@ -22,11 +22,11 @@ others work through the phone or PC. There's nothing to install on the phone or 
 
 Controller plugins live inside games, so they can't reach the home screen or the sign-in screen. Control4Free
 is a GoldHEN payload that goes through Sony's own virtual-device system, the one Remote Play uses. The PS4
-sees a real controller, so it works wherever a DualShock does:
+sees a virtual DualShock 4, which provides:
 
 - **on the home screen and in every menu**, PS button included;
 - **at sign-in**, through the PS4's own user picker, for real users and guests alike;
-- **in every game**, with no per-game setup.
+- **in games**, with DS4 input and no per-game plugin setup. See the limits below for motion and accessories.
 
 ## Features
 
@@ -40,7 +40,8 @@ sees a real controller, so it works wherever a DualShock does:
   can run all four.
 - **A keyboard**, with keys you choose on the same picture.
 - **Your own gamepad mapping.** Map any gamepad on a picture of a DualShock 4: click a control, then press the
-  button you want. Works for gamepads the browser doesn't know, and for wheels, guitars and pedals too. See
+  button you want. Map browser-exposed buttons and axes from gamepads, wheels, guitars and pedals to DS4
+  controls; wheel and guitar model compatibility remains unverified. See
   [Gamepad mapping](docs/gamepad-mapping.md).
 - **Rumble and light bar.** When a game rumbles, your phone buzzes (Android), and so does your gamepad,
   though not every controller supports vibration in the browser. The page glows in the controller's
@@ -76,6 +77,7 @@ New to GoldHEN packages? The **[installation guide](docs/installation.md)** walk
 
 - **[Installation](docs/installation.md)**: requirements, installing, auto-start, updating, uninstalling.
 - **[Playing](docs/playing.md)**: signing in, touch, keyboard and gamepads, the layout editor, settings.
+- **[Gamepad mapping](docs/gamepad-mapping.md)**: profiles, calibration and using several input devices together.
 - **[Troubleshooting](docs/troubleshooting.md)**: the messages you might see and what to do about each.
 - **[How it works](docs/how-it-works.md)**: the virtual-device API, sign-in, and what runs where.
 - **[Protocol](docs/protocol.md)**: the WebSocket protocol between the page and the console.
@@ -95,8 +97,12 @@ New to GoldHEN packages? The **[installation guide](docs/installation.md)** walk
 
 ## Limitations
 
-- **The PS4 always sees a DualShock 4.** A wheel plays as sticks and triggers, so games that need a real
-  wheel or guitar don't accept it, and there's no force feedback.
+- **The PS4 always sees a DualShock 4.** Mapping does not provide native wheel or guitar identity, or wheel
+  force feedback. Games requiring native accessories are outside this release; native accessory emulation
+  remains a separate, unproven research question.
+- **Browser input limits apply.** Hidden buttons and lost input identity cannot be recovered by mapping.
+  With several Xbox controllers, some Chrome/Edge Windows backends combine their Xbox buttons; see the
+  [GameInput workaround](docs/troubleshooting.md#gamepads).
 - **Six pages at a time.** Up to six phones or computers can have the page open at once.
 - **No motion controls.** Browsers only give phone motion sensors to secure (`https`) pages, and the
   console's page is plain `http`.

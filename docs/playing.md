@@ -11,6 +11,10 @@
 Connect one controller at a time, and finish the user screen before the next person picks theirs. **Don't
 press PS while that screen is up**: it cancels the choice. PS works normally once you're signed in.
 
+Signing out of that user on the PS4 disconnects their virtual controllers. The page clears the user's name,
+returns to the home screen, and switches gamepads assigned to those controllers to **Off**. Pick a
+controller again to reconnect. Other signed-in players keep playing.
+
 The home screen shows all four controllers live:
 
 | State | Meaning |
@@ -66,13 +70,17 @@ the bottom of the home screen: click a control on the picture of the controller,
 Connect an Xbox, DualSense, Switch Pro or other gamepad to the phone or computer and press a button on it. It
 appears under **Gamepads on this device**:
 
-- a gamepad that turns up while a controller is open on the page drives that controller;
+- if a controller is open and has no gamepad assigned yet, the first new gamepad drives it;
 - otherwise, pick the controller each gamepad plays as. One computer can run all four controllers this way;
 - a row lights up while you use its gamepad, so you can tell which is which;
 - several gamepads can play as the same controller, a wheel and its pedals for example;
 - **Mapping** changes what its buttons and sticks do. See [Gamepad mapping](gamepad-mapping.md).
 
 Keep the page's window in front: browsers only read gamepads for the active window.
+
+With several Xbox controllers on Chrome or Edge for Windows, check that each Xbox button appears on its
+own gamepad in **Gamepad Controls**. Some browser backends combine those presses; see the
+[GameInput workaround](troubleshooting.md#gamepads). This is not a general Control4Free requirement.
 
 **"This browser only allows gamepads on secure pages."** Some browsers only offer gamepads on `https`
 pages, and the console's page is plain `http`. Save the page to the device (**Save page as** on a computer),

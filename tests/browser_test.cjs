@@ -2,10 +2,10 @@
 // Test instrumentation is inserted into the page in memory, never shipped.
 const { chromium } = require('playwright');
 const fs = require('node:fs'), assert = require('node:assert/strict'), { spawn } = require('node:child_process');
-const hook = '\nwindow.c4fTest = { ControllerMapping, mapper, profileStore, gamepadSources, pollGamepads, setGamepadPad, mergedState, renderGamepads, renderPads, openSettings, closeSettings, openPad, profileFor, loadProfiles, persistProfiles, clearDevice, getKeys: () => keymap };\n';
+const hook = '\nwindow.c4fTest = { ControllerMapping, mapper, profileStore, gamepadSources, pollGamepads, setGamepadPad, mergedState, renderGamepads, renderPads, openSettings, closeSettings, openPad, profileFor, loadProfiles, persistProfiles, clearDevice, applyStatus, status, getKeys: () => keymap };\n';
 const html = fs.readFileSync('/src/client/index.html', 'utf8').replace('\n  })();', hook + '  })();');
 fs.copyFileSync('/src/build/web-host-test', '/tmp/c4f-browser-service');
-const server = spawn('/tmp/c4f-browser-service', [], { stdio: ['ignore', 'pipe', 'pipe'] });
+const server = spawn('/tmp/c4f-browser-service', [], { env: { ...process.env, C4F_TEST_KLOG_FD: '0' }, stdio: ['pipe', 'pipe', 'pipe'] });
 server.on('error', error => console.error('Service harness:', error));
 server.stderr.on('data', data => console.error(data.toString()));
 server.stdout.on('data', data => { const rows = data.toString().split('\n').filter(line => !line.startsWith('FRAME') && line); if (rows.length) console.log(rows.join('\n')); });
@@ -25,6 +25,17 @@ const bindings = (page, output) => page.evaluate(o => c4fTest.mapper.draft.bindi
     // its local test service explicitly, as a user would allow local access.
     await context.grantPermissions(['local-network-access']);
     await context.addInitScript(() => {
+      window.testClaims = [];
+      window.testInputs = [];
+      const socketSend = WebSocket.prototype.send;
+      WebSocket.prototype.send = function(data) {
+        try {
+          const message = JSON.parse(data);
+          if (message.method === 'claim') testClaims.push(message.params);
+          if (message.method === 'u') testInputs.push(message.params);
+        } catch {}
+        return socketSend.call(this, data);
+      };
       window.testPads = [0, 1, 2].map(index => ({ index, id: index < 2 ? 'Synthetic standard controller' : 'Synthetic wheel / pedals',
         mapping: index < 2 ? 'standard' : '', connected: true, buttons: Array.from({ length: 24 }, () => ({ value: 0, pressed: false })), axes: Array(6).fill(0) }));
       Object.defineProperty(navigator, 'getGamepads', { value: () => { if (window.failPolling) throw Error('SecurityError'); return window.testPads; } });
@@ -37,8 +48,113 @@ const bindings = (page, output) => page.evaluate(o => c4fTest.mapper.draft.bindi
     await page.waitForFunction(() => window.c4fTest?.gamepadSources.size === 3);
     await page.waitForFunction(() => document.querySelector('#conn').dataset.conn === 'open');
     assert.equal(await page.locator('#addressForm').isHidden(), true, 'a page served by the PS4 never asks for its address');
-    await page.evaluate(() => { const h = c4fTest; h.setGamepadPad(0, 0); h.setGamepadPad(1, 1); h.setGamepadPad(2, 0); });
+    // Sign the first player in, open/sign in the second, and press the first
+    // gamepad's PS before, during and after that change. Assignment status and
+    // the currently open controller must not move one button to another slot.
+    await page.evaluate(() => { c4fTest.setGamepadPad(0, 0); c4fTest.openPad(0); });
+    await page.waitForFunction(() => c4fTest.status[0].mine && c4fTest.status[0].state === 'select');
+    server.stdin.write('DEVICE_OWNER_CHANGED [DeviceId:0x11030d][UserId:0x1a2b3c4d]\n');
+    await page.waitForFunction(() => c4fTest.status[0].state === 'ready' && c4fTest.status[0].user === 'Alex');
     await page.waitForFunction(() => !c4fTest.gamepadSources.get(0).waitNeutral);
+    await page.evaluate(() => { testPads[0].buttons[16].value = 1; });
+    await page.waitForFunction(() => document.querySelector('#psBtn').classList.contains('on'));
+    await page.evaluate(() => { testPads[0].buttons[16].value = 0; });
+    await page.waitForFunction(() => !(c4fTest.mergedState(0).buttons & 0x10000));
+    await page.evaluate(() => { c4fTest.setGamepadPad(1, 1); c4fTest.openPad(1); });
+    await page.waitForFunction(() => c4fTest.status[1].mine && c4fTest.status[1].state === 'select');
+    await page.evaluate(() => { testPads[0].buttons[16].value = 1; });
+    await page.waitForFunction(() => !!(c4fTest.mergedState(0).buttons & 0x10000));
+    assert.equal(await page.evaluate(() => c4fTest.mergedState(1).buttons & 0x10000), 0, 'PS moved while the second controller was choosing a user');
+    server.stdin.write('DEVICE_OWNER_CHANGED [DeviceId:0x12030d][UserId:0x1a2b3c4e]\n');
+    await page.waitForFunction(() => c4fTest.status[1].state === 'ready' && c4fTest.status[1].user.startsWith('Sam'));
+    assert.equal(await page.evaluate(() => c4fTest.gamepadSources.get(0).pad), 0, 'signing in another user reassigned the first source');
+    assert.equal(await page.evaluate(() => c4fTest.mergedState(1).buttons & 0x10000), 0, 'PS moved after the second controller signed in');
+    assert.equal(await page.locator('#psBtn').evaluate(e => e.classList.contains('on')), false, 'the second controller picture displayed the first controller PS');
+    await page.waitForFunction(() => !!(testInputs.findLast(p => p[0] === 0)?.[1] & 0x10000));
+    assert.equal(await page.evaluate(() => testInputs.findLast(p => p[0] === 1)?.[1] & 0x10000), 0, 'the first signed-in gamepad sent PS to the second slot');
+    await page.evaluate(() => { testPads[0].buttons[16].value = 0; });
+    await page.waitForFunction(() => !(c4fTest.mergedState(0).buttons & 0x10000));
+    await page.click('#backBtn');
+    await page.evaluate(() => c4fTest.setGamepadPad(2, 0));
+    console.log('PASS real browser: first PS stays with its signed-in player before, during and after the second sign-in');
+
+    // Identical gamepads still have independent PS inputs. The open controller
+    // view and physical enumeration order must not choose where a button goes.
+    await page.waitForFunction(() => c4fTest.status[0].mine && c4fTest.status[1].mine);
+    await page.evaluate(() => { c4fTest.setGamepadPad(2, -1); c4fTest.openPad(1); });
+    for (const targets of [[0, 1], [1, 0]]) {
+      for (const index of [0, 1]) {
+        const selection = await page.evaluate(({ index, pad }) => {
+          c4fTest.setGamepadPad(index, pad);
+          return [...new Set([1, ...[...c4fTest.gamepadSources.values()].map(s => s.pad).filter(p => p >= 0)])];
+        }, { index, pad: targets[index] });
+        await page.waitForFunction(selection => c4fTest.status.every(p => p.mine === selection.includes(p.pad)), selection);
+      }
+      await page.waitForFunction(() => c4fTest.status[0].mine && c4fTest.status[1].mine &&
+        !c4fTest.gamepadSources.get(0).waitNeutral && !c4fTest.gamepadSources.get(1).waitNeutral);
+      for (const index of [0, 1]) {
+        const target = targets[index], other = 1 - target;
+        await page.evaluate(index => { testPads[index].buttons[16].value = 1; }, index);
+        await page.waitForFunction(target => !!(c4fTest.mergedState(target).buttons & 0x10000), target);
+        assert.equal(await page.evaluate(other => c4fTest.mergedState(other).buttons & 0x10000, other), 0, 'PS leaked into the other virtual controller');
+        await page.waitForFunction(target => document.querySelector('#psBtn').classList.contains('on') === (target === 1), target);
+        await page.waitForFunction(target => !!(testInputs.findLast(p => p[0] === target)?.[1] & 0x10000), target);
+        assert.equal(await page.evaluate(other => testInputs.findLast(p => p[0] === other)?.[1] & 0x10000, other), 0, 'PS went to the wrong WebSocket slot');
+        await page.evaluate(index => { testPads[index].buttons[16].value = 0; }, index);
+        await page.waitForFunction(() => !(c4fTest.mergedState(0).buttons & 0x10000) && !(c4fTest.mergedState(1).buttons & 0x10000));
+        await page.waitForFunction(() => !document.querySelector('#psBtn').classList.contains('on'));
+      }
+      for (const firstReleased of [0, 1]) {
+        await page.evaluate(() => { testPads[0].buttons[16].value = testPads[1].buttons[16].value = 1; });
+        await page.waitForFunction(() => (c4fTest.mergedState(0).buttons & 0x10000) && (c4fTest.mergedState(1).buttons & 0x10000));
+        await page.evaluate(index => { testPads[index].buttons[16].value = 0; }, firstReleased);
+        await page.waitForFunction(targets => !(c4fTest.mergedState(targets[0]).buttons & 0x10000) && !!(c4fTest.mergedState(targets[1]).buttons & 0x10000),
+          [targets[firstReleased], targets[1 - firstReleased]]);
+        await page.evaluate(() => { testPads[0].buttons[16].value = testPads[1].buttons[16].value = 0; });
+        await page.waitForFunction(() => !(c4fTest.mergedState(0).buttons & 0x10000) && !(c4fTest.mergedState(1).buttons & 0x10000));
+      }
+    }
+    await page.evaluate(() => { c4fTest.setGamepadPad(0, 0); c4fTest.setGamepadPad(1, 1); c4fTest.setGamepadPad(2, 0); });
+    await page.click('#backBtn');
+    console.log('PASS real browser: independent PS buttons on identical gamepads, reversed assignments, simultaneous holds, both release orders, display and WebSocket routing');
+
+    // The two mapping tabs must read only the selected physical source, even
+    // when identical pads arrive in a different enumeration order. Guide can
+    // be exposed through pressed alone, rather than a positive analog value.
+    await page.evaluate(() => { window.testPads = [testPads[1], null, testPads[0], testPads[2]]; });
+    for (const selected of [0, 1]) {
+      await page.evaluate(index => c4fTest.mapper.open(index), selected);
+      await page.click('#mapTabs [data-tab="inputs"]');
+      for (const physical of [0, 1]) {
+        for (const value of [1, 0]) {
+          const changedAt = await page.evaluate(({ physical, value }) => {
+            const button = testPads.find(p => p?.index === physical).buttons[16];
+            button.value = value; button.pressed = true;
+            return performance.now();
+          }, { physical, value });
+          await page.waitForFunction(({ physical, changedAt }) =>
+            c4fTest.gamepadSources.get(physical).snapshot.buttons[16].pressed &&
+            c4fTest.mapper.renderedAt > changedAt, { physical, changedAt });
+          const expected = physical === selected;
+          assert.equal(await page.locator('#mapInputs [data-input="button:16"]').evaluate(e => e.classList.contains('on')), expected,
+            `raw Guide from gamepad ${physical} appeared on gamepad ${selected}`);
+          await page.click('#mapTabs [data-tab="pad"]');
+          await page.waitForFunction(() => c4fTest.mapper.renderedAt > performance.now() - 50);
+          assert.equal(await page.locator('.map-area [data-btn="PS"]').evaluate(e => e.classList.contains('on')), expected,
+            `mapped Guide from gamepad ${physical} appeared on gamepad ${selected}`);
+          await page.evaluate(physical => {
+            const button = testPads.find(p => p?.index === physical).buttons[16];
+            button.value = 0; button.pressed = false;
+          }, physical);
+          await page.waitForFunction(() => !document.querySelector('.map-area [data-btn="PS"]').classList.contains('on'));
+          await page.click('#mapTabs [data-tab="inputs"]');
+          await page.waitForFunction(() => !document.querySelector('#mapInputs [data-input="button:16"]').classList.contains('on'));
+        }
+      }
+      await page.click('#mapBack');
+    }
+    await page.evaluate(() => { window.testPads = testPads.filter(Boolean).sort((a, b) => a.index - b.index); });
+    console.log('PASS real browser: both mapping tabs isolate each PS input, including pressed-only Guide and sparse/reordered device enumeration');
 
     // The gamepad's row opens its mapping. While it's mapped it doesn't play;
     // the other gamepads do.
@@ -104,6 +220,22 @@ const bindings = (page, output) => page.evaluate(o => c4fTest.mapper.draft.bindi
     // its range set a step at a time; a pedal; a D-pad hat.
     await page.evaluate(() => c4fTest.mapper.open(2));
     await page.click('#mapTabs [data-tab="inputs"]');
+    assert.equal(await page.textContent('#mapPanel .map-panel-title'), 'Gamepad Controls');
+    assert.match(await page.textContent('#mapPanel'), /buttons and axes your browser detects/);
+    assert.match(await page.textContent('#mapStatus'), /Select a button or axis/);
+    await page.click('.in-axis[data-input="axis:4"]');
+    await page.click('#mapTabs [data-tab="pad"]');
+    assert.equal(await page.textContent('#mapPanel .map-panel-title'), 'DS4 Mapping', 'switching tabs clears the previous selection');
+    await control(page, 'CROSS');
+    await page.click('#mapTabs [data-tab="inputs"]');
+    assert.equal(await page.textContent('#mapPanel .map-panel-title'), 'Gamepad Controls', 'a selected DS4 control cannot hide the input guide');
+    await page.waitForFunction(() => getComputedStyle(document.querySelector('#mapTabs [data-tab="inputs"]')).backgroundColor === 'rgb(255, 255, 255)');
+    await page.screenshot({ path: '/src/build/gamepad-controls-guide.png' });
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.locator('#mapPanel').scrollIntoViewIfNeeded();
+    assert(await page.evaluate(() => document.querySelector('#mapView').scrollWidth <= innerWidth), 'input guide overflows on mobile');
+    await page.screenshot({ path: '/src/build/gamepad-controls-guide-mobile.png' });
+    await page.setViewportSize({ width: 1440, height: 1000 });
     await page.click('.in-axis[data-input="axis:4"]');
     await page.click('#mapPanel button:has-text("Make it drive")');
     await control(page, 'RS');
@@ -270,6 +402,28 @@ const bindings = (page, output) => page.evaluate(o => c4fTest.mapper.draft.bindi
     await page.waitForFunction(() => new DOMMatrix(getComputedStyle(document.querySelector('.map-area .ps-btn')).transform).a < .95);
     await page.evaluate(() => { testPads[0].buttons[16].value = 0; c4fTest.mapper.back(); });
     console.log('PASS real browser: PS press/release feedback from pointer, keyboard, gamepad and mapping tester');
+    // Earlier capture/index-reuse checks release the second source. Connect it
+    // again so ownership loss is tested with another player actually playing.
+    await page.evaluate(() => { c4fTest.setGamepadPad(1, 1); c4fTest.setGamepadPad(2, 2); });
+    await page.waitForFunction(() => c4fTest.status.slice(0, 3).every(p => p.mine) && !c4fTest.gamepadSources.get(1).waitNeutral);
+    await page.evaluate(() => { testPads[0].buttons[16].value = 1; testPads[1].buttons[0].value = 1; });
+    await page.waitForFunction(() => c4fTest.gamepadSources.get(0).buttons && c4fTest.gamepadSources.get(1).buttons);
+    const otherButtons = await page.evaluate(() => c4fTest.gamepadSources.get(1).buttons);
+    await page.evaluate(() => {
+      const h = c4fTest;
+      testClaims.length = 0;
+      h.applyStatus({ pads: h.status.map((p, i) => i === 0 || i === 2 ? { ...p, state: 'free', mine: false, open: false, connected: false, clients: 0, user: '', uid: 'unassigned-00000000' } : { ...p }) });
+    });
+    assert.equal(await page.locator('#home').isVisible(), true, 'logout closes the controller screen');
+    assert.equal(await page.evaluate(() => c4fTest.gamepadSources.get(0).pad), -1, 'logout clears the physical source selection');
+    assert.equal(await page.evaluate(() => c4fTest.gamepadSources.get(0).buttons), 0, 'logout clears held input');
+    assert.equal(await page.evaluate(() => c4fTest.gamepadSources.get(2).pad), -1, 'logout clears another affected controller');
+    assert.deepEqual(await page.evaluate(() => testClaims), [[1]], 'the remaining claim must not recreate a later logged-out slot');
+    assert.equal(await page.getAttribute('#gamepadList .gp-row[data-index="0"] [data-focus="pad--1"]', 'aria-checked'), 'true');
+    assert.equal(await page.evaluate(() => c4fTest.gamepadSources.get(1).pad), 1, 'another player stays selected');
+    assert.equal(await page.evaluate(() => c4fTest.gamepadSources.get(1).buttons), otherButtons, 'another player keeps their held input');
+    await page.evaluate(() => { testPads[0].buttons[16].value = 0; testPads[1].buttons[0].value = 0; });
+    console.log('PASS real browser: logout/ownership loss returns home and switches affected gamepads Off without dropping another player');
     assert.deepEqual(errors, []);
 
     // Actual served HTTP document works without instrumentation or grants.

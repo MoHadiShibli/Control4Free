@@ -11,7 +11,7 @@ details:
 - the phone or computer and browser you used;
 - what you did and what happened;
 - the service's log, if you can get it: `/data/control4free/control4free.log` on the PS4, over GoldHEN's FTP
-  server (port 2121). The previous run is kept in `control4free.log.previous`.
+  server (port 2121). The last segment of the previous run is kept in `control4free.log.previous`.
 
 The log contains your console's network address. Remove it before posting if you prefer.
 
@@ -78,10 +78,16 @@ Build without new warnings; the app is built with `-Werror`.
 
 ## Releasing
 
-1. Update `VERSION`, and add a section to `CHANGELOG.md`.
-2. Commit, tag `vX.Y.Z`, and push the tag.
-3. CI builds both images, runs the tests, and publishes the release with the ELF, the package and
-   `SHA256SUMS`. It refuses a tag that doesn't match `VERSION`.
+1. Update `VERSION` and the changelog's release date and notes. Review mapping, compatibility and
+   diagnostic documentation; distinguish hardware reports from emulated-input tests.
+2. Run all five Docker host suites and the browser/editor and emulated-gamepad checks. Build normal and
+   diagnostic packages without new warnings. Inspect launcher previews and browser layouts.
+3. Validate standard controllers on real hardware: simultaneous devices, source mixing, rumble,
+   reconnect, logout and rest/wake. Recheck firmware 10.01 and a modern tested firmware, and record the
+   results. Wheel/guitar model compatibility remains unverified until device reports establish it.
+4. Commit, tag `vX.Y.Z`, and push the tag when the release gates pass.
+5. CI checks the tag against `VERSION` and publishes `control4free.elf`, the normal package, the diagnostic
+   package and `SHA256SUMS`. Release-note documentation links point to that tag.
 
 ## Reviewing AI-written code
 

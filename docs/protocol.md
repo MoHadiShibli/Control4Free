@@ -37,10 +37,12 @@ handled.
   an `Invalid request` error.
 
 Controllers are numbered 0 to 3 in the protocol and 1 to 4 on screen.
+`<version>` in the examples is a placeholder for the service's version, read from `VERSION`.
+The control protocol remains version 2 and the launcher API remains version 1.
 
 | Method | Params | Reply |
 |---|---|---|
-| `info` | `[]` | `{"version": "1.1.0", "protocol": 2, "pads": 4}` |
+| `info` | `[]` | `{"version": "<version>", "protocol": 2, "pads": 4}` |
 | `status` | `[]` | A status object, below. |
 | `claim` | the controllers this connection wants, for example `[0]` or `[0, 2]` | A status object, once every controller in the claim exists. |
 | `u` | input, below | None. |
@@ -107,7 +109,7 @@ modules around it when you draw it.
 
 ```json
 {
-  "version": "1.1.0",
+  "version": "<version>",
   "protocol": 2,
   "pads": [
     {"pad": 0, "name": "Controller 1", "user": "Alex", "enabled": true, "open": true, "connected": true, "clients": 1,
@@ -131,11 +133,15 @@ modules around it when you draw it.
 
 ### Messages from the service
 
+PS4 user logout removes that user's virtual controllers. Their status becomes `free`, with `open`,
+`connected` and `mine` false, `clients: 0`, and an empty `user`. Owners receive `[pad, 0, 0]` to stop rumble
+and a disconnection message. Pages clear the affected selections instead of automatically claiming them.
+
 - `{"method": "s", "params": <status>}`: the status, whenever something changes and at least once a second.
 - `{"method": "v", "params": [pad, large, small]}`: rumble, 0 to 255 for each motor, sent to the controller's
   owner when it changes and when a connection takes the controller over. `[pad, 0, 0]` stops it.
 - `{"method": "error", "params": {"message": "…"}}`: a problem that isn't the reply to a request: a controller
-  removed for sitting unused, a request that couldn't be parsed, or an error for a request sent without an
+  removed for sitting unused or PS4 user logout, a request that couldn't be parsed, or an error for a request sent without an
   `id`.
 
 Errors in reply to a request:
@@ -158,7 +164,7 @@ if they carry an `Origin`, an `Upgrade`, a body or `Transfer-Encoding`. A browse
 cross-origin after a CORS preflight, which the service never answers, so websites can't use these.
 
 ```
-GET /api/status   →  {"application": "Control4Free", "api": 1, "version": "1.1.0", "controllers": 2, "stopping": false}
+GET /api/status   →  {"application": "Control4Free", "api": 1, "version": "<version>", "controllers": 2, "stopping": false}
 POST /api/stop    →  {"application": "Control4Free", "stopping": true}
 ```
 

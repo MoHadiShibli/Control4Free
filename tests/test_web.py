@@ -490,6 +490,120 @@ def main():
         server.close()
 
 
+def logout_regressions():
+    def users(server, result=0, ids=(0x1a2b3c4d, 0x1a2b3c4e)):
+        ids = list(ids) + [0xffffffff] * (4 - len(ids))
+        os.write(server.log, ('C4F-TEST-USERS ' + str(result) + ' ' + ' '.join(f'{i:x}' for i in ids) + '\n').encode())
+
+    def bind(server, handle, user):
+        os.write(server.log, f'DEVICE_OWNER_CHANGED [DeviceId:0x{handle:x}][UserId:0x{user:x}]\n'.encode())
+
+    def wait(c, predicate, timeout=2):
+        end = time.monotonic() + timeout
+        while time.monotonic() < end:
+            pads = c.request('status')['result']['pads']
+            for p in pads:
+                if p['mine']: c.input(p['pad'])
+            if predicate(pads): return pads
+            time.sleep(.03)
+        raise AssertionError(pads)
+
+    server = Server()
+    try:
+        c = server.c
+        c.request('claim', [0, 1])
+        bind(server, 0x11030d, 0x1a2b3c4d); bind(server, 0x12030d, 0x1a2b3c4e)
+        wait(c, lambda p: p[0]['user'] == 'Alex' and p[1]['state'] == 'ready')
+        time.sleep(.3)
+        assert 'released klog reader' in server.rows(), 'logout must work without a klog reader'
+        users(server, -5, ())
+        time.sleep(.3)
+        pads = c.request('status')['result']['pads']
+        assert pads[0]['mine'] and pads[0]['user'] == 'Alex', 'failed lookup is not logout'
+        # List order/foreground changes do not disconnect another logged-in player.
+        users(server, ids=(0x1a2b3c4e, 0x1a2b3c4d))
+        c.input(0); c.input(1); time.sleep(.3)
+        assert all(p['mine'] for p in c.request('status')['result']['pads'][:2])
+        os.write(server.log, b'C4F-TEST-FEEDBACK 11030d 80 30 64 0 0\n')
+        c.wait_for(lambda m: m.get('method') == 'v' and m['params'] == [0, 80, 30])
+        c.input(0, 0x10000); c.input(1, 0x4000)
+        adds = len([r for r in server.rows() if r.startswith('ADD ')])
+        users(server, ids=(0x1a2b3c4e,))
+        pads = wait(c, lambda p: not p[0]['open'])
+        assert pads[0]['state'] == 'free' and not pads[0]['mine'] and pads[0]['clients'] == 0 and pads[0]['user'] == ''
+        assert pads[0]['uid'].startswith('unassigned-') and pads[1]['mine'] and pads[1]['state'] == 'ready'
+        c.wait_for(lambda m: m.get('method') == 'v' and m['params'] == [0, 0, 0])
+        rows = server.rows(); removed = rows.index('REMOVE 11030d')
+        assert rows[removed - 1].split()[2:10] == ['11030d', '0', '128', '128', '128', '128', '0', '0'], rows[removed - 1]
+        c.input(0, 0x10000); c.input(1)
+        time.sleep(.1)
+        assert not c.request('status')['result']['pads'][0]['open']
+        assert len([r for r in server.rows() if r.startswith('ADD ')]) == adds, 'late input recreated a logged-out controller'
+        assert len([r for r in server.rows() if 'login session read failed' in r]) == 1
+        print('PASS logout snapshot after klog release: neutral/delete, clear name/ownership, stop rumble, preserve other player; failed reads and foreground changes safe', flush=True)
+    finally:
+        server.close()
+
+    server = Server()
+    try:
+        c = server.c
+        c.request('claim', [0, 1, 2])
+        bind(server, 0x11030d, 0x1a2b3c4d); bind(server, 0x12030d, 0x1a2b3c4d); bind(server, 0x13030d, 0x1a2b3c4e)
+        wait(c, lambda p: all(s['state'] == 'ready' for s in p[:3]))
+        os.write(server.log, b'C4F-TEST-USER-EVENT 1 1a2b3c4d\n')
+        pads = wait(c, lambda p: not p[0]['open'] and not p[1]['open'])
+        assert pads[2]['mine'] and pads[2]['state'] == 'ready'
+        assert all(pads[i]['user'] == '' for i in (0, 1))
+        print('PASS explicit logout removes every controller for that user while a different user stays connected', flush=True)
+    finally:
+        server.close()
+
+    server = Server()
+    try:
+        c = server.c
+        users(server, ids=())
+        c.request('claim', [0, 1])
+        bind(server, 0x11030d, 0x1a2b3c4d)
+        wait(c, lambda p: p[0]['state'] == 'ready')
+        time.sleep(.3)
+        assert c.request('status')['result']['pads'][0]['mine'], 'sign-in race treated as logout'
+        os.write(server.log, b'C4F-TEST-USER-EVENT 1 1a2b3c4d\n')
+        pads = wait(c, lambda p: not p[0]['open'])
+        assert pads[1]['mine'] and pads[1]['state'] == 'select'
+        # A known assigned controller losing its device owner is also removed.
+        bind(server, 0x12030d, 0x1a2b3c4e)
+        wait(c, lambda p: p[1]['state'] == 'ready')
+        # Keep a third unassigned pad so the assignment log reader remains open.
+        c.request('claim', [1, 2])
+        bind(server, 0x12030d, 0xffffffff)
+        wait(c, lambda p: not p[1]['open'])
+        print('PASS delayed initial login listing, fast logout event and explicit unassignment', flush=True)
+    finally:
+        server.close()
+
+    server = Server(C4F_TEST_ADD_DELAY='650')
+    try:
+        c = server.c
+        c.request('claim', [0]); bind(server, 0x11030d, 0x1a2b3c4d)
+        wait(c, lambda p: p[0]['state'] == 'ready')
+        replies = []
+        worker = threading.Thread(target=lambda: replies.append(c.request('claim', [0, 1])))
+        worker.start()
+        end = time.monotonic() + 2
+        while not any(r.startswith('ADD 12030d') for r in server.rows()):
+            assert time.monotonic() < end
+            time.sleep(.02)
+        os.write(server.log, b'C4F-TEST-USER-EVENT 1 1a2b3c4d\n')
+        worker.join(timeout=4)
+        assert replies and replies[0]['error']['code'] == 409, replies
+        pads = c.request('status')['result']['pads']
+        assert not pads[0]['open'] and not pads[1]['open'] and not pads[0]['mine']
+        assert 'REMOVE 12030d' in server.rows(), 'issued creation leaked after logout invalidated its retained slot'
+        print('PASS logout during pending claim: revalidation rejects it and cleans up only its new devices', flush=True)
+    finally:
+        server.close()
+
+
 def reliability():
     # Reserve retained and newly-created slots throughout a multi-device claim.
     server = Server(C4F_TEST_ADD_DELAY='1250')
@@ -580,4 +694,5 @@ def reliability():
 
 if __name__ == '__main__':
     main()
+    logout_regressions()
     reliability()

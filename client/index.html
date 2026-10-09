@@ -1704,6 +1704,7 @@
 
     function applyStatus(s) {
       if (!s || !Array.isArray(s.pads)) return;
+      let closePrimary = false;
       if (s.version && s.version !== conn.version) {
         conn.version = s.version;
         showVersion();
@@ -1715,13 +1716,17 @@
         const wasMine = st.mine;
         Object.assign(st, p, { known: true });
         if (wasMine && !st.mine) {
-          for (const src of gamepadSources.values()) if (src.pad === p.pad) src.pad = -1;
-          if (primaryPad === p.pad) closePad();
+          onRumble(p.pad, 0, 0);
+          for (const src of gamepadSources.values()) if (src.pad === p.pad) { src.pad = -1; clearDevice(src); }
+          if (primaryPad === p.pad) closePrimary = true;
           lastClaim = '';
         }
         // The game just opened this pad: make sure it gets our current state right away
         if (!wasOpen && st.open) lastSent[p.pad] = '';
       }
+      // Closing sends the remaining claim. Clear every lost source first so a
+      // logout affecting several controllers cannot recreate a later slot.
+      if (closePrimary) closePad();
       renderPads();
       renderPadLabel();
       if (gamepadSources.size) renderGamepads();
@@ -2885,6 +2890,12 @@
       src() { return this.index === null ? null : gamepadSources.get(this.index); },
       keyboard() { return this.source === 'keyboard'; },
       status(text) { $('#mapStatus').textContent = text || ''; },
+      guideStatus() {
+        if (this.keyboard()) return 'Click a DS4 control to change its key.';
+        return (this.tab === 'inputs'
+          ? 'Select a button or axis to inspect or change it.'
+          : 'Click a DS4 control, then choose the gamepad input for it.') + ' This gamepad stops playing until you leave.';
+      },
       // Changed since saved, or a different profile chosen for this gamepad.
       dirty() {
         if (!this.draft) return false;
@@ -2913,8 +2924,7 @@
         document.body.classList.remove('in-pad');
         mapView.hidden = false;
         this.render();
-        this.status(this.keyboard() ? 'Click a control to change its key.' :
-          'Click a control, then press the gamepad button for it. This gamepad stops playing until you leave.');
+        this.status(this.guideStatus());
       },
 
       // Leaves without saving. `quiet` when another view is about to take over.
@@ -3098,7 +3108,13 @@
         if (this.pick) return this.renderPick(panel);
         if (this.input) return this.renderInputPanel(panel);
         if (!this.target) {
-          panel.appendChild(el('h3', 'map-panel-title', this.keyboard() ? 'Keyboard' : 'Mapping'));
+          if (!this.keyboard() && this.tab === 'inputs') {
+            panel.appendChild(el('h3', 'map-panel-title', 'Gamepad Controls'));
+            panel.appendChild(el('p', 'hint', 'See the buttons and axes your browser detects, their live readings, and what they control on the DS4.'));
+            panel.appendChild(el('p', 'hint', 'Press a button or move a stick to identify it. Select its tile or bar to change its mapping. Axes also have response and range settings.'));
+            return;
+          }
+          panel.appendChild(el('h3', 'map-panel-title', this.keyboard() ? 'Keyboard' : 'DS4 Mapping'));
           panel.appendChild(el('p', 'hint', this.keyboard()
             ? 'Click a control on the controller to choose its key. Press keys to see what they do.'
             : 'Click a control on the controller to choose what drives it. Press anything on the gamepad to see what it does.' +
@@ -3830,7 +3846,9 @@
       mapper.importProfile(file);
     });
     for (const tab of $$('#mapTabs button')) tab.addEventListener('click', () => {
-      mapper.stopListening(); mapper.tab = tab.dataset.tab; mapper.pick = null; mapper.render();
+      mapper.stopListening(); mapper.tab = tab.dataset.tab;
+      mapper.target = ''; mapper.input = null; mapper.wizard = null; mapper.pick = null;
+      mapper.render(); mapper.status(mapper.guideStatus());
     });
     $('#mapStage').addEventListener('click', e => mapper.clickPicture(e));
     window.addEventListener('keydown', e => { if (!mapView.hidden && mapper.keyboard()) mapper.onKey(e); }, true);

@@ -126,6 +126,7 @@ or remove the `control4free.elf` line from `/data/GoldHEN/payloads.ini` by hand 
 |---|---|
 | `/data/payloads/control4free.elf` | The copy of the service that AutoRun starts. |
 | `/data/GoldHEN/payloads.ini` | GoldHEN's AutoRun list. The app adds or removes one line. |
-| `/data/control4free/control4free.log` | The service's log, with the previous run in `control4free.log.previous`. |
-| `/data/control4free/control4free.log.1` | The older part of the log, once it passes 1 MB. |
+| `/data/control4free/control4free.log` | The current service log, bounded to 1 MiB. |
+| `/data/control4free/control4free.log.1` | One older 1 MiB segment from the current run. |
+| `/data/control4free/control4free.log.previous` | The last segment of the previous run. |
 | `/data/control4free/instance.lock` | Keeps a second copy from starting next to the first. |

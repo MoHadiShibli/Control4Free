@@ -86,6 +86,44 @@ of Bluetooth, or the other way round), can also help.
 **A gamepad button does nothing after changing its mapping.** Let go of it and press it again: a button held
 down while a gamepad starts playing waits until it's released.
 
+**The Xbox button presses PS for another controller in Chrome or Edge on Windows.** The browser's
+Windows.Gaming.Input backend combines Xbox/Guide presses from several controllers and reports them on one
+gamepad. Other buttons can still belong to the correct gamepad. Check **Mapping → Gamepad Controls** on
+each device: if the wrong device's **B16** lights up, the browser has already lost the physical source.
+Control4Free cannot recover that source from the reported input. See the
+[Chromium implementation](https://chromium.googlesource.com/chromium/src/+/refs/heads/main/device/gamepad/wgi_data_fetcher_win.cc#419).
+
+On Windows 11, newer Chrome builds offer an experimental **Windows GameInput** backend with
+per-device Guide-button callbacks. If your browser offers it, open
+`chrome://flags/#enable-windows-gameinput-data-fetcher` (or search `edge://flags` in Edge), set it to
+**Enabled**, and relaunch. Reconnect the gamepads and repeat the **Gamepad Controls** check: each Xbox
+button should light **B16** only on its own gamepad. Confirm both PS buttons after assigning controllers.
+This resolved combined Xbox/Guide reporting in a two-controller user test on Chrome 154 and Windows 11.
+Controller models and connection modes were not recorded, and other input and haptic capabilities were
+not revalidated. The option remains experimental; input counts and haptics may change. Compare
+**Gamepad Controls**, including any extra paddles, and review saved profiles after changing the backend.
+If gamepads stop appearing, return the flag to **Default**.
+See Chromium's [backend selection](https://chromium.googlesource.com/chromium/src/+/refs/heads/main/device/gamepad/gamepad_platform_data_fetcher.h)
+and [per-device Guide handling](https://chromium.googlesource.com/chromium/src/+/refs/heads/main/device/gamepad/gameinput_data_fetcher.cc).
+
+GameInput is a workaround for this browser's multi-controller Guide reporting, not a general
+Control4Free requirement. The controller page cannot select a Windows input backend or change browser
+flags through the [Gamepad API](https://w3c.github.io/gamepad/). A permanent correction to this browser
+path requires a browser fix; a future PC app could choose its own per-device reader. The existing mapper
+can also use an independently reported button for PS.
+
+In older browser builds that offer **Enable Windows.Gaming.Input**, open
+`chrome://flags/#enable-windows-gaming-input-data-fetcher` (or search `edge://flags` in Edge), set it to
+**Disabled**, and relaunch the browser. Reconnect the gamepads, select their controllers again, and check
+both Xbox buttons independently. This switches those builds to per-device XInput; extra paddles, input
+counts and haptic capabilities may change, so review saved mappings. The flag is unavailable in some
+newer builds.
+
+If these options are unavailable or the raw Guide input still crosses devices, try Firefox on Windows
+or map an independently reported button to **PS button**
+using **DS4 Mapping → PS button → Change**. That replaces the Xbox/Guide binding. Remapping or swapping
+controller numbers alone cannot separate the combined Xbox-button signal.
+
 **The gamepad does nothing.** Keep the page's window in front, press a button on the gamepad after the page
 has loaded, and check it has a controller under **Gamepads on this device**.
 
@@ -133,8 +171,9 @@ log files. Please use it before you open an issue:
 5. [Open an issue](https://github.com/MoHadiShibli/Control4Free/issues/new/choose) and attach the
    screenshots.
 
-The app also saves the same report as text: `control4free-diag.txt` on a USB stick that was plugged in, and
-`/data/control4free/diag-report.txt` on the PS4. You can attach that instead of the screenshots. The report
+The app also attempts to save the same report as text: `control4free-diag.txt` on a plugged-in USB stick, and
+`/data/control4free/diag-report.txt` on the PS4. Its first page reports which saves succeeded. You can attach
+a saved report instead of the screenshots. The report
 shows your console's local network address. It only works inside your home network, but you can blur it.
 
 When you're done, install the normal package again over the diagnostic one, open it, press **Square**, then
@@ -142,6 +181,7 @@ When you're done, install the normal package again over the diagnostic one, open
 one back on auto-start.
 
 The service's own log is `/data/control4free/control4free.log` on the PS4, readable over GoldHEN's FTP
-server (port 2121). When it reaches 1 MB it moves to `control4free.log.1` and a new one starts; the previous
-run is in `control4free.log.previous`. The diagnostic app shows the end of each, and its first page says
+server (port 2121). Each active segment is bounded to 1 MiB: rollover moves it to `control4free.log.1` and
+starts a new one, replacing the older segment. The last segment of the previous run is in
+`control4free.log.previous`. The diagnostic app shows the end of each, and its first page says
 whether it managed to save the report.

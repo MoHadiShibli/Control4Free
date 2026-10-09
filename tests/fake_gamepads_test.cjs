@@ -223,7 +223,7 @@ async function runProfile(browser, profile) {
     await checkApi(page, profile);
     const row = page.locator('.gp-row[data-index="0"]');
     assert.equal(await row.locator('.gp-name').textContent(), profile.gamepad.id.value.replace(/\s*\(.*?\)\s*/g, ' ').trim());
-    assert.equal((await row.textContent()).includes('buttons may be mixed up'), profile.gamepad.mapping.value === '');
+    assert.equal(/buttons may be mixed up/i.test(await row.textContent()), profile.gamepad.mapping.value === '');
     assert((await row.textContent()).includes('Standard layout'));
     await row.locator('[data-focus="pad-0"]').click();
     await poll(page);

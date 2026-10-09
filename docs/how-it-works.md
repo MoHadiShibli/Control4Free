@@ -54,6 +54,12 @@ controller?"*. The service never presses anything itself: the choice is made on 
 the login manager logs `DEVICE_OWNER_CHANGED [DeviceId:…][UserId:…]`, which is how the page learns the
 controller is signed in.
 
+UserService logout events and the current local login list are checked independently of the assignment
+log. When a bound user signs out, their controllers are neutralized and removed, rumble is stopped, and
+status clears the user and ownership. A failed login-list read leaves controllers alone; a newly assigned
+user is first observed in the list before absence counts as logout. The browser clears affected gamepad
+selections and returns to its home screen, requiring an explicit choice to reconnect.
+
 None of this blocks. Creating a controller is a small state machine the main loop advances: drain the log's
 backlog, write a marker and wait for it to come back (proof that the reader really delivers), call
 `AddDevice`, wait for the line. The other players keep playing and keep being answered meanwhile.
@@ -77,8 +83,8 @@ turns it into a `ScePadData` sample and hands it to `scePadVirtualDeviceInsertDa
 - a short queue keeps every button press and release, so a quick tap can't fall between two reports, while
   stick movement only ever keeps the latest position.
 
-When a page stops sending, its buttons are released at once; after 3 seconds the controller goes neutral, and
-after 15 it's removed. A page that reconnects forgets which controllers it had; picking the same one again
+When a connection closes, its buttons are released at once. With no new input for 3 seconds the controller
+goes neutral, and after 15 it's removed. A page that reconnects forgets which controllers it had; picking the same one again
 within those 15 seconds gets it back, still signed in.
 
 Gamepad mapping happens on the page, before anything is sent. Each gamepad's inputs go through its profile's

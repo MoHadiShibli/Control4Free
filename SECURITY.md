@@ -19,8 +19,9 @@ can reach your PS4 over the network can:
 - stop Control4Free, which disconnects every controller;
 - see the names of the users signed in on the controllers.
 
-They cannot sign in as one of your users without someone at the PS4 choosing that
-user on the PS4's own screen, and they cannot see your screen.
+Controller input can operate the PS4's user-selection screen, so someone on your
+network can select an available user. The PS4's own login restrictions still apply.
+Control4Free does not stream the screen.
 
 Run Control4Free on a network you trust. Do not forward port 4264 through your
 router, and do not run it on open or guest Wi-Fi. When you are finished, stop it
@@ -51,8 +52,8 @@ for a controller page opened from a saved file, and the saved file is how gamepa
 work in browsers that only allow the Gamepad API on secure pages. A website can
 produce the same `Origin: null` from a sandboxed frame, so a page you have open
 while on your home network could take a free controller and press buttons, as
-anyone on your network can. It cannot take a controller someone is using, sign in
-as a user, or see your screen.
+anyone on your network can. It cannot take a controller someone is using or stream
+your screen, but its input can operate the user-selection screen.
 
 **One controller has one owner.** A slot is claimed by one WebSocket connection.
 Another device asking for the same slot is refused (409), and input never claims a

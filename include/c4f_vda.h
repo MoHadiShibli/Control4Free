@@ -77,6 +77,10 @@ int32_t c4fVirtualPadFeedback(const C4fVirtualPad *pad, C4fPadFeedback *out);
 /* The PS4's name for a user, as it shows it. Returns 0, or the call's error.
  * Not written to the log: people post logs in bug reports. */
 int32_t c4fUserName(uint32_t userId, char *out, size_t size);
+/* Current local login sessions, independently of cached names or pad assignment.
+ * Failed reads never mean a user logged out. Events are nonblocking. */
+int32_t c4fLoginUsers(int32_t userIds[4]);
+int32_t c4fUserEvent(int32_t *type, uint32_t *userId);
 
 /* A neutral sample: sticks centred, identity quaternion, connected. */
 void c4fPadDataNeutral(ScePadData *data);

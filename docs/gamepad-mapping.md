@@ -1,8 +1,15 @@
 # Gamepad mapping
 
-Any gamepad, wheel, guitar or other game controller the browser can see can play as one of the four
-controllers, with every button and stick doing what you choose. You map it on a picture of a DualShock 4. The
+Map the buttons and axes a browser exposes from gamepads, wheels, guitars and other input devices to one of
+the four virtual DualShock 4 controllers. Wheel and guitar model compatibility remains unverified; these
+are mapping capabilities, not native accessory emulation. You map on a picture of a DualShock 4. The
 keyboard is mapped the same way. Mappings are kept in the browser, like your layout.
+
+With several gamepads on Chrome or Edge for Windows, Xbox/Guide presses can be reported on the wrong
+gamepad by the browser. Check **Gamepad Controls** first; see the
+[Xbox-button workaround](troubleshooting.md#gamepads). Mapping cannot restore an input's missing source.
+
+![DS4 Mapping with an emulated example gamepad](images/mapping.png)
 
 ## Change a button
 
@@ -15,9 +22,10 @@ keyboard is mapped the same way. Mappings are kept in the browser, like your lay
 4. Click a control, press **Change**, then press the gamepad button you want for it.
 5. Press **Save**.
 
-**Add another** gives a control a second button, for example a back paddle that also presses Cross.
-**Remove** takes one away. A gamepad button drives one control, as a keyboard key does: give it to Circle, and
-Cross lets go of it.
+**Add another** gives a DS4 control another input, for example a back paddle that also presses Cross.
+Cross stays pressed until both inputs are released. **Remove** takes a binding away. Choosing **Change**
+moves the selected input from its previous control. The engine also accepts profiles with one input
+driving multiple outputs; see [Advanced profiles](#advanced-profiles).
 
 While you map a gamepad, it stops playing. Its controller stays connected, and everyone else keeps playing.
 When you leave, a button you're still holding does nothing until you let go of it, so nothing gets pressed by
@@ -54,6 +62,12 @@ A D-pad that the browser reports as a single axis (a "hat") works the same way: 
 ## Gamepad Controls
 
 The **Gamepad Controls** tab shows every button and axis on the gamepad, live, and what each one drives.
+Press a button or move a stick to identify its tile or bar. This view starts with the physical input;
+**DS4 Mapping** starts with the DS4 control you want to change. The guide panel follows the selected tab.
+The screenshots use an emulated gamepad to illustrate the editor.
+
+![Gamepad Controls showing the emulated gamepad's raw inputs](images/mapping-inputs.png)
+
 Click one to:
 
 - **Make it drive…** another control: click that control on the picture. For a stick, choose the direction.
@@ -63,18 +77,55 @@ Click one to:
   (let go, then all the way one way, then the other), a pedal or trigger (let go, then all the way), or a D-pad
   hat (let go, then up, right, down and left).
 
+The hat wizard infers diagonal values from the four directions. Test every diagonal afterward. A hat with
+different encoding needs its actual neutral and eight direction values in an advanced profile.
+
 ## Profiles
 
-A mapping is saved as a profile, named in the **Name** box. It's used for every gamepad of the same kind in this
-browser, now and when you connect one again. **Save** changes the profile for every connected gamepad using it.
-The **Profile** list switches between your profiles and the **Standard layout**, which can't be changed.
+A mapping is saved as a profile, named in the **Name** box. Choose that profile for each connected gamepad
+that should use it. **Save** updates every connected gamepad already using that profile; the editor lists
+the others affected. **Save as a new profile** branches a profile for only the selected gamepad.
+The browser remembers the last saved profile choice for matching device IDs, mapping types and input
+counts when a gamepad reconnects. The **Profile** list switches between your profiles and the
+**Standard layout**, which is immutable: editing and saving it creates a named profile.
 
 The **⋯** menu has **Save as a new profile**, **New empty profile**, **Back to the standard layout**, **Export to a
 file**, **Import from a file**, and **Delete this profile**, which asks you to press it twice. A profile made for a
 different gamepad says so: press **Fit it to this gamepad** to drop the inputs this one doesn't have.
 
+Imports open as drafts and do not overwrite an existing profile. Review bindings and calibration before
+**Save**, especially after fitting a different device. Missing inputs must be removed or corrected.
+Profiles use browser storage under `c4f.gamepadProfiles`; export them as a backup. Invalid data falls back
+safely, and a storage warning means changes will last only for this session.
+
 Several gamepads can play as the same controller, for example a wheel and a separate set of pedals: pick the
 same controller on both rows.
+
+## Advanced profiles
+
+Export a profile, edit its JSON, then import it for review. The file has
+`format: "control4free-controller-profile"`, `schema: 1`, and a `profile` containing its ID, name,
+device signature, bindings and calibration. Unknown file versions are rejected. Unknown versions already
+in browser storage are preserved, with changes limited to the session.
+
+Bindings can use a digital or pressure-sensitive button, a full axis, its positive or negative half,
+a calibrated pedal, or a hat direction. Outputs are DS4 buttons, stick axes or directions, and L2/R2
+pressure. This permits button-to-stick, button-to-trigger, axis-to-button and axis-to-trigger mapping.
+Duplicate a binding with a different `output` to make one input drive multiple actions.
+
+Each binding includes `invert`, `deadzone`, `saturation`, `exponent`, `activate` and `release`.
+The response curve is a power curve with exponent 1 for linear response. Analog-to-button bindings default
+to 50% activation and 40% release to avoid jitter. Default stick bindings retain the previous transfer
+behavior through `legacy`; remove that property when opting into tuning.
+
+Centered-axis calibration stores `min`, `center` and `max`, including asymmetric ranges. Pedal calibration
+stores `released` and `full`, which may be reversed. For combined pedals, use opposite halves of the axis.
+Hat calibration stores `values` in the order neutral, up, up-right, right, down-right, down, down-left,
+left, up-left, plus a `tolerance` that separates those values.
+
+Inputs sharing a controller are merged: buttons use OR, triggers use maximum pressure, opposing digital
+stick directions cancel, and analog sticks use the strongest displacement. Equal opposing analog
+contributions cancel. Values are converted to DS4 bytes after merging.
 
 ## The keyboard
 
@@ -87,7 +138,14 @@ Windows key can't be used.
 
 - Only what the browser can see can be mapped. Some extra buttons, like paddles, either aren't shown to
   browsers or send the same button as another one.
-- The PS4 always sees a DualShock 4: a wheel plays as sticks and triggers, so games that need a real wheel or
-  guitar don't accept it, and there is no force feedback.
-- Pedals combined into one axis by the device can't be split back into two.
+- The PS4 always sees a DualShock 4. Native wheel/guitar identity and wheel force feedback are not provided.
+  Native accessory emulation is unproven and outside this release; existing supported gamepad rumble remains.
+- A combined pedal axis can drive separate outputs, but simultaneous pedal positions lost by the device
+  cannot be recovered.
 - The page reads gamepads about 60 times a second, so a press shorter than that can be missed.
+- DS4 output uses 8-bit stick and trigger values; extra precision in a physical device is reduced.
+- Macros, turbo, toggles, chords and shifted layers are outside this release.
+
+When reporting compatibility, include the controller model, browser and OS versions, connection mode,
+exposed button/axis counts, working mappings and remaining limitations. Emulated-input tests are not
+real-device compatibility reports.

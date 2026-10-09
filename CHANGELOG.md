@@ -3,33 +3,38 @@
 Versions follow [Semantic Versioning](https://semver.org): PATCH for fixes, MINOR for features that break
 nothing, MAJOR for anything people rely on that changes.
 
-## 1.2.0 — 2026-10-08
+## 1.2.0 — 2026-10-09
 
 Gamepad mapping.
 
-- Map a gamepad on a picture of a DualShock 4: each control shows what drives it and lights up when pressed.
-  Click a control, then press the gamepad button for it. It works for gamepads the browser doesn't know, and
-  for wheels, guitars, pedals and arcade sticks, as DualShock 4 buttons, sticks and triggers. Sticks and
-  triggers show their position with a dead zone and a curve. **Everything it sends** shows every button and
+- Map a gamepad on a DualShock 4: each control shows what drives it and lights up when pressed.
+  Click a control, then press the gamepad button for it. Map browser-exposed inputs from gamepads, wheels,
+  guitars, pedals and arcade sticks to DualShock 4 buttons, sticks and triggers. Wheel and guitar model
+  compatibility remains unverified, and native accessory identity is not provided. Sticks and
+  triggers show their position with a dead zone and a curve. **Gamepad Controls** shows every button and
   axis live, and sets an axis's range a step at a time. See [Gamepad mapping](docs/gamepad-mapping.md).
-- Keyboard keys are chosen on the same picture.
-- Mappings are saved as profiles in the browser, used for every gamepad of the same kind, and can be exported
-  to a file and imported on another device.
+- Keyboard keys are chosen on the same screen.
+- Mappings are saved as named profiles in the browser. Save updates every connected gamepad using that
+  profile; Save as new gives the selected gamepad a separate profile. Profiles can be exported to a file
+  and imported on another device for review before saving.
 - Several gamepads can play as the same controller, for example a wheel and its pedals.
-- A button still held when a gamepad starts playing does nothing until it's let go.
 - A phone that drops off the network no longer keeps a connection to the PS4 open for ever. Before, enough of
   those could stop new phones and computers from opening the page.
 - When two people pick controllers at the same moment, one is asked to try again, instead of one taking the
   other's controller.
 - A controller the console refused input for recovers once it accepts input again.
-- The page only asks for the PS4's address when it was saved to the device and opened from there.
-- The address box takes a full address, such as `http://192.168.1.20:4264/`, and adds `:4264` when it's
-  missing.
+- Signing out of a PS4 user disconnects their virtual controllers and clears their names and browser
+  selections. Other signed-in players stay connected.
+- The mapping header aligns its controls, and gamepad rows group the device name, controller choice and
+  Mapping button. The PS button uses the PlayStation mark and shows press feedback.
+- Documented a Windows GameInput workaround for Xbox buttons crossing gamepads in affected Chrome/Edge
+  builds. A two-controller Chrome/Windows 11 test confirmed it; it is not a general requirement. See
+  [Gamepad troubleshooting](docs/troubleshooting.md#gamepads).
 - A touch on the touchpad that the browser cancels no longer clicks it.
 - Keys with Ctrl, Alt or the Windows key can't be chosen any more: they never worked in play.
 - The app on the PS4 says when the Control4Free running is a different version from the app, and how to switch.
   It tells a missing auto-start copy apart from auto-start being off.
-- The service's log stays under 2 MB, however long it runs.
+- Active service logs are bounded to two 1 MiB files. The last segment of the previous run is kept separately.
 - The diagnostic app says whether it managed to save its report.
 
 ## 1.1.1 — 2026-10-07
