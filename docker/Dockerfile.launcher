@@ -1,7 +1,19 @@
-# Reuse the pinned OpenOrbis release from the existing plugin toolchain image.
-ARG OPENORBIS_IMAGE=xfangfang/goldhen_plugin@sha256:e3d2acad69a1905472bd9d73e373d1d0fb6d3ca293d9f9a6ba957b9b2f49fffc
-FROM ${OPENORBIS_IMAGE} AS openorbis
-FROM ubuntu:20.04 AS pkgcompat
+# The official release contains the same OpenOrbis files as the former pinned
+# toolchain image. Fetch it directly so this build needs no Docker Hub pulls.
+FROM control4free-build:latest AS openorbis
+ARG OPENORBIS_VERSION=v0.5.3
+ARG OPENORBIS_ARCHIVE=toolchain-llvm-18.2.zip
+ARG OPENORBIS_SHA256=5006bb8629a40093b712fac971456fa4d5ad3fafaadb16d11c10b8a93b8b496f
+RUN curl -fsSL --retry 3 -o /tmp/openorbis.zip \
+        "https://github.com/OpenOrbis/OpenOrbis-PS4-Toolchain/releases/download/${OPENORBIS_VERSION}/${OPENORBIS_ARCHIVE}" \
+    && echo "${OPENORBIS_SHA256}  /tmp/openorbis.zip" | sha256sum -c - \
+    && mkdir /tmp/openorbis \
+    && unzip -q /tmp/openorbis.zip -d /tmp/openorbis \
+    && tar -xzf /tmp/openorbis/toolchain-llvm-18.tar.gz -C /opt \
+    && test -f /opt/OpenOrbis/PS4Toolchain/lib/crt1.o \
+    && rm -rf /tmp/openorbis /tmp/openorbis.zip
+# Docker's official Ubuntu mirror, pinned to the same image as Docker Hub.
+FROM public.ecr.aws/docker/library/ubuntu:20.04@sha256:8feb4d8ca5354def3d8fce243717141ce31e2c428701f6682bd2fafe15388214 AS pkgcompat
 RUN apt-get update && apt-get install -y --no-install-recommends libssl1.1 \
     && rm -rf /var/lib/apt/lists/*
 FROM control4free-build:latest
