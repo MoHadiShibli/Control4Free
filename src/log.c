@@ -16,6 +16,10 @@
 static int g_logFd = -1;
 static int g_klogEnabled = 1;
 static uint64_t g_startedMs;
+static size_t g_logSize;
+#ifndef C4F_LOG_SEGMENT
+#define C4F_LOG_SEGMENT (1024u * 1024u)
+#endif
 
 static uint64_t c4fLogNowMs(void)
 {
@@ -31,12 +35,15 @@ void c4fLogOpen(void)
 {
     (void)mkdir("/data", 0777);
     (void)mkdir(C4F_LOG_DIR, 0777);
+    (void)unlink(C4F_LOG_PATH ".1");
     /* Keep the previous run for post-restart diagnosis. */
     if (rename(C4F_LOG_PATH, C4F_LOG_PATH ".previous") != 0 && errno != ENOENT)
         g_logFd = open(C4F_LOG_PATH, O_WRONLY | O_CREAT | O_APPEND, 0666);
     else
         g_logFd = open(C4F_LOG_PATH, O_WRONLY | O_CREAT | O_TRUNC, 0666);
     g_startedMs = c4fLogNowMs();
+    struct stat info;
+    g_logSize = g_logFd >= 0 && !fstat(g_logFd, &info) ? (size_t)info.st_size : 0;
     c4fLog("---- Control4Free %s; timestamps are elapsed time ----\n", C4F_VERSION);
 }
 
@@ -75,12 +82,20 @@ void c4fLog(const char *fmt, ...)
                             (unsigned long long)(elapsed % 1000), (int)length, p);
         if (g_klogEnabled) klog_printf("%s", line);
         if (g_logFd >= 0) {
+            if (g_logSize + (size_t)used > C4F_LOG_SEGMENT) {
+                (void)close(g_logFd); g_logFd = -1;
+                if (!rename(C4F_LOG_PATH, C4F_LOG_PATH ".1")) {
+                    g_logFd = open(C4F_LOG_PATH, O_WRONLY | O_CREAT | O_TRUNC, 0666);
+                    g_logSize = 0;
+                }
+            }
             size_t offset = 0;
-            while (offset < (size_t)used) {
+            while (g_logFd >= 0 && offset < (size_t)used) {
                 ssize_t written = write(g_logFd, line + offset, (size_t)used - offset);
                 if (written < 0 && errno == EINTR) continue;
                 if (written <= 0) break;
                 offset += (size_t)written;
+                g_logSize += (size_t)written;
             }
         }
         p += length + (end != NULL);

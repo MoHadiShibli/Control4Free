@@ -54,9 +54,10 @@ int main(int argc, char **argv)
     snprintf(s.address, sizeof(s.address), "http://192.168.1.20:4264");
     const char *state = argv[2], *message = "";
     s.autorun = C4F_AUTORUN_ON;
-    if (!strcmp(state, "running") || !strcmp(state, "confirm") || !strcmp(state, "outdated")) {
+    if (!strcmp(state, "running") || !strcmp(state, "confirm") || !strcmp(state, "outdated") || !strcmp(state, "mismatch")) {
         s.running = 1; s.controllers = 2; s.confirmStop = !strcmp(state, "confirm");
         if (!strcmp(state, "outdated")) s.autorun = C4F_AUTORUN_OUTDATED;
+        if (!strcmp(state, "mismatch")) snprintf(s.runningVersion, sizeof(s.runningVersion), "older build");
         message = "Ready. Open the address on your phone or PC.";
     } else if (!strcmp(state, "setup")) {
         s.autorun = C4F_AUTORUN_OFF; message = "Not running.";

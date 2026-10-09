@@ -338,10 +338,10 @@
 
     .gp-row {
       display: grid;
-      grid-template-columns: auto 1fr auto;
+      grid-template-columns: minmax(0, 1fr) auto;
       align-items: center;
-      gap: 14px;
-      padding: 12px 14px;
+      gap: 16px;
+      padding: 16px;
       border-radius: 6px;
       background: rgba(255, 255, 255, .05);
       box-shadow: inset 0 0 0 1px var(--line-soft);
@@ -349,9 +349,26 @@
     }
 
     .gp-row.active { box-shadow: var(--glow); }
-    .gp-row svg { width: 30px; height: 30px; color: var(--muted); }
-    .gp-name { font-size: 15px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-    .gp-sub { font-size: 12.5px; color: var(--muted); font-weight: 300; }
+    .gp-device { display: flex; align-items: center; gap: 12px; min-width: 0; }
+    .gp-device-icon { display: grid; place-items: center; flex: 0 0 40px; height: 40px; border-radius: 6px; background: rgba(255, 255, 255, .06); color: var(--muted); }
+    .gp-device-icon svg { width: 26px; height: 26px; }
+    .gp-details { display: grid; gap: 3px; min-width: 0; }
+    .gp-name { font-size: 15px; font-weight: 500; line-height: 1.4; overflow-wrap: anywhere; }
+    .gp-sub { font-size: 12.5px; line-height: 1.45; color: var(--muted); font-weight: 300; }
+    .gp-meta { display: flex; flex-wrap: wrap; gap: 2px 10px; }
+    .gp-meta > span { max-width: 100%; overflow-wrap: anywhere; }
+    .gp-profile::before { content: '·'; margin-right: 10px; }
+    .gp-note { font-size: 12.5px; line-height: 1.45; color: var(--muted); }
+    .gp-note.warning { color: var(--warn); }
+    .gp-assignment { display: grid; gap: 6px; }
+    .gp-assignment-label { font-size: 12px; color: var(--muted); }
+    .gp-actions { display: flex; align-items: flex-end; gap: 16px; }
+    .gp-row .seg { flex-wrap: nowrap; gap: 4px; }
+    .gp-row .seg button { height: 40px; font-variant-numeric: tabular-nums; }
+    .gp-row .gp-mapping { height: 40px; min-width: 96px; padding: 0 14px; font-size: 14px; }
+    .gp-row--settings { grid-template-columns: minmax(0, 1fr) auto; }
+    .gp-row--settings .gp-mapping { align-self: center; }
+    .gp-help { margin: 12px 0 0; font-size: 12.5px; line-height: 1.5; color: var(--muted); text-wrap: pretty; }
 
     .seg { display: flex; gap: 6px; flex-wrap: wrap; justify-content: flex-end; }
 
@@ -372,9 +389,18 @@
     .seg button:active { transform: scale(.95); }
     .seg button[aria-checked="true"] { background: #fff; color: #06215a; box-shadow: 0 0 0 2px var(--pc), 0 0 14px rgba(255, 255, 255, .45); }
 
+    @media (max-width: 760px) {
+      .gp-row { grid-template-columns: minmax(0, 1fr) auto; gap: 14px 10px; padding: 14px; }
+      .gp-device { align-items: flex-start; gap: 10px; }
+      .gp-profile::before { content: none; }
+      .gp-actions { display: contents; }
+      .gp-assignment { grid-column: 1 / -1; grid-row: 2; }
+      .gp-row .seg { justify-content: flex-start; }
+      .gp-row .seg button { flex: 1; }
+      .gp-row .gp-mapping { grid-column: 2; grid-row: 1; align-self: start; min-width: 0; padding: 0 12px; }
+    }
+
     @media (max-width: 560px) {
-      .gp-row { grid-template-columns: auto 1fr; }
-      .gp-row .seg { grid-column: 1 / -1; justify-content: flex-start; }
       /* A phone shows its own clock: give the connection status the room */
       .home .clock { display: none; }
     }
@@ -606,7 +632,7 @@
 
     .finger { position: absolute; width: calc(var(--u) * 7); height: calc(var(--u) * 7); margin: calc(var(--u) * -3.5) 0 0 calc(var(--u) * -3.5); border-radius: 50%; background: color-mix(in srgb, var(--accent) 45%, transparent); box-shadow: 0 0 0 1px color-mix(in srgb, var(--accent) 85%, transparent), 0 0 20px var(--accent); pointer-events: none; }
 
-    /* PS button: opens the menu */
+    /* PS button: round inset cap with the PlayStation mark (Tokyoship, CC BY 3.0). */
     .ps-btn {
       border-radius: 50%;
       display: grid;
@@ -614,11 +640,16 @@
       color: rgba(236, 240, 248, .75);
       background: radial-gradient(circle at 50% 30%, #414a5f 0%, #1a1f2b 72%);
       box-shadow: inset 0 1px 0 rgba(255, 255, 255, .2), 0 0 0 calc(var(--u) * .6) #121620, 0 0 0 calc(var(--u) * .6 + 1px) rgba(255, 255, 255, .08), 0 6px 16px -4px rgba(0, 0, 0, .8);
-      transition: transform .08s var(--ease);
+      transition: transform .08s var(--ease), filter .08s, box-shadow .12s, background .12s;
     }
 
-    .ps-btn:active { transform: scale(.92); }
-    .ps-btn svg { width: 46%; height: 46%; }
+    .ps-btn.on, .ps-btn:active {
+      transform: scale(.92);
+      color: #fff;
+      background: radial-gradient(circle at 50% 30%, color-mix(in srgb, var(--accent) 40%, #414a5f), color-mix(in srgb, var(--accent) 22%, #1a1f2b) 72%);
+      box-shadow: inset 0 0 0 1.5px color-mix(in srgb, var(--accent) 75%, transparent), 0 0 0 calc(var(--u) * .6) #121620, 0 0 calc(var(--u) * 3) -1px var(--accent);
+    }
+    .ps-btn svg { width: 58%; height: 58%; pointer-events: none; }
 
     /* Sticks: DualShock tops (hollow, with a ridged rim) in a sunken well that shows how far they move */
     .stick {
@@ -881,11 +912,227 @@
     .save-bar .save-status { flex: 1; min-width: 180px; font-size: 13.5px; color: var(--muted); font-weight: 300; }
     .save-bar .field { width: auto; }
 
-    .key-row { display: grid; grid-template-columns: 1fr auto; align-items: center; gap: 12px; min-height: 52px; padding: 8px 18px; border-top: 1px solid var(--line-soft); }
-    .key-row:first-child { border-top: 0; }
     .key-btn { min-width: 110px; height: 36px; padding: 0 14px; border: 0; border-radius: 4px; background: rgba(255, 255, 255, .1); box-shadow: inset 0 0 0 1px var(--line); font-size: 14px; }
     .key-btn:hover { box-shadow: var(--glow); }
     .key-btn.listening { background: #fff; color: #06215a; animation: pulse 1s ease-in-out infinite; }
+    /* ---------- Mapping: a DualShock 4 to map a gamepad or the keyboard onto ---------- */
+
+    .map-view { position: fixed; inset: 0; z-index: 4; display: flex; flex-direction: column; overflow-y: auto; overscroll-behavior: contain; }
+    .map-view .backdrop { z-index: -1; position: fixed; }
+
+    .map-top {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: flex-start;
+      gap: 12px 16px;
+      padding: max(10px, env(safe-area-inset-top)) max(22px, env(safe-area-inset-right)) 12px max(22px, env(safe-area-inset-left));
+    }
+
+    .map-what { display: grid; gap: 4px; min-width: 0; flex: 1 1 280px; }
+    .map-what .field { width: 100%; }
+    .map-source { height: 42px; max-width: 440px; font-size: 16px; }
+    .map-sub { font-size: 12.5px; color: var(--muted); font-weight: 300; }
+    .map-profile { display: flex; align-items: flex-end; flex-wrap: wrap; gap: 10px; }
+    .map-label { display: grid; gap: 4px; font-size: 12px; line-height: 16px; color: var(--muted); }
+    .map-profile .map-label .field { width: 200px; height: 42px; font-size: 14px; }
+    .map-top > .icon-btn { margin-top: 20px; }
+    .map-top .icon-btn { width: 42px; height: 42px; }
+    .map-menu-wrap { position: relative; }
+
+    .map-menu {
+      position: absolute;
+      right: 0;
+      top: calc(100% + 6px);
+      z-index: 6;
+      display: grid;
+      min-width: 240px;
+      padding: 6px;
+      border-radius: 8px;
+      background: var(--panel-strong);
+      box-shadow: inset 0 0 0 1px var(--line), 0 18px 40px -12px rgba(0, 0, 0, .9);
+    }
+
+    .map-menu button, .map-file { display: block; padding: 10px 12px; border: 0; border-radius: 5px; background: none; color: var(--text); font-size: 14px; text-align: left; cursor: pointer; transition: background .15s; }
+    .map-menu button:hover, .map-file:hover { background: rgba(255, 255, 255, .1); }
+    .map-menu button:disabled { opacity: .4; pointer-events: none; }
+    .map-menu .danger { color: var(--bad); }
+    .map-file input { display: none; }
+    .map-save { display: flex; align-items: center; gap: 10px; margin-left: auto; padding-top: 20px; }
+    .map-save .btn { height: 42px; }
+    .map-dirty { font-size: 13px; color: var(--warn); }
+
+    .map-banner {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 10px 14px;
+      margin: 0 max(22px, env(safe-area-inset-right)) 10px max(22px, env(safe-area-inset-left));
+      padding: 10px 14px;
+      border-radius: 6px;
+      background: rgba(255, 208, 77, .1);
+      box-shadow: inset 0 0 0 1px rgba(255, 208, 77, .4);
+      font-size: 14px;
+      line-height: 1.5;
+    }
+
+    .map-tabs { display: flex; gap: 6px; padding: 0 max(22px, env(safe-area-inset-right)) 12px max(22px, env(safe-area-inset-left)); }
+    .map-tabs button { height: 36px; padding: 0 16px; border: 0; border-radius: 4px; background: transparent; color: var(--muted); font-size: 14px; transition: background .2s, color .2s, box-shadow .2s; }
+    .map-tabs button:hover { color: #fff; background: rgba(255, 255, 255, .08); }
+    .map-tabs button[aria-selected="true"] { color: #06215a; background: #fff; }
+
+    .map-body {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) 360px;
+      align-items: start;
+      gap: 18px;
+      width: 100%;
+      max-width: 1400px;
+      margin: 0 auto;
+      padding: 0 max(22px, env(safe-area-inset-right)) 8px max(22px, env(safe-area-inset-left));
+    }
+
+    @media (max-width: 900px) { .map-body { grid-template-columns: 1fr; } }
+
+    .map-stage {
+      padding: 10px;
+      border-radius: 10px;
+      background:
+        radial-gradient(75% 95% at 10% -15%, color-mix(in srgb, var(--accent) 14%, transparent), transparent 62%),
+        #0b0e14;
+      box-shadow: inset 0 0 0 1px var(--line-soft), 0 16px 34px -18px rgba(0, 0, 0, .9);
+    }
+
+    .map-pad { position: relative; width: 100%; max-width: calc(64dvh * 2); aspect-ratio: 2 / 1; margin: 0 auto; }
+    .map-pad .pad-area { inset: 0; }
+    .map-area .ctl { cursor: pointer; }
+    .map-area .map-unset { opacity: .4; }
+    .map-area .map-sel:not(.arm) { outline: 2px solid var(--accent); outline-offset: 5px; }
+    .map-area .arm.map-sel { stroke: #fff; stroke-width: 3; }
+    .map-chips { position: absolute; inset: 0; z-index: 2; pointer-events: none; }
+
+    .map-chip {
+      position: absolute;
+      max-width: 128px;
+      padding: 2px 7px;
+      border: 0;
+      border-radius: 5px;
+      background: rgba(2, 11, 31, .9);
+      box-shadow: inset 0 0 0 1px var(--line);
+      color: #fff;
+      font-size: 11.5px;
+      font-variant-numeric: tabular-nums;
+      line-height: 1.4;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      transform: translate(-50%, -50%);
+      pointer-events: auto;
+      transition: box-shadow .15s, background .15s;
+    }
+
+    .map-chip:hover { box-shadow: var(--glow); }
+    .map-chip.unset { color: var(--faint); box-shadow: inset 0 0 0 1px var(--line-soft); }
+    .map-chip.sel { background: #fff; color: #06215a; }
+    .map-chip.listening { background: var(--accent); animation: pulse 1s ease-in-out infinite; }
+
+    .map-panel {
+      display: grid;
+      align-content: start;
+      gap: 12px;
+      padding: 18px;
+      border-radius: 8px;
+      background: var(--panel);
+      box-shadow: inset 0 0 0 1px var(--line-soft);
+      backdrop-filter: blur(10px);
+      -webkit-backdrop-filter: blur(10px);
+    }
+
+    .map-panel-title { margin: 0; font-size: 22px; font-weight: 300; letter-spacing: .01em; }
+    .map-panel .hint { margin: 0; }
+    .map-rows { display: grid; gap: 8px; }
+    .map-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; min-height: 44px; padding: 6px 10px; border-radius: 5px; background: rgba(255, 255, 255, .05); font-size: 14px; }
+    .map-row-label { flex: 1; min-width: 0; }
+    .map-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+    .map-actions .btn { height: 40px; padding: 0 16px; font-size: 14px; }
+    .link-btn:disabled { opacity: .4; pointer-events: none; }
+
+    @keyframes listen { 50% { box-shadow: inset 0 0 0 1px var(--accent), 0 0 22px -4px var(--accent); } }
+    .map-listen { margin: 0; padding: 14px 16px; border-radius: 6px; background: color-mix(in srgb, var(--accent) 20%, transparent); box-shadow: inset 0 0 0 1px var(--accent); font-size: 15px; line-height: 1.5; animation: listen 1.4s ease-in-out infinite; }
+    .map-step { margin: 0; font-size: 12.5px; color: var(--muted); }
+
+    .map-section { display: grid; gap: 10px; padding-top: 12px; border-top: 1px solid var(--line-soft); }
+    .map-section h4 { margin: 0; font-size: 13px; font-weight: 400; color: var(--muted); letter-spacing: .03em; }
+    .map-section .hint { font-size: 12.5px; }
+    .map-slider { display: grid; grid-template-columns: 90px minmax(0, 1fr) 62px; align-items: center; gap: 10px; font-size: 14px; }
+    .map-slider input { width: 100%; accent-color: var(--accent); }
+    .map-slider output { text-align: right; font-size: 13px; color: var(--muted); font-variant-numeric: tabular-nums; }
+    .map-toggle { display: flex; align-items: center; justify-content: space-between; gap: 10px; font-size: 14px; cursor: pointer; }
+    .map-toggle .check { grid-column: auto; grid-row: auto; }
+
+    .map-stick { justify-self: center; width: 150px; height: 150px; overflow: visible; }
+    .map-stick .well { fill: rgba(0, 0, 0, .35); stroke: var(--line); }
+    .map-stick .dead { fill: rgba(255, 208, 77, .1); stroke: rgba(255, 208, 77, .6); stroke-dasharray: 3 3; }
+    .map-stick .cross { stroke: var(--line-soft); }
+    .map-stick .raw { fill: var(--faint); }
+    .map-stick .out { fill: var(--accent); stroke: #fff; stroke-width: 1.5; }
+    .map-curve { justify-self: start; width: 110px; height: 110px; padding: 6px; border-radius: 6px; background: rgba(0, 0, 0, .3); overflow: visible; }
+    .map-curve .grid { fill: none; stroke: var(--line); stroke-dasharray: 3 3; }
+    .map-curve .line { fill: none; stroke: var(--accent); stroke-width: 3; stroke-linecap: round; stroke-linejoin: round; }
+
+    .map-bar { position: relative; height: 14px; border-radius: 7px; background: rgba(0, 0, 0, .35); box-shadow: inset 0 0 0 1px var(--line-soft); overflow: hidden; }
+    .map-bar.wide { height: 18px; border-radius: 9px; overflow: visible; }
+    .map-bar.wide::after { content: ""; position: absolute; left: 50%; top: -3px; bottom: -3px; width: 1px; background: var(--line); }
+    .map-bar-fill { position: absolute; inset: 0 auto 0 0; width: 0; background: var(--accent); }
+    .map-bar-dot { position: absolute; top: 50%; left: 50%; width: 16px; height: 16px; margin: -8px 0 0 -8px; border-radius: 50%; background: #fff; box-shadow: 0 0 12px var(--accent); }
+
+    .map-inputs { display: grid; gap: 10px; }
+    .in-head { margin: 6px 0 0; font-size: 13px; font-weight: 400; color: var(--muted); letter-spacing: .03em; }
+    .in-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(84px, 1fr)); gap: 8px; }
+
+    .in-tile, .in-axis {
+      position: relative;
+      border: 0;
+      border-radius: 6px;
+      background: rgba(255, 255, 255, .06);
+      box-shadow: inset 0 0 0 1px var(--line-soft);
+      text-align: left;
+      overflow: hidden;
+      transition: box-shadow .15s, transform .1s;
+    }
+
+    .in-tile:hover, .in-axis:hover { box-shadow: var(--glow); }
+    .in-tile:active, .in-axis:active { transform: scale(.98); }
+    .in-tile { display: grid; align-content: end; gap: 2px; min-height: 66px; padding: 8px; }
+    .in-tile.on { box-shadow: inset 0 0 0 2px var(--accent), 0 0 16px -2px var(--accent); }
+    .in-fill { position: absolute; left: 0; right: 0; bottom: 0; height: 0; background: color-mix(in srgb, var(--accent) 35%, transparent); }
+    .in-name { position: relative; font-size: 15px; }
+    .in-use { position: relative; font-size: 11.5px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .in-axes { display: grid; gap: 8px; }
+    .in-axis { display: grid; grid-template-columns: minmax(120px, 190px) minmax(0, 1fr) 52px; grid-template-areas: "name bar value" "use use use"; align-items: center; gap: 4px 12px; padding: 10px 12px; }
+    .in-axis .in-name { grid-area: name; font-size: 14px; }
+    .in-axis .in-use { grid-area: use; }
+    .in-bar { grid-area: bar; position: relative; height: 10px; border-radius: 5px; background: rgba(0, 0, 0, .35); }
+    .in-bar::after { content: ""; position: absolute; left: 50%; top: -3px; bottom: -3px; width: 1px; background: var(--line); }
+    .in-dot { position: absolute; top: 50%; left: 50%; width: 12px; height: 12px; margin: -6px 0 0 -6px; border-radius: 50%; background: var(--accent); box-shadow: 0 0 8px var(--accent); }
+    .in-value { grid-area: value; text-align: right; font-size: 13px; color: var(--muted); font-variant-numeric: tabular-nums; }
+    .in-axis.outside .in-dot { background: var(--faint); box-shadow: none; }
+    .in-tile.missing, .in-axis.missing { opacity: .4; }
+
+    .map-list { display: none; gap: 6px; margin-top: 10px; }
+    .map-list-item { display: flex; justify-content: space-between; gap: 10px; padding: 10px 12px; border: 0; border-radius: 5px; background: rgba(255, 255, 255, .06); color: var(--text); font-size: 14px; text-align: left; }
+    .map-list-item.sel { box-shadow: var(--glow); background: rgba(255, 255, 255, .14); }
+    .map-list-tag { color: var(--muted); font-variant-numeric: tabular-nums; }
+    @media (max-width: 700px) { .map-chips { display: none; } .map-list { display: grid; } }
+
+    .map-status { margin: 0; padding: 6px max(22px, env(safe-area-inset-right)) max(16px, env(safe-area-inset-bottom)) max(22px, env(safe-area-inset-left)); min-height: 2.8em; font-size: 14px; color: var(--muted); }
+
+    @media (max-width: 640px) {
+      .map-profile { width: 100%; }
+      .map-label { flex: 1 1 140px; }
+      .map-profile .map-label .field { width: 100%; }
+      .map-save { width: 100%; justify-content: flex-end; padding-top: 0; }
+      .in-axis { grid-template-columns: minmax(0, 1fr) 52px; grid-template-areas: "name value" "bar bar" "use use"; }
+    }
 
     @media (max-width: 760px) {
       .settings-body { grid-template-columns: 1fr; gap: 10px; }
@@ -1011,10 +1258,10 @@
 
     <main class="home-main">
       <form class="panel" id="addressForm" hidden>
-        <h2>Console address</h2>
-        <p class="hint" id="addressHint">Enter your PS4 IP address followed by :4264. Load Control4Free on the PS4 first.</p>
+        <h2>Your PS4's address</h2>
+        <p class="hint" id="addressHint">This copy of the page was opened from a file, so it needs the address the Control4Free app shows on the PS4, like 192.168.1.20.</p>
         <div class="address-row">
-          <input class="field" id="address" inputmode="url" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="192.168.1.20:4264" aria-label="Console address">
+          <input class="field" id="address" inputmode="url" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="192.168.1.20" aria-label="Your PS4's address">
           <button class="btn primary" type="submit">Connect</button>
         </div>
       </form>
@@ -1029,6 +1276,7 @@
         <h2 id="gpTitle">Gamepads on this device</h2>
         <p class="hint" id="gamepadHint"></p>
         <ul class="gp-list" id="gamepadList"></ul>
+        <p class="gp-help" id="gamepadHelp" hidden>Several gamepads can share one controller. Keep this window active while playing.</p>
       </section>
     </main>
 
@@ -1061,7 +1309,11 @@
       <div class="ctl touchpad" data-ctl="touchpad" id="touchpad" aria-label="Touchpad"><span class="pad-label" id="padLabel"></span></div>
 
       <button class="ctl ps-btn" data-ctl="ps" id="psBtn" data-btn="PS" type="button" aria-label="PS button">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 11.5L12 5l8 6.5"/><path d="M6.5 10v8.5h11V10"/></svg>
+        <svg viewBox="1240 1136 378 296" fill="currentColor" fill-rule="evenodd" aria-hidden="true">
+          <path d="m1442.9581 1196.8425-.242 234.3159-59.4601-20.4178-.4185-274.2048 75.8973 21.1864c48.5826 13.7861 78.3137 40.5845 77.8302 87.5507-.4829 54.6248-25.8649 75.8164-68.8533 55.8404v-101.2762c0-14.941-24.7536-25.8506-24.7536-2.9946z"/>
+          <path d="m1370.7136 1303.1522-8.9415 2.8809-86.5464 31.0437c-18.2193 8.3547-33.4371 13.7582-33.5335 27.3708.4569 17.2306 27.4593 25.6141 66.9974 32.2183 21.0698 4.2232 42.5958 1.3924 61.026-2.5123l.015-32.4651s-34.1651 13.278-42.2947 14.3829l-16.4389-.09c-12.2037-.067-17.8867-7.8843-5.7302-12.0759l65.4355-24.7626.011-35.9902z"/>
+          <path d="m1524.5024 1317.7768c-22.722-.075-54.1883 6.1167-69.7875 13.3735v37.0026l41.1316-15.041 32.581-10.3583c33.9325-5.5872 47.4232 6.2615 14.3731 16.1649l-88.0833 32.2321-.1072 35.8824 128.695-46.2998c14.2026-4.9527 34.177-14.9519 34.225-27.2419-3.4472-19.028-32.0697-30.1323-76.5199-34.8392-3.9869-.4111-7.9933-.6688-11.9728-.7879-1.5161-.044-3.0225-.083-4.5372-.088z"/>
+        </svg>
       </button>
 
       <div class="ctl dpad" data-ctl="dpad" id="dpad" aria-label="Directional buttons">
@@ -1131,9 +1383,16 @@
       <nav class="settings-nav" role="tablist" aria-label="Settings">
         <button class="nav-item" role="tab" data-page="device" aria-selected="false"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="7" y="2.5" width="10" height="19" rx="2"/><path d="M11 18.5h2"/></svg>This device</button>
         <button class="nav-item" role="tab" data-page="keyboard" aria-selected="false"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="2.5" y="6" width="19" height="12" rx="2"/><path d="M6 10h1M9.5 10h1M13 10h1M16.5 10h1M7 14h10"/></svg>Keyboard</button>
+        <button class="nav-item" role="tab" data-page="gamepads" aria-selected="false"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><path d="M7 7h10a5 5 0 0 1 4.8 6.4l-1 3.4a2.6 2.6 0 0 1-4.4 1.2L14.4 16H9.6l-2 2a2.6 2.6 0 0 1-4.4-1.2l-1-3.4A5 5 0 0 1 7 7z"/><path d="M7.5 10v3M6 11.5h3"/></svg>Gamepads</button>
       </nav>
 
       <div class="settings-pages">
+        <section data-page="gamepads" hidden>
+          <h2 class="page-title">Gamepads</h2>
+          <p class="hint">Choose what each button and stick on a gamepad does. Mappings are saved in this browser, for every gamepad of the same kind.</p>
+          <ul class="gp-list" id="gpSettings"></ul>
+          <p class="hint" id="gpSettingsEmpty">Connect a gamepad to this device and press a button on it. If it never shows up, this browser only allows gamepads on secure pages: save this page, open the saved file, and enter the console's address.</p>
+        </section>
         <section data-page="device" hidden>
           <h2 class="page-title">This device</h2>
           <p class="hint">Saved on this phone or computer only.</p>
@@ -1142,13 +1401,54 @@
 
         <section data-page="keyboard" hidden>
           <h2 class="page-title">Keyboard</h2>
-          <p class="hint">Click a key to change it, then press the new key. Keys drive the controller opened on this page.</p>
-          <div class="rows" id="keyRows"></div>
-          <div class="actions" style="margin-top:14px"><button class="btn" type="button" id="resetKeys">Reset keys</button></div>
+          <p class="hint">Keys drive the controller open on this page. Choose them on a picture of the controller: click a control, then press its key.</p>
+          <div class="map-actions" style="margin-top:16px"><button class="btn primary" type="button" id="mapKeys">Choose keys</button><button class="btn" type="button" id="resetKeys">Reset keys</button></div>
         </section>
 
       </div>
     </div>
+  </div>
+
+  <!-- Mapping: a DualShock 4 to map a gamepad or the keyboard onto -->
+  <div class="map-view" id="mapView" hidden>
+    <div class="backdrop" aria-hidden="true"></div>
+    <header class="map-top">
+      <button class="icon-btn" id="mapBack" type="button" aria-label="Back"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg></button>
+      <div class="map-what">
+        <label class="map-label">Input device<select class="field map-source" id="mapSource"></select></label>
+        <span class="map-sub" id="mapSub"></span>
+      </div>
+      <div class="map-profile" id="mapProfileBox">
+        <label class="map-label">Profile<select class="field" id="mapProfile"></select></label>
+        <label class="map-label">Name<input class="field" id="mapName" maxlength="100" autocomplete="off" spellcheck="false"></label>
+        <div class="map-menu-wrap">
+          <button class="icon-btn" id="mapMenuBtn" type="button" aria-label="More profile options"><svg viewBox="0 0 24 24" fill="currentColor"><circle cx="5" cy="12" r="1.8"/><circle cx="12" cy="12" r="1.8"/><circle cx="19" cy="12" r="1.8"/></svg></button>
+          <div class="map-menu" id="mapMenu" hidden>
+            <button type="button" id="mapSaveNew">Save as a new profile</button>
+            <button type="button" id="mapNew">New empty profile</button>
+            <button type="button" id="mapStandard">Back to the standard layout</button>
+            <button type="button" id="mapExport">Export to a file</button>
+            <label class="map-file">Import from a file<input type="file" id="mapImport" accept="application/json,.json"></label>
+            <button type="button" id="mapDelete" class="danger">Delete this profile</button>
+          </div>
+        </div>
+      </div>
+      <div class="map-save">
+        <span class="map-dirty" id="mapDirty"></span>
+        <button class="btn" type="button" id="mapReset">Standard keys</button>
+        <button class="btn primary" type="button" id="mapSave">Save</button>
+      </div>
+    </header>
+    <p class="map-banner" id="mapBanner" hidden></p>
+    <nav class="map-tabs" id="mapTabs" role="tablist" aria-label="View"><button type="button" role="tab" data-tab="pad">DS4 Mapping</button><button type="button" role="tab" data-tab="inputs">Gamepad Controls</button></nav>
+    <div class="map-body">
+      <div>
+        <div class="map-stage" id="mapStage"><div class="map-pad" id="mapPad"><div class="map-chips" id="mapChips"></div></div><div class="map-list" id="mapList"></div></div>
+        <div class="map-inputs" id="mapInputs" hidden></div>
+      </div>
+      <aside class="map-panel" id="mapPanel"></aside>
+    </div>
+    <p class="map-status" id="mapStatus" role="status" aria-live="polite"></p>
   </div>
 
   <!-- Options menu on the controller -->
@@ -1270,6 +1570,9 @@
     }));
 
     const servedByConsole = location.protocol === 'http:' || location.protocol === 'https:';
+    // Only a copy of the page saved to the device and opened from there needs
+    // to be told where the PS4 is.
+    const openedFromFile = location.protocol === 'file:';
 
     function initialAddress() {
       const param = new URLSearchParams(location.search).get('host');
@@ -1293,11 +1596,16 @@
       if (conn.ws) {
         conn.ws.onclose = null;
         conn.ws.close();
+        resetClaims();
+        forgetSelections();
+        for (const [, p] of conn.pending) p.reject(new Error('Connection changed'));
+        conn.pending.clear();
       }
-      conn.address = address.trim().replace(/^wss?:\/\//, '').replace(/\/.*$/, '');
+      conn.address = address.trim().replace(/^(?:https?|wss?):\/\//i, '').replace(/[/?#].*$/, '');
+      if (!conn.address.includes(':') && conn.address) conn.address += ':4264';
       if (!conn.address) {
         setConnState('closed', 'Not connected');
-        $('#addressForm').hidden = false;
+        $('#addressForm').hidden = !openedFromFile;
         return;
       }
       if (!servedByConsole) store.set('address', conn.address);
@@ -1308,15 +1616,16 @@
         ws = new WebSocket('ws://' + conn.address);
       } catch (e) {
         setConnState('closed', 'Invalid address');
-        $('#addressForm').hidden = false;
+        $('#addressForm').hidden = !openedFromFile;
         return;
       }
       conn.ws = ws;
       ws.onopen = () => {
+        if (conn.ws !== ws) return;
         conn.retry = 0;
         conn.everOpened = true;
         setConnState('open', 'Connected', ' to ' + conn.address);
-        $('#addressForm').hidden = servedByConsole;
+        $('#addressForm').hidden = true;
         $('#addressHint').classList.remove('error');
         call('info', []).then(info => {
           conn.version = info.version || '';
@@ -1325,24 +1634,19 @@
         }).catch(() => {});
         resendAll();
       };
-      ws.onmessage = ev => onMessage(ev.data);
+      ws.onmessage = ev => { if (conn.ws === ws) onMessage(ev.data); };
       ws.onclose = () => {
+        if (conn.ws !== ws) return;
         conn.ws = null;
         // Reconnecting the page must not silently recreate a controller or
         // replay held buttons. The user selects a controller again.
-        lastClaim = '';
-        releaseScreen(); heldKeys.clear();
-        for (const src of gamepadSources.values()) src.pad = -1;
-        primaryPad = -1;
-        Object.assign(screenSource, blankSource(-1));
-        Object.assign(keySource, blankSource(-1));
-        padView.hidden = true; $('#home').hidden = false;
-        document.body.classList.remove('in-pad');
+        resetClaims();
+        forgetSelections();
         for (const [, p] of conn.pending) p.reject(new Error('closed'));
         conn.pending.clear();
         stopAllRumble();
         const wait = Math.min(5000, 800 * Math.pow(1.6, conn.retry++));
-        if (!conn.everOpened && !servedByConsole) {
+        if (!conn.everOpened && openedFromFile) {
           setConnState('closed', 'Can\'t reach', ' ' + conn.address);
           $('#addressForm').hidden = false;
           $('#addressHint').textContent = 'Can\'t reach the console. Load the Control4Free payload, then check the address.';
@@ -1369,7 +1673,7 @@
         const timer = setTimeout(() => {
           conn.pending.delete(id);
           reject(new Error('The console did not answer'));
-        }, 4000);
+        }, method === 'claim' ? 18000 : 4000);
         conn.pending.set(id, {
           resolve: v => { clearTimeout(timer); resolve(v); },
           reject: e => { clearTimeout(timer); reject(e); },
@@ -1420,7 +1724,7 @@
       }
       renderPads();
       renderPadLabel();
-      if (gamepadSources.size && !(document.activeElement && document.activeElement.closest('.seg'))) renderGamepads();
+      if (gamepadSources.size) renderGamepads();
     }
 
     function setPadColor(pad, rgb) {
@@ -1445,26 +1749,29 @@
     function allSources() {
       return [screenSource, keySource, ...gamepadSources.values()];
     }
-
-    function farther(a, b) {
-      return Math.abs(b - 128) > Math.abs(a - 128) ? b : a;
+    function forgetSelections() {
+      stopAllRumble();
+      mapper.cancelCapture(); releaseScreen(); heldKeys.clear();
+      for (const src of gamepadSources.values()) { src.pad = -1; clearDevice(src); }
+      primaryPad = -1;
+      Object.assign(screenSource, blankSource(-1)); Object.assign(keySource, blankSource(-1));
+      padView.hidden = true;
+      if (mapView.hidden && $('#settingsView').hidden) $('#home').hidden = false;
+      document.body.classList.remove('in-pad');
+      document.title = 'Control4Free';
+      history.replaceState(null, '', updateQuery('pad', null));
+      renderGamepads();
     }
 
     function mergedState(pad) {
       const s = blankSource(pad);
+      const outputs = [];
       for (const src of allSources()) {
         if (src.pad !== pad) continue;
-        s.buttons |= src.buttons;
-        s.lx = farther(s.lx, src.lx);
-        s.ly = farther(s.ly, src.ly);
-        s.rx = farther(s.rx, src.rx);
-        s.ry = farther(s.ry, src.ry);
-        s.l2 = Math.max(s.l2, src.l2);
-        s.r2 = Math.max(s.r2, src.r2);
+        outputs.push(src.mapped || ControllerMapping.fromSource(src));
         if (src.touches.length) s.touches = s.touches.concat(src.touches);
       }
-      if (s.buttons & B.L2) s.l2 = Math.max(s.l2, 255);
-      if (s.buttons & B.R2) s.r2 = Math.max(s.r2, 255);
+      Object.assign(s, ControllerMapping.toSource(ControllerMapping.merge(outputs)));
       if (s.l2 > 20) s.buttons |= B.L2;
       if (s.r2 > 20) s.buttons |= B.R2;
       s.touches = s.touches.slice(0, 2);
@@ -1479,20 +1786,28 @@
     }
 
     let lastClaim = '';
+    let claimFlight = false, claimQueued = false;
+    let claimEpoch = 0;
+    function resetClaims() { claimEpoch++; lastClaim = ''; claimFlight = claimQueued = false; }
     function sendClaim(force) {
       keepAwake.update();
       if (conn.state !== 'open') return;
+      if (claimFlight) { claimQueued = true; return; }
       const pads = claimedPads();
       const key = pads.join(',');
       if (!force && key === lastClaim) return;
       lastClaim = key;
-      call('claim', pads).then(applyStatus).catch(e => {
+      claimFlight = true;
+      const epoch = claimEpoch;
+      call('claim', pads).then(s => { if (epoch === claimEpoch) applyStatus(s); }).catch(e => {
+        if (epoch !== claimEpoch) return;
         lastClaim = '';
         toast(e.message || 'Could not connect the controller');
-        call('status', []).then(s => {
+        return call('status', []).then(s => {
+          if (epoch !== claimEpoch) return;
           applyStatus(s);
           let dropped = false;
-          const taken = pad => pad >= 0 && status[pad].known && !status[pad].mine && status[pad].open;
+          const taken = pad => pad >= 0 && status[pad].known && !status[pad].mine && status[pad].clients > 0;
           if (taken(primaryPad)) { closePad(); dropped = true; }
           for (const src of gamepadSources.values()) if (taken(src.pad)) { src.pad = -1; dropped = true; }
           renderGamepads();
@@ -1500,11 +1815,16 @@
           // for any other reason cannot turn into a loop.
           if (dropped && claimedPads().length) sendClaim(true);
         }).catch(() => {
+          if (epoch !== claimEpoch) return;
           // No answer at all: assume nothing is ours.
           closePad();
           for (const src of gamepadSources.values()) src.pad = -1;
           renderGamepads();
         });
+      }).finally(() => {
+        if (epoch !== claimEpoch) return;
+        claimFlight = false;
+        if (claimQueued) { claimQueued = false; sendClaim(); }
       });
     }
 
@@ -2004,7 +2324,7 @@
           draggingStick[side] = false;
           el.classList.remove('on');
           knob.style.transform = '';
-          shownStick[side] = '';
+          padShown.stick[side] = '';
           if (side === 'L') { screenSource.lx = 128; screenSource.ly = 128; } else { screenSource.rx = 128; screenSource.ry = 128; }
           if (clicking) release(screenSource, clickBit);
           else if (ev && !moved && now() - startAt < 250) lastStickTap[side] = { at: now(), x: startX, y: startY };
@@ -2047,12 +2367,12 @@
       };
       return {
         move: update,
-        up() {
+        up(ev) {
           clearTimeout(holdTimer);
           if (held) {
             release(screenSource, B.TOUCH);
             remove();
-          } else if (!moved && settings.tapClick && now() - startAt < 300) {
+          } else if (ev && ev.type === 'pointerup' && !moved && settings.tapClick && now() - startAt < 300) {
             // Tap: click while the finger is still reported on the pad
             press(screenSource, B.TOUCH);
             setTimeout(() => { release(screenSource, B.TOUCH); remove(); }, 90);
@@ -2117,7 +2437,16 @@
     const STICK_ACTIONS = { LS_UP: ['ly', -1], LS_DOWN: ['ly', 1], LS_LEFT: ['lx', -1], LS_RIGHT: ['lx', 1], RS_UP: ['ry', -1], RS_DOWN: ['ry', 1], RS_LEFT: ['rx', -1], RS_RIGHT: ['rx', 1] };
     const TOUCH_ACTIONS = { T_TL: [0.25, 0.25], T_TR: [0.75, 0.25], T_BL: [0.25, 0.75], T_BR: [0.75, 0.75] };
     const defaultKeys = () => Object.fromEntries(KEY_ACTIONS.map(([action, , code]) => [action, code]));
-    let keymap = Object.assign(defaultKeys(), store.get('keymap', {}));
+    function validKey(code) {
+      return typeof code === 'string' && (code === '' || /^(Key[A-Z]|Digit[0-9]|Numpad[0-9]|F([1-9]|1[0-2])|Arrow(Up|Down|Left|Right)|Space|Escape|Backspace|Enter|Tab|Shift(Left|Right)|Bracket(Left|Right)|Semicolon|Quote|Comma|Period|Slash|Backslash|Minus|Equal|Backquote|Delete|Insert|Home|End|PageUp|PageDown|CapsLock|NumLock|Numpad(Add|Subtract|Multiply|Divide|Decimal|Enter))$/.test(code));
+    }
+    function loadKeys(saved) {
+      const keys = defaultKeys();
+      if (saved && typeof saved === 'object' && !Array.isArray(saved))
+        for (const action of Object.keys(keys)) if (validKey(saved[action])) keys[action] = saved[action];
+      return keys;
+    }
+    let keymap = loadKeys(store.get('keymap', {}));
     let actionForCode = {};
     const heldKeys = new Map(); // code -> action
 
@@ -2150,7 +2479,6 @@
     }
 
     window.addEventListener('keydown', e => {
-      if (listeningKey) return;
       if (primaryPad < 0 || padView.hidden || typing() || e.metaKey || e.ctrlKey || e.altKey) return;
       const action = actionForCode[e.code];
       if (!action) return;
@@ -2179,26 +2507,1339 @@
     });
 
     window.addEventListener('blur', () => {
+      mapper.cancelCapture();
+      mapper.keysDown.clear();
       heldKeys.clear();
       Object.assign(keySource, blankSource(keySource.pad));
     });
 
     // ---------------------------------------------------------------- gamepads
 
-    // Standard mapping: https://w3c.github.io/gamepad/#remapping
-    const GP_BUTTONS = [
-      B.CROSS, B.CIRCLE, B.SQUARE, B.TRIANGLE, B.L1, B.R1, 0, 0,
-      B.SHARE, B.OPTIONS, B.L3, B.R3, B.UP, B.DOWN, B.LEFT, B.RIGHT, B.PS, B.TOUCH,
-    ];
-    const gpAssign = {};
-    const gamepadsAvailable = typeof navigator.getGamepads === 'function';
+    // Pure mapping stages. No DOM, browser index, storage or network dependencies.
+    const ControllerMapping = (() => {
+      const axes = ['lx', 'ly', 'rx', 'ry'];
+      const directions = { LS_LEFT: ['lx', -1], LS_RIGHT: ['lx', 1], LS_UP: ['ly', -1], LS_DOWN: ['ly', 1],
+        RS_LEFT: ['rx', -1], RS_RIGHT: ['rx', 1], RS_UP: ['ry', -1], RS_DOWN: ['ry', 1] };
+      const hats = [[], ['UP'], ['UP', 'RIGHT'], ['RIGHT'], ['RIGHT', 'DOWN'], ['DOWN'],
+        ['DOWN', 'LEFT'], ['LEFT'], ['LEFT', 'UP']];
+      const outputs = [...Object.keys(B), ...axes, ...Object.keys(directions)].filter(k => k !== 'NONE');
+      function outputLabel(key) {
+        const labels = { lx: 'Left stick, left and right', ly: 'Left stick, up and down', rx: 'Right stick, left and right', ry: 'Right stick, up and down',
+          TOUCH: 'Touchpad click', PS: 'PS button', LS_LEFT: 'Left stick left', LS_RIGHT: 'Left stick right',
+          LS_UP: 'Left stick up', LS_DOWN: 'Left stick down', RS_LEFT: 'Right stick left', RS_RIGHT: 'Right stick right',
+          RS_UP: 'Right stick up', RS_DOWN: 'Right stick down', UP: 'D-pad up', DOWN: 'D-pad down', LEFT: 'D-pad left', RIGHT: 'D-pad right' };
+        return labels[key] || (/^[LR][123]$/.test(key) ? key : key[0] + key.slice(1).toLowerCase());
+      }
+      const copy = value => JSON.parse(JSON.stringify(value));
+      const bounded = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
+      const finite = v => typeof v === 'number' && Number.isFinite(v);
+      function signature(gp) {
+        return { id: String(gp.id || ''), mapping: String(gp.mapping || ''), buttons: gp.buttons.length, axes: gp.axes.length };
+      }
+      const signatureKey = s => JSON.stringify([s.id, s.mapping, s.buttons, s.axes]);
+      function read(gp) {
+        return { signature: signature(gp),
+          buttons: Array.from(gp.buttons, b => b && finite(b.value) && b.value >= 0 && b.value <= 1
+            ? { value: b.value, pressed: b.pressed === true } : null),
+          axes: Array.from(gp.axes, v => finite(v) && Math.abs(v) <= 8 ? v : null) };
+      }
+      function empty() { return { buttons: 0, l2: 0, r2: 0, analog: { lx: [], ly: [], rx: [], ry: [] }, digital: { lx: [], ly: [], rx: [], ry: [] } }; }
+      function strongest(values) {
+        let strength = 0, positive = false, negative = false;
+        for (const v of values) {
+          if (!finite(v)) continue;
+          const a = Math.abs(v);
+          if (a > strength + 1e-9) { strength = a; positive = negative = false; }
+          if (Math.abs(a - strength) <= 1e-9 && a) { if (v > 0) positive = true; else negative = true; }
+        }
+        return positive && negative ? 0 : negative ? -strength : strength;
+      }
+      function merge(states) {
+        const out = empty();
+        for (const s of states) {
+          out.buttons |= s.buttons;
+          out.l2 = Math.max(out.l2, s.l2); out.r2 = Math.max(out.r2, s.r2);
+          for (const axis of axes) { out.analog[axis].push(...s.analog[axis]); out.digital[axis].push(...s.digital[axis]); }
+        }
+        return out;
+      }
+      function axisValue(out, axis) {
+        const d = out.digital[axis];
+        const digital = d.some(v => v < 0) === d.some(v => v > 0) ? 0 : d.some(v => v < 0) ? -1 : 1;
+        return strongest([...out.analog[axis], digital]);
+      }
+      function toSource(out) {
+        const s = { buttons: out.buttons, l2: Math.round(out.l2 * 255), r2: Math.round(out.r2 * 255) };
+        for (const axis of axes) {
+          const v = axisValue(out, axis);
+          s[axis] = Math.round((v + 1) / 2 * 255);
+        }
+        return s;
+      }
+      function fromSource(src) {
+        const out = empty(); out.buttons = src.buttons;
+        out.l2 = src.buttons & B.L2 ? 1 : src.l2 / 255; out.r2 = src.buttons & B.R2 ? 1 : src.r2 / 255;
+        for (const axis of axes) out.analog[axis].push(src[axis] === 128 ? 0 : src[axis] / 255 * 2 - 1);
+        return out;
+      }
+      function normalize(raw, c, mode) {
+        if (!finite(raw)) return null;
+        if (c && c.type === 'pedal') return bounded((raw - c.released) / (c.full - c.released), 0, 1);
+        const center = c ? c.center : 0, min = c ? c.min : -1, max = c ? c.max : 1;
+        let v = bounded((raw - center) / (raw < center ? center - min : max - center), -1, 1);
+        if (mode === 'positive') v = Math.max(0, v);
+        if (mode === 'negative') v = Math.max(0, -v);
+        return v;
+      }
+      function inputValue(snapshot, profile, input) {
+        if (input.kind === 'button') {
+          const b = snapshot.buttons[input.index];
+          return b ? input.mode === 'digital' ? (b.pressed || b.value > 0.5 ? 1 : 0) : b.value : null;
+        }
+        const raw = snapshot.axes[input.index], c = profile.calibration[input.index];
+        if (input.kind === 'hat') {
+          if (!finite(raw) || !c || c.type !== 'hat') return null;
+          let nearest = -1, distance = Infinity;
+          c.values.forEach((v, i) => { const d = Math.abs(raw - v); if (d < distance) { distance = d; nearest = i; } });
+          return distance <= c.tolerance && hats[nearest].includes(input.direction) ? 1 : 0;
+        }
+        if (c && c.type === 'hat') return null;
+        return normalize(raw, c, input.mode);
+      }
+      function tune(v, binding) {
+        const signed = binding.input.kind === 'axis' && binding.input.mode === 'center';
+        if (binding.invert) v = signed ? -v : 1 - v;
+        if (binding.legacy) {
+          return Math.abs(v) < 0.06 ? 0 : v;
+        }
+        const a = Math.abs(v), dz = binding.deadzone, sat = binding.saturation;
+        const magnitude = a <= dz ? 0 : Math.pow(bounded((a - dz) / (sat - dz), 0, 1), binding.exponent);
+        return Math.sign(v) * magnitude;
+      }
+      function evaluate(snapshot, profile, transient = {}, hold = {}) {
+        const out = empty();
+        profile.bindings.forEach((binding, i) => {
+          let v = inputValue(snapshot, profile, binding.input);
+          if (v === null || hold[i]) { delete transient[i]; return; }
+          v = tune(v, binding);
+          const target = binding.output;
+          if (target === 'L2' || target === 'R2') out[target.toLowerCase()] = Math.max(out[target.toLowerCase()], Math.max(0, v));
+          else if (axes.includes(target)) {
+            if (binding.input.kind === 'button' && binding.input.mode === 'digital' || binding.input.kind === 'hat') out.digital[target].push(Math.sign(v));
+            else out.analog[target].push(v);
+          } else {
+            const active = v >= (transient[i] ? binding.release : binding.activate);
+            transient[i] = active;
+            if (active && directions[target]) {
+              const [axis, sign] = directions[target]; out.digital[axis].push(sign);
+            } else if (active && B[target]) out.buttons |= B[target];
+          }
+        });
+        return out;
+      }
+      function binding(input, output, extra = {}) {
+        return Object.assign({ input, output, invert: false, deadzone: 0, saturation: 1, exponent: 1, activate: .5, release: .4 }, extra);
+      }
+      function browserDefault(sig) {
+        const names = ['CROSS', 'CIRCLE', 'SQUARE', 'TRIANGLE', 'L1', 'R1', 'L2', 'R2', 'SHARE', 'OPTIONS', 'L3', 'R3', 'UP', 'DOWN', 'LEFT', 'RIGHT', 'PS', 'TOUCH'];
+        return { id: 'default', name: 'Standard layout', signature: copy(sig), calibration: {},
+          bindings: [...names.slice(0, sig.buttons).map((output, index) => binding({ kind: 'button', index, mode: index === 6 || index === 7 ? 'pressure' : 'digital' }, output)),
+            ...axes.slice(0, sig.axes).map((output, index) => binding({ kind: 'axis', index, mode: 'center' }, output, { legacy: true }))] };
+      }
+      function validate(profile) {
+        const s = profile && profile.signature;
+        if (!profile || typeof profile.id !== 'string' || !/^[\w-]{1,96}$/.test(profile.id) ||
+            typeof profile.name !== 'string' || !profile.name.trim() || profile.name.length > 100 ||
+            !s || typeof s.id !== 'string' || s.id.length > 2048 || typeof s.mapping !== 'string' || s.mapping.length > 100 ||
+            !Number.isInteger(s.buttons) || s.buttons < 0 || s.buttons > 1024 || !Number.isInteger(s.axes) || s.axes < 0 || s.axes > 1024 ||
+            !profile.calibration || typeof profile.calibration !== 'object' || Array.isArray(profile.calibration) ||
+            !Array.isArray(profile.bindings) || profile.bindings.length > 4096) return 'Invalid profile structure';
+        for (const [index, c] of Object.entries(profile.calibration)) {
+          if (!/^\d+$/.test(index) || +index >= s.axes || !c) return 'Invalid calibration index';
+          if (c.type === 'center') {
+            if (![c.min, c.center, c.max].every(finite) || !(c.min < c.center && c.center < c.max)) return 'Minimum must be below center and maximum';
+          } else if (c.type === 'pedal') {
+            if (![c.released, c.full].every(finite) || Math.abs(c.released - c.full) < .0001) return 'Released and full positions must differ';
+          } else if (c.type === 'hat') {
+            if (!Array.isArray(c.values) || c.values.length !== 9 || !c.values.every(finite) || !finite(c.tolerance) || c.tolerance <= 0 ||
+                c.values.some((v, i) => c.values.some((w, j) => i !== j && Math.abs(v - w) <= c.tolerance * 2))) return 'Hat positions must be distinct with a smaller tolerance';
+          } else return 'Unknown calibration type';
+        }
+        for (const b of profile.bindings) {
+          const i = b && b.input;
+          if (!i || !['button', 'axis', 'hat'].includes(i.kind) || !Number.isInteger(i.index) || i.index < 0 ||
+              i.index >= (i.kind === 'button' ? s.buttons : s.axes) || !outputs.includes(b.output) ||
+              ![b.deadzone, b.saturation, b.exponent, b.activate, b.release].every(finite) ||
+              b.deadzone < 0 || b.saturation > 1 || b.saturation <= b.deadzone || b.exponent < .1 || b.exponent > 10 ||
+              b.release < 0 || b.release >= b.activate || b.activate > 1 || typeof b.invert !== 'boolean' ||
+              (b.legacy !== undefined && typeof b.legacy !== 'boolean')) return 'Invalid binding or tuning';
+          if (i.kind === 'button' && !['digital', 'pressure'].includes(i.mode) ||
+              i.kind === 'axis' && !['center', 'positive', 'negative', 'pedal'].includes(i.mode)) return 'Invalid input mode';
+          if (i.kind === 'hat' && (!['UP', 'RIGHT', 'DOWN', 'LEFT'].includes(i.direction) || !profile.calibration[i.index] || profile.calibration[i.index].type !== 'hat')) return 'Calibrate this hat before applying';
+          if (i.kind === 'axis' && (profile.calibration[i.index]?.type === 'hat' ||
+              i.mode === 'pedal' && profile.calibration[i.index]?.type !== 'pedal' ||
+              i.mode !== 'pedal' && profile.calibration[i.index]?.type === 'pedal')) return 'Input mode must match calibration';
+        }
+        return '';
+      }
+      function unresolved(profile, sig) {
+        return profile.bindings.some(b => b.input.index >= (b.input.kind === 'button' ? sig.buttons : sig.axes)) ||
+          Object.keys(profile.calibration).some(i => +i >= sig.axes);
+      }
+      // After a gamepad changes profile or comes back, a button still held down
+      // must not press anything: each binding that presses something waits until
+      // its own input has been let go. Stick axes never wait, and nothing waits
+      // for anything else, so a worn stick resting a little off centre, or an axis
+      // that never rests at zero, can't keep the rest of the gamepad silent.
+      function holdBack(profile) {
+        const hold = {};
+        profile.bindings.forEach((b, i) => { if (!axes.includes(b.output)) hold[i] = true; });
+        return hold;
+      }
+      function letGo(snapshot, profile, hold) {
+        for (const i of Object.keys(hold)) {
+          const b = profile.bindings[i];
+          const v = b && inputValue(snapshot, profile, b.input);
+          // Judged before inversion: an inverted binding is pressed at rest on purpose.
+          if (!b || (v !== null && Math.abs(tune(v, Object.assign({}, b, { invert: false }))) < Math.min(b.release, .2))) delete hold[i];
+        }
+        return hold;
+      }
+      // A stick or wheel's range, from where it rests and both ends in either order.
+      function centeredRange(center, a, b) {
+        const min = Math.min(a, b), max = Math.max(a, b);
+        if (![center, a, b].every(finite) || !(min < center - .1 && center + .1 < max)) return null;
+        return { type: 'center', min, center, max };
+      }
+      // A hat from its rest and its four directions. Each diagonal sits halfway
+      // between its neighbours; up-left, past left, one more step on.
+      function hatFromCardinals(rest, up, right, down, left) {
+        if (![rest, up, right, down, left].every(finite)) return null;
+        const mid = (a, b) => (a + b) / 2;
+        const values = [rest, up, mid(up, right), right, mid(right, down), down, mid(down, left), left, left + (left - down) / 2];
+        let gap = Infinity;
+        values.forEach((v, i) => values.forEach((w, j) => { if (i < j) gap = Math.min(gap, Math.abs(v - w)); }));
+        if (gap < .02) return null;
+        return { type: 'hat', values, tolerance: gap / 3 };
+      }
+      function exportProfile(profile) { return { format: 'control4free-controller-profile', schema: 1, profile: copy(profile) }; }
+      function importProfile(value) {
+        if (!value || value.format !== 'control4free-controller-profile' || value.schema !== 1) throw Error('Unsupported profile format or schema');
+        const error = validate(value.profile); if (error) throw Error(error);
+        return copy(value.profile);
+      }
+      return { axes, directions, hats, outputs, outputLabel, copy, signature, signatureKey, read, empty, merge, toSource, fromSource, normalize, inputValue,
+        tune, evaluate, binding, browserDefault, validate, unresolved, holdBack, letGo, centeredRange, hatFromCardinals, exportProfile, importProfile };
+    })();
 
-    function gpKey(gp) { return gp.id + '#' + gp.index; }
-
-    function axisByte(v) {
-      if (Math.abs(v) < 0.06) return 128;
-      return Math.round(clamp((v + 1) / 2 * 255, 0, 255));
+    const profileStore = { schema: 1, profiles: [], preferred: {} };
+    let profilePersistence = '', profileStorageBlocked = false;
+    function loadProfiles() {
+      try {
+        const raw = localStorage.getItem('c4f.gamepadProfiles');
+        if (!raw) return;
+        const saved = JSON.parse(raw);
+        if (!saved || saved.schema !== 1) {
+          profileStorageBlocked = true; profilePersistence = 'Unknown storage schema preserved. Changes are session-only.'; return;
+        }
+        if (!Array.isArray(saved.profiles) || !saved.preferred || typeof saved.preferred !== 'object' || Array.isArray(saved.preferred)) throw Error();
+        const ids = new Set();
+        for (const p of saved.profiles) {
+          if (p.id === 'default' || ids.has(p.id) || ControllerMapping.validate(p)) { profilePersistence = 'Invalid saved profiles were ignored.'; continue; }
+          ids.add(p.id); profileStore.profiles.push(ControllerMapping.copy(p));
+        }
+        for (const [key, id] of Object.entries(saved.preferred))
+          if (key.length < 4096 && typeof id === 'string' && ids.has(id)) Object.defineProperty(profileStore.preferred, key, { value: id, writable: true, enumerable: true, configurable: true });
+      } catch (e) { profilePersistence = 'Saved profiles could not be read. Browser defaults are active.'; }
     }
+    function persistProfiles() {
+      if (profileStorageBlocked) return false;
+      try { localStorage.setItem('c4f.gamepadProfiles', JSON.stringify(profileStore)); profilePersistence = ''; return true; }
+      catch (e) { profilePersistence = 'Storage unavailable. Profile changes are session-only.'; toast(profilePersistence); return false; }
+    }
+    function profileFor(src) { return profileStore.profiles.find(p => p.id === src.profileId) || ControllerMapping.browserDefault(src.signature); }
+    // Forgets what the gamepad was doing. Its bindings that press something then
+    // wait until their input is let go (ControllerMapping.holdBack).
+    function clearDevice(src) {
+      Object.assign(src, blankSource(src.pad)); src.mapped = ControllerMapping.empty(); src.transient = {};
+      src.hold = null; src.waitNeutral = true;
+    }
+    function preferProfile(src, id) {
+      src.profileId = id;
+      const key = ControllerMapping.signatureKey(src.signature);
+      Object.defineProperty(profileStore.preferred, key, { value: id, writable: true, enumerable: true, configurable: true });
+      clearDevice(src); persistProfiles();
+    }
+    loadProfiles();
+
+    // ---------------------------------------------------------------- mapping view
+
+    // A DualShock 4 to map a gamepad or the keyboard onto: the controller
+    // screen's own controls, copied, with what drives each one written beside it.
+    // Pressing anything lights up what it does. Click a control to change it.
+    const MAP_TARGETS = {
+      CROSS: 'Cross', CIRCLE: 'Circle', SQUARE: 'Square', TRIANGLE: 'Triangle',
+      L1: 'L1', R1: 'R1', L2: 'L2', R2: 'R2', L3: 'L3', R3: 'R3',
+      SHARE: 'Share', OPTIONS: 'Options', PS: 'PS button', TOUCH: 'Touchpad',
+      UP: 'D-pad up', DOWN: 'D-pad down', LEFT: 'D-pad left', RIGHT: 'D-pad right',
+      LS: 'Left stick', RS: 'Right stick',
+    };
+    const STICKS = {
+      LS: { x: 'lx', y: 'ly', up: 'LS_UP', down: 'LS_DOWN', left: 'LS_LEFT', right: 'LS_RIGHT' },
+      RS: { x: 'rx', y: 'ry', up: 'RS_UP', down: 'RS_DOWN', left: 'RS_LEFT', right: 'RS_RIGHT' },
+    };
+    const TRIGGERS = ['L2', 'R2'];
+    const ARROWS = { UP: '↑', RIGHT: '→', DOWN: '↓', LEFT: '←' };
+
+    // Which DualShock 4 outputs a picture control stands for.
+    function targetOutputs(target) {
+      const s = STICKS[target];
+      return s ? [s.x, s.y, s.up, s.down, s.left, s.right] : [target];
+    }
+    function targetOf(output) {
+      for (const [id, s] of Object.entries(STICKS)) if (Object.values(s).includes(output)) return id;
+      return output;
+    }
+
+    // A gamepad input, in full and as the short tag on the picture.
+    function describeInput(input) {
+      if (input.kind === 'button') return 'Button ' + input.index + (input.mode === 'pressure' ? ', pressure' : '');
+      if (input.kind === 'hat') return 'Hat ' + input.index + ', ' + input.direction.toLowerCase();
+      return 'Axis ' + input.index + ({ positive: ', + side', negative: ', − side', pedal: ', pedal' }[input.mode] || '');
+    }
+    function tagInput(input) {
+      if (input.kind === 'button') return 'B' + input.index;
+      if (input.kind === 'hat') return 'H' + input.index + ARROWS[input.direction];
+      return 'A' + input.index + ({ positive: '+', negative: '−' }[input.mode] || '');
+    }
+
+    // The keyboard's actions for each picture control.
+    function keyActions(target) {
+      const s = STICKS[target];
+      if (s) return [s.up, s.left, s.down, s.right];
+      return target === 'TOUCH' ? ['TOUCH', 'T_TL', 'T_TR', 'T_BL', 'T_BR'] : [target];
+    }
+    const KEY_ACTION_LABEL = Object.fromEntries(KEY_ACTIONS.map(([action, label]) => [action, label]));
+
+    // What the keyboard would do with these keys held, in the shape the picture draws.
+    function keyboardState(map, down) {
+      const s = blankSource(-1), axis = { lx: 0, ly: 0, rx: 0, ry: 0 };
+      for (const [action, code] of Object.entries(map)) {
+        if (!code || !down.has(code)) continue;
+        if (STICK_ACTIONS[action]) axis[STICK_ACTIONS[action][0]] += STICK_ACTIONS[action][1];
+        else if (TOUCH_ACTIONS[action]) s.buttons |= B.TOUCH;
+        else s.buttons |= B[action];
+      }
+      for (const k of Object.keys(axis)) s[k] = axis[k] < 0 ? 0 : axis[k] > 0 ? 255 : 128;
+      if (s.buttons & B.L2) s.l2 = 255;
+      if (s.buttons & B.R2) s.r2 = 255;
+      return s;
+    }
+
+    const mapView = $('#mapView');
+    const mapArea = $('.pad-area', padView).cloneNode(true);
+    // The copy is a picture: no ids twice in the page, no key hints, nothing to
+    // play with. L3 and R3 always show, whatever the touch setting.
+    for (const node of $$('[id]', mapArea)) node.removeAttribute('id');
+    for (const node of $$('.keyhint, .pad-label', mapArea)) node.remove();
+    mapArea.classList.add('map-area');
+    for (const node of $$('button', mapArea)) node.tabIndex = -1;
+    $('#mapPad').appendChild(mapArea);
+    for (const node of $$('[data-ctl]', mapArea)) {
+      setPlace(node, DEFAULT_LAYOUT[node.dataset.ctl]);
+      node.hidden = false;
+      node.classList.remove('ctl-off', 'selected', 'on', 'clicked');
+    }
+    const mapNodes = {};
+    for (const node of $$('[data-btn]', mapArea)) mapNodes[node.dataset.btn] = node;
+    for (const node of $$('[data-arm]', mapArea)) mapNodes[node.dataset.arm] = node;
+    mapNodes.LS = $('[data-stick="L"]', mapArea);
+    mapNodes.RS = $('[data-stick="R"]', mapArea);
+    mapNodes.TOUCH = $('.touchpad', mapArea);
+    const mapChips = {};
+    for (const target of Object.keys(MAP_TARGETS)) {
+      const chip = el('button', 'map-chip');
+      chip.type = 'button';
+      chip.dataset.target = target;
+      chip.setAttribute('aria-label', MAP_TARGETS[target]);
+      $('#mapChips').appendChild(chip);
+      mapChips[target] = chip;
+    }
+    const mapCache = { buttons: -1, l2: -1, r2: -1, stick: { L: '', R: '' } };
+
+    const mapper = {
+      source: null,        // 'keyboard', or a gamepad's index
+      index: null,         // the gamepad being mapped; it stops playing meanwhile
+      draft: null,         // its profile, or the keyboard's keys, being changed
+      saved: '',           // the draft as it was last saved, to tell changes apart
+      target: '',          // the control open in the panel
+      input: null,         // the gamepad input open in the panel ({kind, index})
+      tab: 'pad',
+      capture: null,       // listening for the gamepad: { target, output, add, baseline, ready }
+      listenKey: null,     // listening for a key: { action }
+      pick: null,          // choosing on the picture what an input drives
+      wizard: null,        // the range being recorded
+      keysDown: new Set(),
+      testerState: {}, pollFailed: false, renderedAt: 0, backArmed: 0, deleteArmed: 0,
+
+      src() { return this.index === null ? null : gamepadSources.get(this.index); },
+      keyboard() { return this.source === 'keyboard'; },
+      status(text) { $('#mapStatus').textContent = text || ''; },
+      // Changed since saved, or a different profile chosen for this gamepad.
+      dirty() {
+        if (!this.draft) return false;
+        const src = this.src();
+        return JSON.stringify(this.draft) !== this.saved || (!!src && this.draft.id !== src.profileId);
+      },
+
+      // ---- opening and closing
+
+      open(source) {
+        this.close(true);
+        if (source !== 'keyboard') {
+          const src = gamepadSources.get(source);
+          if (!src) return;
+          this.index = source;
+          this.draft = ControllerMapping.copy(profileFor(src));
+          clearDevice(src); flush(now());
+        } else {
+          this.draft = Object.assign({}, keymap);
+        }
+        this.source = source;
+        this.saved = JSON.stringify(this.draft);
+        this.tab = 'pad'; this.target = ''; this.input = null; this.pollFailed = false;
+        releaseScreen(); heldKeys.clear(); Object.assign(keySource, blankSource(keySource.pad));
+        $('#home').hidden = true; padView.hidden = true; $('#settingsView').hidden = true;
+        document.body.classList.remove('in-pad');
+        mapView.hidden = false;
+        this.render();
+        this.status(this.keyboard() ? 'Click a control to change its key.' :
+          'Click a control, then press the gamepad button for it. This gamepad stops playing until you leave.');
+      },
+
+      // Leaves without saving. `quiet` when another view is about to take over.
+      close(quiet) {
+        this.stopListening();
+        const src = this.src();
+        this.index = null; this.source = null; this.draft = null; this.saved = '';
+        this.target = ''; this.input = null; this.wizard = null; this.pick = null; this.keysDown.clear();
+        this.testerState = {};
+        if (src) clearDevice(src);
+        flush(now());
+        if (quiet || mapView.hidden) return;
+        mapView.hidden = true;
+        if (primaryPad >= 0) { padView.hidden = false; document.body.classList.add('in-pad'); }
+        else $('#home').hidden = false;
+        renderGamepads();
+      },
+
+      back() {
+        if (this.dirty() && (!this.backArmed || now() - this.backArmed > 3000)) {
+          this.backArmed = now();
+          return this.status('You have changes that aren\'t saved. Press Back again to throw them away, or Save.');
+        }
+        this.close();
+      },
+
+      stopListening() {
+        const was = this.capture || this.listenKey;
+        this.capture = null; this.listenKey = null;
+        if (was && !mapView.hidden) this.renderPanel();
+      },
+      // Kept for the page's lifecycle handlers: focus loss and polling failures stop listening.
+      cancelCapture() { this.stopListening(); },
+
+      // ---- the picture
+
+      render() {
+        this.renderTop();
+        $('#mapTabs').hidden = this.keyboard();
+        for (const b of $$('#mapTabs button')) b.setAttribute('aria-selected', String(b.dataset.tab === this.tab));
+        $('#mapStage').hidden = this.tab !== 'pad';
+        $('#mapInputs').hidden = this.tab !== 'inputs';
+        this.renderChips();
+        this.renderPanel();
+        if (this.tab === 'inputs') this.renderInputs();
+      },
+
+      renderTop() {
+        const select = $('#mapSource');
+        select.textContent = '';
+        select.appendChild(new Option('Keyboard', 'keyboard'));
+        for (const [i, src] of gamepadSources) select.appendChild(new Option('Gamepad ' + (i + 1) + ' · ' + gamepadName(src), String(i)));
+        select.value = this.keyboard() ? 'keyboard' : String(this.index);
+        const gamepad = !this.keyboard();
+        $('#mapProfileBox').hidden = !gamepad;
+        $('#mapReset').hidden = gamepad;
+        $('#mapSave').disabled = !this.dirty();
+        $('#mapDirty').textContent = this.dirty() ? 'Not saved' : '';
+        const banner = $('#mapBanner');
+        banner.textContent = '';
+        banner.hidden = true;
+        if (!gamepad) { $('#mapSub').textContent = 'Keys drive the controller open on this page.'; return; }
+        const src = this.src(), sig = src.signature;
+        $('#mapSub').textContent = sig.buttons + ' buttons, ' + sig.axes + ' axes · ' +
+          (sig.mapping === 'standard' ? 'the browser knows its layout' : 'the browser doesn\'t know its layout: check each control');
+        const profiles = $('#mapProfile');
+        profiles.textContent = '';
+        for (const p of [ControllerMapping.browserDefault(sig), ...profileStore.profiles]) profiles.appendChild(new Option(p.name, p.id));
+        if (![...profiles.options].some(o => o.value === this.draft.id)) profiles.appendChild(new Option('New profile', this.draft.id));
+        profiles.value = this.draft.id;
+        // The standard layout's name is the gamepad's, until one is typed.
+        if (document.activeElement !== $('#mapName'))
+          $('#mapName').value = this.draft.id === 'default' && this.draft.name === 'Standard layout' ? gamepadName(src) : this.draft.name;
+        $('#mapDelete').disabled = !profileStore.profiles.some(p => p.id === this.draft.id);
+        $('#mapDelete').textContent = 'Delete this profile';
+        const others = [...gamepadSources].filter(([i, s]) => i !== this.index && this.draft.id !== 'default' && s.profileId === this.draft.id).map(([i]) => 'Gamepad ' + (i + 1));
+        const notes = [];
+        if (others.length) notes.push('Saving also changes ' + others.join(' and ') + ', which use this profile.');
+        if (profilePersistence) notes.push(profilePersistence);
+        if (ControllerMapping.signatureKey(this.draft.signature) !== ControllerMapping.signatureKey(sig)) {
+          notes.push('This profile was made for a different gamepad.');
+          const fit = el('button', 'btn', 'Fit it to this gamepad');
+          fit.type = 'button';
+          fit.addEventListener('click', () => this.fit());
+          banner.appendChild(el('span', '', notes.join(' ') + ' '));
+          banner.appendChild(fit);
+          banner.hidden = false;
+        } else if (notes.length) {
+          banner.textContent = notes.join(' ');
+          banner.hidden = false;
+        }
+      },
+
+      // What drives each control, written beside it on the picture.
+      tags(target) {
+        if (this.keyboard()) {
+          const keys = keyActions(target).map(a => this.draft[a]).filter(Boolean);
+          return STICKS[target] ? keys.map(keyLabel).join(' ') : keys.map(keyLabel).slice(0, 1).join('');
+        }
+        const outs = targetOutputs(target);
+        return this.draft.bindings.filter(b => outs.includes(b.output)).map(b => tagInput(b.input)).filter((t, i, a) => a.indexOf(t) === i).join(' ');
+      },
+
+      renderChips() {
+        if (mapView.hidden) return;
+        const box = $('#mapPad').getBoundingClientRect();
+        for (const [target, chip] of Object.entries(mapChips)) {
+          const tag = this.tags(target);
+          chip.textContent = tag || '—';
+          chip.classList.toggle('unset', !tag);
+          chip.classList.toggle('sel', this.target === target);
+          chip.classList.toggle('listening', !!(this.capture && this.capture.target === target) ||
+                                              !!(this.listenKey && keyActions(target).includes(this.listenKey.action)));
+          const node = mapNodes[target];
+          node.classList.toggle('map-sel', this.target === target);
+          node.classList.toggle('map-unset', !tag);
+          const r = node.getBoundingClientRect();
+          chip.style.left = (r.left + r.width / 2 - box.left) + 'px';
+          chip.style.top = (node.classList.contains('arm') ? r.top + r.height / 2 - box.top
+            : target === 'TOUCH' ? r.top - box.top + 28 : r.bottom - box.top + (node.classList.contains('face-btn') ? 8 : 12)) + 'px';
+        }
+        // Narrow screens: the picture is too small for tags, so the same list sits under it.
+        const list = $('#mapList');
+        list.textContent = '';
+        for (const [target, label] of Object.entries(MAP_TARGETS)) {
+          const item = el('button', 'map-list-item' + (this.target === target ? ' sel' : ''));
+          item.type = 'button';
+          item.dataset.target = target;
+          item.append(el('span', '', label), el('span', 'map-list-tag', this.tags(target) || 'Nothing'));
+          list.appendChild(item);
+        }
+      },
+
+      // The picture lights up with whatever the draft would do right now.
+      live() {
+        let state;
+        if (this.keyboard()) state = keyboardState(this.draft, this.keysDown);
+        else {
+          const src = this.src();
+          if (!src || !src.snapshot || ControllerMapping.validate(this.draft)) state = blankSource(-1);
+          else {
+            state = Object.assign(blankSource(-1), ControllerMapping.toSource(ControllerMapping.evaluate(src.snapshot, this.draft, this.testerState)));
+            if (state.l2 > 20) state.buttons |= B.L2;
+            if (state.r2 > 20) state.buttons |= B.R2;
+          }
+        }
+        renderControls(mapArea, state, mapCache);
+        return state;
+      },
+
+      // ---- clicking the picture
+
+      clickPicture(e) {
+        const chip = e.target.closest('.map-chip, .map-list-item');
+        let target = chip && chip.dataset.target;
+        if (!target) {
+          const node = e.target.closest('[data-btn], [data-stick], .touchpad, .dpad');
+          if (!node || !mapArea.contains(node)) return;
+          if (node.dataset.btn) target = node.dataset.btn;
+          else if (node.dataset.stick) target = node.dataset.stick + 'S';
+          else if (node.classList.contains('touchpad')) target = 'TOUCH';
+          else {
+            const r = node.getBoundingClientRect();
+            const dx = e.clientX - (r.left + r.width / 2), dy = e.clientY - (r.top + r.height / 2);
+            target = Math.abs(dx) > Math.abs(dy) ? (dx > 0 ? 'RIGHT' : 'LEFT') : (dy > 0 ? 'DOWN' : 'UP');
+          }
+        }
+        if (this.pick) return this.pickTarget(target);
+        this.stopListening();
+        this.target = target; this.input = null; this.wizard = null;
+        this.render();
+        if (matchMedia('(max-width: 900px)').matches) $('#mapPanel').scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+      },
+
+      // ---- the panel
+
+      renderPanel() {
+        const panel = $('#mapPanel');
+        panel.textContent = '';
+        if (this.wizard) return this.renderWizard(panel);
+        if (this.pick) return this.renderPick(panel);
+        if (this.input) return this.renderInputPanel(panel);
+        if (!this.target) {
+          panel.appendChild(el('h3', 'map-panel-title', this.keyboard() ? 'Keyboard' : 'Mapping'));
+          panel.appendChild(el('p', 'hint', this.keyboard()
+            ? 'Click a control on the controller to choose its key. Press keys to see what they do.'
+            : 'Click a control on the controller to choose what drives it. Press anything on the gamepad to see what it does.' +
+              (this.src() && this.src().signature.mapping !== 'standard' ? ' The browser doesn\'t know this gamepad, so the standard layout is only a guess.' : '')));
+          return;
+        }
+        panel.appendChild(el('h3', 'map-panel-title', MAP_TARGETS[this.target]));
+        if (this.keyboard()) this.renderKeyPanel(panel);
+        else this.renderPadPanel(panel);
+      },
+
+      // Keys for one control. Sticks and the touchpad have several.
+      renderKeyPanel(panel) {
+        const rows = el('div', 'map-rows');
+        for (const action of keyActions(this.target)) {
+          const row = el('div', 'map-row');
+          row.appendChild(el('span', 'map-row-label', keyActions(this.target).length > 1 ? KEY_ACTION_LABEL[action] : 'Key'));
+          const listening = this.listenKey && this.listenKey.action === action;
+          const key = el('button', 'key-btn' + (listening ? ' listening' : ''), listening ? 'Press a key…' : keyLabel(this.draft[action]));
+          key.type = 'button';
+          key.addEventListener('click', () => {
+            if (listening) return this.stopListening();
+            this.listenKey = { action };
+            this.renderPanel(); this.renderChips();
+          });
+          row.appendChild(key);
+          const clear = el('button', 'link-btn', 'Clear');
+          clear.type = 'button'; clear.disabled = !this.draft[action];
+          clear.addEventListener('click', () => { this.draft[action] = ''; this.changed(); });
+          row.appendChild(clear);
+          rows.appendChild(row);
+        }
+        panel.appendChild(rows);
+        panel.appendChild(el('p', 'hint', 'A key drives one control: choosing it here takes it from wherever it was.'));
+      },
+
+      onKey(e) {
+        if (!this.listenKey) {
+          if (this.keyboard() && !typing()) { this.keysDown.add(e.code); e.preventDefault(); }
+          return;
+        }
+        e.preventDefault(); e.stopPropagation();
+        if (e.ctrlKey || e.altKey || e.metaKey || !e.code || !validKey(e.code)) return this.status('That key can\'t be used. Choose one without Ctrl, Alt or the Windows key.');
+        const { action } = this.listenKey;
+        const taken = Object.keys(this.draft).filter(other => other !== action && this.draft[other] === e.code);
+        for (const other of taken) this.draft[other] = '';
+        this.draft[action] = e.code;
+        this.listenKey = null;
+        this.changed();
+        this.status(KEY_ACTION_LABEL[action] + ' is ' + keyLabel(e.code) + (taken.length ? ', taken from ' + taken.map(a => KEY_ACTION_LABEL[a]).join(', ') : '') + '.');
+      },
+
+      // A gamepad control: what drives it, Change, and how it responds.
+      renderPadPanel(panel) {
+        const M = ControllerMapping, target = this.target, stick = STICKS[target];
+        const listening = this.capture && this.capture.target === target;
+        const bindings = this.draft.bindings.filter(b => targetOutputs(target).includes(b.output));
+        if (listening) {
+          const ask = el('p', 'map-listen', this.capture.ask);
+          panel.appendChild(ask);
+          const stop = el('button', 'btn', 'Cancel');
+          stop.type = 'button';
+          stop.addEventListener('click', () => { this.stopListening(); this.status(''); });
+          panel.appendChild(stop);
+          return;
+        }
+        const list = el('div', 'map-rows');
+        if (!bindings.length) list.appendChild(el('p', 'hint', 'Nothing drives it.'));
+        for (const b of bindings) {
+          const row = el('div', 'map-row');
+          const what = stick ? { [stick.x]: 'Left and right', [stick.y]: 'Up and down' }[b.output] || M.outputLabel(b.output) : '';
+          row.appendChild(el('span', 'map-row-label', (what ? what + ': ' : '') + describeInput(b.input) + (b.invert ? ', reversed' : '')));
+          const remove = el('button', 'link-btn', 'Remove');
+          remove.type = 'button';
+          remove.addEventListener('click', () => { this.draft.bindings.splice(this.draft.bindings.indexOf(b), 1); this.changed(); });
+          row.appendChild(remove);
+          list.appendChild(row);
+        }
+        panel.appendChild(list);
+        const actions = el('div', 'map-actions');
+        actions.appendChild(this.action('Change', 'btn primary', () => this.listen(target, false)));
+        if (!stick && bindings.length) actions.appendChild(this.action('Add another', 'btn', () => this.listen(target, true)));
+        panel.appendChild(actions);
+
+        if (stick) {
+          const x = bindings.find(b => b.output === stick.x), y = bindings.find(b => b.output === stick.y);
+          panel.appendChild(this.stickPreview(stick, x, y));
+          const axes = [x, y].filter(Boolean);
+          if (axes.length) {
+            const tune = this.section(panel, 'Response');
+            const dead = axes[0].legacy ? .06 : axes[0].deadzone;
+            this.slider(tune, 'Dead zone', 0, .5, .01, dead, v => Math.round(v * 100) + '%', v => {
+              for (const b of axes) { delete b.legacy; b.deadzone = v; if (b.saturation <= v) b.saturation = 1; }
+            });
+            this.slider(tune, 'Curve', .5, 3, .1, axes[0].exponent, v => v === 1 ? 'straight' : v < 1 ? 'quicker' : 'gentler', v => {
+              for (const b of axes) { delete b.legacy; b.exponent = v; }
+            });
+            for (const [b, label] of [[x, 'Reverse left and right'], [y, 'Reverse up and down']]) {
+              if (b) this.toggle(tune, label, b.invert, v => { delete b.legacy; b.invert = v; });
+            }
+            for (const b of axes) if (b.input.kind === 'axis') {
+              const range = el('button', 'btn', 'Set the range of axis ' + b.input.index);
+              range.type = 'button';
+              range.addEventListener('click', () => this.startWizard(b.input.index, 'center'));
+              tune.appendChild(range);
+            }
+          }
+        } else {
+          const analog = bindings.filter(b => b.input.kind === 'axis' || (b.input.kind === 'button' && b.input.mode === 'pressure'));
+          if (TRIGGERS.includes(target)) panel.appendChild(this.triggerPreview(target));
+          if (analog.length) {
+            const tune = this.section(panel, 'Response');
+            if (TRIGGERS.includes(target)) {
+              this.slider(tune, 'Dead zone', 0, .5, .01, analog[0].deadzone, v => Math.round(v * 100) + '%', v => {
+                for (const b of analog) { b.deadzone = v; if (b.saturation <= v) b.saturation = 1; }
+              });
+            } else {
+              this.slider(tune, 'Presses at', .1, .95, .05, analog[0].activate, v => Math.round(v * 100) + '%', v => {
+                for (const b of analog) { b.activate = v; b.release = Math.max(0, v - .1); }
+              });
+            }
+            for (const b of analog) if (b.input.kind === 'axis') {
+              const range = el('button', 'btn', 'Set the range of axis ' + b.input.index);
+              range.type = 'button';
+              range.addEventListener('click', () => this.startWizard(b.input.index, 'pedal'));
+              tune.appendChild(range);
+            }
+          }
+        }
+      },
+
+      action(text, cls, fn) {
+        const b = el('button', cls, text);
+        b.type = 'button';
+        b.addEventListener('click', fn);
+        return b;
+      },
+      section(panel, title) {
+        const box = el('div', 'map-section');
+        box.appendChild(el('h4', '', title));
+        panel.appendChild(box);
+        return box;
+      },
+      slider(box, label, min, max, step, value, format, apply) {
+        const row = el('label', 'map-slider');
+        const name = el('span', '', label), out = el('output', '', format(value));
+        const input = el('input');
+        Object.assign(input, { type: 'range', min, max, step, value });
+        input.addEventListener('input', () => { apply(Number(input.value)); out.textContent = format(Number(input.value)); this.changed(false); });
+        row.append(name, input, out);
+        box.appendChild(row);
+        return input;
+      },
+      toggle(box, label, value, apply) {
+        const row = el('label', 'map-toggle');
+        const input = el('input', 'check');
+        input.type = 'checkbox'; input.checked = value;
+        input.addEventListener('change', () => { apply(input.checked); this.changed(false); });
+        row.append(el('span', '', label), input);
+        box.appendChild(row);
+      },
+
+      // The stick's raw position (grey) and what the controller gets (lit),
+      // inside the dead zone ring.
+      stickPreview(stick, x, y) {
+        const ns = 'http://www.w3.org/2000/svg';
+        const svg = document.createElementNS(ns, 'svg');
+        svg.setAttribute('viewBox', '-60 -60 120 120');
+        svg.setAttribute('class', 'map-stick');
+        svg.setAttribute('aria-hidden', 'true');
+        svg.innerHTML = '<circle r="54" class="well"/><circle r="0" class="dead"/><line x1="-54" x2="54" class="cross"/><line y1="-54" y2="54" class="cross"/><circle r="5" class="raw"/><circle r="7" class="out"/>';
+        svg.dataset.x = stick.x; svg.dataset.y = stick.y;
+        const dead = x && !x.legacy ? x.deadzone : .06;
+        $('.dead', svg).setAttribute('r', String(54 * dead));
+        return svg;
+      },
+      triggerPreview(target) {
+        const bar = el('div', 'map-bar');
+        bar.dataset.trigger = target;
+        bar.appendChild(el('span', 'map-bar-fill'));
+        return bar;
+      },
+
+      // ---- listening to the gamepad
+
+      listen(target, add) {
+        if (!this.src()) return;
+        const stick = STICKS[target];
+        this.capture = { target, add, baseline: null, ready: false, output: stick ? stick.x : target,
+                         ask: 'Let go of everything for a moment…' };
+        this.renderPanel(); this.renderChips();
+      },
+      askFor() {
+        const c = this.capture, stick = STICKS[c.target];
+        if (!stick) return 'Now press the button for ' + MAP_TARGETS[c.target] + ' on the gamepad.';
+        return c.output === stick.x ? 'Now move the stick you want all the way to the right.' : 'Now move it all the way down.';
+      },
+      // Called when a press or movement is seen while listening.
+      heard(snap, base, buttonIndex, axisIndex) {
+        const c = this.capture, stick = STICKS[c.target];
+        const message = this.assign(c.output, snap, base, buttonIndex, axisIndex, c.add);
+        if (message.retry) {
+          c.baseline = null; c.ready = false; c.ask = message.text;
+          return this.renderPanel();
+        }
+        if (stick && c.output === stick.x && !message.error) {
+          // Then the other axis, the same way.
+          c.output = stick.y; c.baseline = null; c.ready = false; c.ask = 'Let go of the stick…';
+          this.changed();
+          return;
+        }
+        this.capture = null;
+        this.changed();
+        this.status(message.text);
+      },
+
+      // Binds what was just pressed or moved to one output. Without `add` it
+      // replaces what the output had. Like a key, an input then drives only this
+      // control: the control that had it lets go.
+      assign(output, snap, base, buttonIndex, axisIndex, add) {
+        const M = ControllerMapping, axisOut = M.axes.includes(output), name = M.outputLabel(output);
+        const draft = M.copy(this.draft);
+        let input, extra = {};
+        if (buttonIndex >= 0) {
+          if (axisOut) return { retry: true, text: 'That was a button. Move a stick instead.' };
+          input = { kind: 'button', index: buttonIndex, mode: TRIGGERS.includes(output) ? 'pressure' : 'digital' };
+        } else {
+          const from = base.axes[axisIndex], to = snap.axes[axisIndex], c = draft.calibration[axisIndex];
+          if (c?.type === 'hat' || Math.abs(from) > 1.05) {
+            // A D-pad the browser reports as one axis: it rests outside -1..1,
+            // and each direction has a value of its own. Unrecorded directions
+            // start at the usual values; the one just pressed is recorded.
+            const slot = { UP: 1, RIGHT: 3, DOWN: 5, LEFT: 7 }[output];
+            if (!slot) return { retry: true, text: 'That\'s a D-pad. Press a button or move a stick instead.' };
+            const hat = c?.type === 'hat' ? c : { type: 'hat', values: [from, -1, -5 / 7, -3 / 7, -1 / 7, 1 / 7, 3 / 7, 5 / 7, 1], tolerance: .05 };
+            hat.values[slot] = to;
+            draft.calibration[axisIndex] = hat;
+            // A hat isn't a stick: whatever read it as one stops.
+            draft.bindings = draft.bindings.filter(b => !(b.input.kind === 'axis' && b.input.index === axisIndex));
+            input = { kind: 'hat', index: axisIndex, direction: output };
+          } else if (axisOut) {
+            if (c?.type === 'pedal' || Math.abs(from) > .8) return { retry: true, text: 'That one rests at one end, like a trigger or a pedal. Move a stick instead.' };
+            input = { kind: 'axis', index: axisIndex, mode: 'center' };
+            extra = { invert: to < from, deadzone: .06 };
+          } else if (c?.type === 'pedal' || (!c && Math.abs(from) > .8)) {
+            // A trigger or pedal resting at one end of its axis: its whole travel.
+            if (!c) {
+              draft.calibration[axisIndex] = { type: 'pedal', released: from, full: from > 0 ? -1 : 1 };
+              for (const b of draft.bindings) if (b.input.kind === 'axis' && b.input.index === axisIndex) { b.input.mode = 'pedal'; delete b.legacy; }
+            }
+            input = { kind: 'axis', index: axisIndex, mode: 'pedal' };
+          } else {
+            input = { kind: 'axis', index: axisIndex, mode: to > from ? 'positive' : 'negative' };
+          }
+        }
+        const target = targetOf(output);
+        const same = b => b.input.kind === input.kind && b.input.index === input.index &&
+          (axisOut || input.kind === 'button' || (b.input.mode === input.mode && b.input.direction === input.direction));
+        const taken = new Set();
+        draft.bindings = draft.bindings.filter(b => {
+          if (!add && (b.output === output || (M.directions[b.output] && M.directions[b.output][0] === output))) return false;
+          const sameKind = axisOut ? (M.axes.includes(b.output) || !!M.directions[b.output]) : !M.axes.includes(b.output);
+          if (same(b) && sameKind && targetOf(b.output) !== target) { taken.add(MAP_TARGETS[targetOf(b.output)]); return false; }
+          return !(add && same(b) && b.output === output);
+        });
+        draft.bindings.push(M.binding(input, output, extra));
+        const error = M.validate(draft);
+        if (error) return { error: true, text: 'That input can\'t be used for ' + name + ' (' + error + ').' };
+        this.draft = draft;
+        return { text: MAP_TARGETS[target] + ' now uses ' + describeInput(input) + (taken.size ? ', taken from ' + [...taken].join(', ') : '') + '.' };
+      },
+
+      // ---- the inputs tab: everything the gamepad sends
+
+      renderInputs() {
+        const src = this.src(), root = $('#mapInputs');
+        root.textContent = '';
+        if (!src) return;
+        const sig = src.signature, used = this.usage();
+        const buttons = el('div', 'in-grid');
+        for (let i = 0; i < sig.buttons; i++) {
+          const tile = el('button', 'in-tile');
+          tile.type = 'button';
+          tile.dataset.input = 'button:' + i;
+          tile.appendChild(el('span', 'in-fill'));
+          tile.appendChild(el('span', 'in-name', 'B' + i));
+          tile.appendChild(el('span', 'in-use', used['button:' + i] || '—'));
+          tile.addEventListener('click', () => this.openInput({ kind: 'button', index: i }));
+          buttons.appendChild(tile);
+        }
+        root.appendChild(el('h4', 'in-head', 'Buttons'));
+        root.appendChild(buttons);
+        root.appendChild(el('h4', 'in-head', 'Axes'));
+        const axes = el('div', 'in-axes');
+        for (let i = 0; i < sig.axes; i++) {
+          const row = el('button', 'in-axis');
+          row.type = 'button';
+          row.dataset.input = 'axis:' + i;
+          const c = this.draft.calibration[i];
+          row.appendChild(el('span', 'in-name', 'Axis ' + i + (c ? ' · ' + { center: 'stick or wheel', pedal: 'pedal', hat: 'D-pad hat' }[c.type] : '')));
+          const bar = el('span', 'in-bar');
+          bar.appendChild(el('span', 'in-dot'));
+          row.appendChild(bar);
+          row.appendChild(el('span', 'in-value'));
+          row.appendChild(el('span', 'in-use', used['axis:' + i] || '—'));
+          row.addEventListener('click', () => this.openInput({ kind: 'axis', index: i }));
+          axes.appendChild(row);
+        }
+        root.appendChild(axes);
+        if (!sig.buttons && !sig.axes) root.appendChild(el('p', 'hint', 'The browser shows no inputs for this gamepad.'));
+      },
+      // Which controls each input drives, by input.
+      usage() {
+        const out = {};
+        for (const b of this.draft.bindings) {
+          const key = (b.input.kind === 'button' ? 'button:' : 'axis:') + b.input.index;
+          const label = MAP_TARGETS[targetOf(b.output)];
+          out[key] = out[key] ? (out[key].includes(label) ? out[key] : out[key] + ', ' + label) : '→ ' + label;
+        }
+        return out;
+      },
+      // Live values on the inputs tab.
+      paintInputs(snap) {
+        for (const tile of $$('.in-tile', $('#mapInputs'))) {
+          const b = snap.buttons[+tile.dataset.input.split(':')[1]];
+          tile.classList.toggle('on', !!b && (b.pressed || b.value > .5));
+          $('.in-fill', tile).style.height = (b ? b.value * 100 : 0) + '%';
+          tile.classList.toggle('missing', !b);
+        }
+        for (const row of $$('.in-axis', $('#mapInputs'))) {
+          const v = snap.axes[+row.dataset.input.split(':')[1]];
+          $('.in-value', row).textContent = v === null ? '—' : v.toFixed(2);
+          $('.in-dot', row).style.left = (v === null ? 50 : clamp((v + 1) / 2, 0, 1) * 100) + '%';
+          row.classList.toggle('missing', v === null);
+          row.classList.toggle('outside', v !== null && Math.abs(v) > 1.001);
+        }
+      },
+
+      openInput(input) {
+        this.stopListening();
+        this.input = input; this.target = ''; this.wizard = null; this.pick = null;
+        this.renderPanel(); this.renderChips();
+      },
+
+      // One gamepad input: what it drives and how.
+      renderInputPanel(panel) {
+        const M = ControllerMapping, input = this.input;
+        const axis = input.kind === 'axis', c = axis && this.draft.calibration[input.index];
+        panel.appendChild(el('h3', 'map-panel-title', axis ? 'Axis ' + input.index : 'Button ' + input.index));
+        const mine = this.draft.bindings.filter(b => (b.input.kind === 'button') === !axis && b.input.index === input.index);
+        if (!mine.length) panel.appendChild(el('p', 'hint', 'It doesn\'t drive anything.'));
+        for (const b of mine) {
+          const box = this.section(panel, M.outputLabel(b.output));
+          box.appendChild(el('p', 'hint', describeInput(b.input)));
+          const analog = b.input.kind === 'axis' || b.input.mode === 'pressure';
+          if (b.input.kind !== 'hat') this.toggle(box, 'Reverse', b.invert, v => { delete b.legacy; b.invert = v; });
+          if (analog) {
+            this.slider(box, 'Dead zone', 0, .5, .01, b.legacy ? .06 : b.deadzone, v => Math.round(v * 100) + '%', v => {
+              delete b.legacy; b.deadzone = v; if (b.saturation <= v) b.saturation = 1;
+            });
+            const curve = this.curvePreview(b.exponent);
+            this.slider(box, 'Curve', .5, 3, .1, b.exponent, v => v === 1 ? 'straight' : v < 1 ? 'quicker' : 'gentler', v => {
+              delete b.legacy; b.exponent = v; this.drawCurve(curve, v);
+            });
+            box.appendChild(curve);
+            if (!M.axes.includes(b.output) && !TRIGGERS.includes(b.output) && !M.directions[b.output])
+              this.slider(box, 'Presses at', .1, .95, .05, b.activate, v => Math.round(v * 100) + '%', v => { b.activate = v; b.release = Math.max(0, v - .1); });
+          }
+          box.appendChild(this.action('Remove', 'link-btn', () => { this.draft.bindings.splice(this.draft.bindings.indexOf(b), 1); this.changed(); }));
+        }
+        const actions = el('div', 'map-actions');
+        actions.appendChild(this.action('Make it drive…', 'btn primary', () => {
+          if (axis && c?.type === 'hat') return this.useAsDpad(input.index);
+          this.pick = { input }; this.tab = 'pad'; this.render();
+        }));
+        if (axis) {
+          actions.appendChild(this.action(c ? 'Set its range again' : 'Set its range', 'btn', () => this.startWizard(input.index, c ? c.type : '')));
+          if (c) actions.appendChild(this.action('Forget its range', 'link-btn', () => {
+            delete this.draft.calibration[input.index];
+            for (const b of this.draft.bindings) if (b.input.index === input.index && b.input.kind !== 'button') {
+              if (b.input.kind === 'hat') b.output = '';
+              else if (b.input.mode === 'pedal') b.input.mode = 'positive';
+            }
+            this.draft.bindings = this.draft.bindings.filter(b => b.output);
+            this.changed();
+          }));
+        }
+        panel.appendChild(actions);
+      },
+
+      curvePreview(exponent) {
+        const ns = 'http://www.w3.org/2000/svg';
+        const svg = document.createElementNS(ns, 'svg');
+        svg.setAttribute('viewBox', '0 0 100 100');
+        svg.setAttribute('class', 'map-curve');
+        svg.setAttribute('aria-hidden', 'true');
+        svg.innerHTML = '<path class="grid" d="M0 100L100 0"/><path class="line"/>';
+        this.drawCurve(svg, exponent);
+        return svg;
+      },
+      drawCurve(svg, exponent) {
+        let d = 'M0 100';
+        for (let i = 1; i <= 20; i++) d += 'L' + i * 5 + ' ' + (100 - Math.pow(i / 20, exponent) * 100).toFixed(1);
+        $('.line', svg).setAttribute('d', d);
+      },
+
+      // Choosing on the picture what an input drives.
+      renderPick(panel) {
+        const input = this.pick.input;
+        panel.appendChild(el('h3', 'map-panel-title', (input.kind === 'axis' ? 'Axis ' : 'Button ') + input.index));
+        if (this.pick.stick) {
+          const stick = STICKS[this.pick.stick];
+          panel.appendChild(el('p', 'hint', 'Which way on the ' + MAP_TARGETS[this.pick.stick].toLowerCase() + '?'));
+          const ways = input.kind === 'axis'
+            ? [['Left and right', stick.x], ['Up and down', stick.y]]
+            : [['Up', stick.up], ['Down', stick.down], ['Left', stick.left], ['Right', stick.right]];
+          const actions = el('div', 'map-actions');
+          for (const [label, output] of ways) actions.appendChild(this.action(label, 'btn', () => this.bindPicked(output)));
+          panel.appendChild(actions);
+        } else {
+          panel.appendChild(el('p', 'map-listen', 'Click the control on the controller it should drive.'));
+        }
+        panel.appendChild(this.action('Cancel', 'link-btn', () => { this.pick = null; this.input = input; this.render(); }));
+      },
+      pickTarget(target) {
+        if (STICKS[target]) { this.pick.stick = target; return this.renderPanel(); }
+        this.bindPicked(target);
+      },
+      bindPicked(output) {
+        const M = ControllerMapping, input = this.pick.input, c = this.draft.calibration[input.index];
+        let bound;
+        if (input.kind === 'button') bound = { kind: 'button', index: input.index, mode: TRIGGERS.includes(output) ? 'pressure' : 'digital' };
+        else if (M.axes.includes(output)) bound = { kind: 'axis', index: input.index, mode: c?.type === 'pedal' ? 'pedal' : 'center' };
+        else bound = { kind: 'axis', index: input.index, mode: c?.type === 'pedal' ? 'pedal' : 'positive' };
+        const draft = M.copy(this.draft);
+        draft.bindings.push(M.binding(bound, output, M.axes.includes(output) ? { deadzone: .06 } : {}));
+        const error = M.validate(draft);
+        this.pick = null; this.input = input;
+        if (error) { this.status('That doesn\'t work here: ' + error + '.'); return this.render(); }
+        this.draft = draft;
+        this.changed();
+        this.status(describeInput(bound) + ' now drives ' + M.outputLabel(output) + '.');
+      },
+      useAsDpad(index) {
+        this.draft.bindings = this.draft.bindings.filter(b => !(b.input.kind === 'hat' && b.input.index === index));
+        for (const direction of ['UP', 'RIGHT', 'DOWN', 'LEFT'])
+          this.draft.bindings.push(ControllerMapping.binding({ kind: 'hat', index, direction }, direction));
+        this.changed();
+        this.status('Axis ' + index + ' is the D-pad now.');
+      },
+
+      // ---- setting an axis's range, a step at a time
+
+      startWizard(index, type) {
+        this.stopListening();
+        this.input = { kind: 'axis', index };
+        this.wizard = { index, type, step: 0, seen: [], values: {} };
+        this.renderPanel();
+      },
+      renderWizard(panel) {
+        const w = this.wizard;
+        panel.appendChild(el('h3', 'map-panel-title', 'Range of axis ' + w.index));
+        if (!w.type) {
+          panel.appendChild(el('p', 'hint', 'What is it?'));
+          const actions = el('div', 'map-actions');
+          for (const [type, label] of [['center', 'A stick or wheel'], ['pedal', 'A pedal or trigger'], ['hat', 'A D-pad (hat)']])
+            actions.appendChild(this.action(label, 'btn', () => { w.type = type; this.renderPanel(); }));
+          panel.appendChild(actions);
+        } else {
+          const steps = this.wizardSteps();
+          panel.appendChild(el('p', 'map-step', 'Step ' + (w.step + 1) + ' of ' + steps.length));
+          panel.appendChild(el('p', 'map-listen', steps[w.step].ask));
+          const bar = el('div', 'map-bar wide');
+          bar.dataset.wizard = '1';
+          bar.appendChild(el('span', 'map-bar-fill'));
+          bar.appendChild(el('span', 'map-bar-dot'));
+          panel.appendChild(bar);
+          panel.appendChild(this.action(steps[w.step].button, 'btn primary', () => this.wizardNext()));
+        }
+        panel.appendChild(this.action('Cancel', 'link-btn', () => { this.wizard = null; this.renderPanel(); }));
+      },
+      wizardSteps() {
+        const t = this.wizard.type;
+        if (t === 'center') return [
+          { key: 'center', ask: 'Let go of it, so it rests in the middle.', button: 'It\'s in the middle' },
+          { key: 'a', ask: 'Push or turn it all the way one way, and hold it.', button: 'Holding it there' },
+          { key: 'b', ask: 'Now all the way the other way, and hold it.', button: 'Done' }];
+        if (t === 'pedal') return [
+          { key: 'released', ask: 'Let go of it completely.', button: 'It\'s let go' },
+          { key: 'full', ask: 'Press it all the way, and hold it.', button: 'Done' }];
+        return [
+          { key: 0, ask: 'Let go of the D-pad.', button: 'It\'s let go' },
+          { key: 1, ask: 'Hold up.', button: 'Holding up' }, { key: 3, ask: 'Hold right.', button: 'Holding right' },
+          { key: 5, ask: 'Hold down.', button: 'Holding down' }, { key: 7, ask: 'Hold left.', button: 'Done' }];
+      },
+      wizardNext() {
+        const w = this.wizard, steps = this.wizardSteps(), src = this.src();
+        const v = src && src.snapshot && src.snapshot.axes[w.index];
+        if (!Number.isFinite(v)) return this.status('The gamepad isn\'t sending this axis right now.');
+        w.values[steps[w.step].key] = v;
+        if (w.step + 1 < steps.length) { w.step++; return this.renderPanel(); }
+        const M = ControllerMapping;
+        let range;
+        if (w.type === 'center') range = M.centeredRange(w.values.center, w.values.a, w.values.b);
+        else if (w.type === 'pedal') range = Math.abs(w.values.full - w.values.released) > .2 ? { type: 'pedal', released: w.values.released, full: w.values.full } : null;
+        else range = M.hatFromCardinals(w.values[0], w.values[1], w.values[3], w.values[5], w.values[7]);
+        if (!range) { w.step = 0; this.status('That didn\'t look right: the readings were too close together. Try again.'); return this.renderPanel(); }
+        this.applyRange(w.index, range);
+      },
+      applyRange(index, range) {
+        this.draft.calibration[index] = range;
+        for (const b of this.draft.bindings) {
+          if (b.input.kind === 'button' || b.input.index !== index) continue;
+          delete b.legacy;
+          if (range.type === 'pedal' && b.input.kind === 'axis') b.input.mode = 'pedal';
+          if (range.type === 'center' && b.input.mode === 'pedal') b.input.mode = 'positive';
+        }
+        if (range.type === 'hat') this.draft.bindings = this.draft.bindings.filter(b => !(b.input.kind === 'axis' && b.input.index === index));
+        else this.draft.bindings = this.draft.bindings.filter(b => !(b.input.kind === 'hat' && b.input.index === index));
+        this.wizard = null;
+        if (range.type === 'hat') return this.useAsDpad(index);
+        this.changed();
+        this.status('Range saved in the profile. Save to keep it.');
+      },
+
+      // ---- live, every frame
+
+      tick(t) {
+        if (mapView.hidden || !this.draft) return;
+        const src = this.src();
+        if (!this.keyboard() && !src) return;
+        const capture = this.capture, snap = src && src.snapshot;
+        if (capture && snap) {
+          this.pollFailed = false;
+          if (!capture.baseline) { capture.baseline = ControllerMapping.copy(snap); capture.stableAt = t; }
+          else {
+            const base = capture.baseline;
+            const movedButton = snap.buttons.findIndex((b, i) => b && base.buttons[i] && b.value - base.buttons[i].value > .5);
+            const movedAxis = snap.axes.findIndex((v, i) => v !== null && base.axes[i] !== null && Math.abs(v - base.axes[i]) > .3);
+            if (!capture.ready) {
+              const stable = snap.axes.every((v, i) => v === null || base.axes[i] === null || Math.abs(v - base.axes[i]) < .03) &&
+                snap.buttons.every((b, i) => !b || !base.buttons[i] || Math.abs(b.value - base.buttons[i].value) < .03);
+              if (!stable) { capture.baseline = ControllerMapping.copy(snap); capture.stableAt = t; }
+              const released = snap.buttons.every(b => !b || (!b.pressed && b.value < .1));
+              if (released && t - capture.stableAt >= 300) { capture.ready = true; capture.ask = this.askFor(); this.renderPanel(); }
+            } else if (movedButton >= 0 || movedAxis >= 0) {
+              this.heard(snap, base, movedButton, movedButton >= 0 ? -1 : movedAxis);
+            }
+          }
+        }
+        if (t - this.renderedAt < 33) return;
+        this.renderedAt = t;
+        const state = this.live();
+        for (const svg of $$('.map-stick', $('#mapPanel'))) {
+          const r = svg.dataset.x === 'lx' ? [state.lx, state.ly] : [state.rx, state.ry];
+          const axis = this.draft.bindings && this.draft.bindings.find(b => b.output === svg.dataset.x);
+          $('.dead', svg).setAttribute('r', String(54 * (axis && !axis.legacy ? axis.deadzone : .06)));
+          $('.out', svg).setAttribute('cx', ((r[0] - 128) / 127.5 * 54).toFixed(1));
+          $('.out', svg).setAttribute('cy', ((r[1] - 128) / 127.5 * 54).toFixed(1));
+          const raw = this.rawStick(svg.dataset.x, svg.dataset.y, snap);
+          $('.raw', svg).setAttribute('cx', (raw[0] * 54).toFixed(1));
+          $('.raw', svg).setAttribute('cy', (raw[1] * 54).toFixed(1));
+        }
+        for (const bar of $$('.map-bar[data-trigger]', $('#mapPanel')))
+          $('.map-bar-fill', bar).style.width = (state[bar.dataset.trigger.toLowerCase()] / 2.55) + '%';
+        const wizardBar = $('.map-bar[data-wizard]', $('#mapPanel'));
+        if (wizardBar && snap) {
+          const v = snap.axes[this.wizard.index];
+          $('.map-bar-dot', wizardBar).style.left = (v === null ? 50 : clamp((v + 1) / 2, 0, 1) * 100) + '%';
+        }
+        if (this.tab === 'inputs' && snap) this.paintInputs(snap);
+      },
+      // The stick's own position, before dead zone and curve, from its axis bindings.
+      rawStick(xOut, yOut, snap) {
+        if (!snap || this.keyboard()) return [0, 0];
+        const value = output => {
+          const b = this.draft.bindings.find(b => b.output === output && b.input.kind === 'axis');
+          if (!b) return 0;
+          const v = ControllerMapping.inputValue(snap, this.draft, b.input);
+          return v === null ? 0 : b.invert ? -v : v;
+        };
+        return [value(xOut), value(yOut)];
+      },
+
+      // ---- after any change
+
+      changed(redraw = true) {
+        this.testerState = {};
+        this.backArmed = 0;
+        $('#mapSave').disabled = !this.dirty();
+        $('#mapDirty').textContent = this.dirty() ? 'Not saved' : '';
+        if (redraw) this.render();
+        else this.renderChips();
+      },
+
+      // ---- profiles
+
+      save(asNew) {
+        if (this.keyboard()) {
+          keymap = Object.assign({}, this.draft);
+          store.set('keymap', keymap);
+          rebuildKeymap();
+          this.saved = JSON.stringify(this.draft);
+          this.changed();
+          return this.status('Keys saved.');
+        }
+        const src = this.src();
+        if (!src) return;
+        if (this.draft.id === 'default' && JSON.stringify(this.draft) === this.saved) {
+          // The standard layout, chosen again: nothing to store but the choice.
+          preferProfile(src, 'default');
+          this.changed();
+          return this.status('This gamepad uses the standard layout.');
+        }
+        const draft = ControllerMapping.copy(this.draft);
+        draft.name = $('#mapName').value.trim() || gamepadName(src);
+        const error = ControllerMapping.validate(draft);
+        if (error) return this.status('It can\'t be saved yet: ' + error + '.');
+        if (ControllerMapping.unresolved(draft, src.signature) ||
+            ControllerMapping.signatureKey(draft.signature) !== ControllerMapping.signatureKey(src.signature))
+          return this.status('This profile was made for a different gamepad. Press Fit it to this gamepad first.');
+        if (asNew || draft.id === 'default' || !profileStore.profiles.some(p => p.id === draft.id)) draft.id = this.newId();
+        const at = profileStore.profiles.findIndex(p => p.id === draft.id);
+        if (at >= 0) profileStore.profiles[at] = draft; else profileStore.profiles.push(draft);
+        for (const s of gamepadSources.values()) if (s.profileId === draft.id && s !== src) clearDevice(s);
+        preferProfile(src, draft.id);
+        this.draft = ControllerMapping.copy(draft);
+        this.saved = JSON.stringify(this.draft);
+        this.changed();
+        this.status('Saved as ' + draft.name + '.' + (profilePersistence ? ' ' + profilePersistence : ''));
+      },
+      newId() { return 'profile-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 10); },
+      // Drops what this gamepad doesn't have and takes on its signature.
+      fit() {
+        const sig = this.src().signature;
+        this.draft.bindings = this.draft.bindings.filter(b => b.input.index < (b.input.kind === 'button' ? sig.buttons : sig.axes));
+        for (const i of Object.keys(this.draft.calibration)) if (+i >= sig.axes) delete this.draft.calibration[i];
+        this.draft.signature = ControllerMapping.copy(sig);
+        this.changed();
+      },
+      choose(id) {
+        const src = this.src();
+        this.draft = ControllerMapping.copy(profileStore.profiles.find(p => p.id === id) || ControllerMapping.browserDefault(src.signature));
+        this.saved = JSON.stringify(this.draft);
+        this.target = ''; this.input = null;
+        this.changed();
+      },
+      startEmpty() {
+        const src = this.src();
+        this.draft = Object.assign(ControllerMapping.browserDefault(src.signature), { id: this.newId(), name: 'New profile', bindings: [] });
+        this.changed();
+        this.status('An empty profile: nothing does anything until you set it.');
+      },
+      resetToStandard() {
+        if (this.keyboard()) { this.draft = defaultKeys(); this.changed(); return this.status('Back to the standard keys. Save to keep them.'); }
+        const { id, name } = this.draft;
+        this.draft = Object.assign(ControllerMapping.browserDefault(this.src().signature), { id, name });
+        this.changed();
+        this.status('Back to the standard layout. Save to keep it.');
+      },
+      remove() {
+        const id = this.draft.id;
+        if (!profileStore.profiles.some(p => p.id === id)) return;
+        if (!this.deleteArmed || now() - this.deleteArmed > 3000) {
+          this.deleteArmed = now();
+          $('#mapDelete').textContent = 'Press again to delete it';
+          return this.status('Press Delete again to delete ' + this.draft.name + '.');
+        }
+        $('#mapMenu').hidden = true;
+        this.deleteArmed = 0;
+        profileStore.profiles = profileStore.profiles.filter(p => p.id !== id);
+        for (const key of Object.keys(profileStore.preferred)) if (profileStore.preferred[key] === id) delete profileStore.preferred[key];
+        for (const s of gamepadSources.values()) if (s.profileId === id) { s.profileId = 'default'; clearDevice(s); }
+        persistProfiles();
+        this.choose('default');
+        this.status('Profile deleted. ' + profilePersistence);
+      },
+      exportProfile() {
+        const profile = ControllerMapping.copy(this.draft);
+        profile.name = $('#mapName').value.trim() || profile.name;
+        const error = ControllerMapping.validate(profile);
+        if (error) return this.status('It can\'t be exported yet: ' + error + '.');
+        const url = URL.createObjectURL(new Blob([JSON.stringify(ControllerMapping.exportProfile(profile), null, 2)], { type: 'application/json' }));
+        const a = el('a'); a.href = url; a.download = 'control4free-profile.json'; a.click();
+        setTimeout(() => URL.revokeObjectURL(url), 1000);
+      },
+      async importProfile(file) {
+        const index = this.index, before = this.draft;
+        if (!file || index === null) return;
+        if (file.size > 1024 * 1024) return this.status('That file is too big to be a profile.');
+        try {
+          const profile = ControllerMapping.importProfile(JSON.parse(await file.text()));
+          if (this.index !== index || this.draft !== before) return;
+          profile.id = this.newId();
+          this.draft = profile;
+          this.changed();
+          this.status('Imported. Check it, then Save to keep it.');
+        } catch (error) {
+          if (this.index === index && this.draft === before) this.status('That isn\'t a Control4Free profile: ' + (error.message || 'it can\'t be read'));
+        }
+      },
+    };
+
+    function gamepadName(src) {
+      return (src.signature.id || '').replace(/\s*\(.*?\)\s*/g, ' ').trim() || 'Gamepad';
+    }
+
+    $('#mapBack').addEventListener('click', () => mapper.back());
+    $('#mapSave').addEventListener('click', () => mapper.save(false));
+    $('#mapSaveNew').addEventListener('click', () => { $('#mapMenu').hidden = true; mapper.save(true); });
+    $('#mapSource').addEventListener('change', () => {
+      const value = $('#mapSource').value;
+      if (mapper.dirty()) { mapper.status('Save or press Back first: this one has changes.'); $('#mapSource').value = mapper.keyboard() ? 'keyboard' : String(mapper.index); return; }
+      mapper.open(value === 'keyboard' ? 'keyboard' : +value);
+    });
+    $('#mapProfile').addEventListener('change', () => mapper.choose($('#mapProfile').value));
+    $('#mapName').addEventListener('input', () => { mapper.draft.name = $('#mapName').value; mapper.changed(false); });
+    $('#mapMenuBtn').addEventListener('click', () => { $('#mapMenu').hidden = !$('#mapMenu').hidden; mapper.deleteArmed = 0; });
+    // The menu closes on a click anywhere else.
+    document.addEventListener('click', e => { if (!e.target.closest('.map-menu-wrap')) $('#mapMenu').hidden = true; });
+    $('#mapNew').addEventListener('click', () => { $('#mapMenu').hidden = true; mapper.startEmpty(); });
+    $('#mapStandard').addEventListener('click', () => { $('#mapMenu').hidden = true; mapper.resetToStandard(); });
+    $('#mapReset').addEventListener('click', () => mapper.resetToStandard());
+    $('#mapDelete').addEventListener('click', () => mapper.remove());
+    $('#mapExport').addEventListener('click', () => { $('#mapMenu').hidden = true; mapper.exportProfile(); });
+    $('#mapImport').addEventListener('change', event => {
+      const file = event.target.files[0];
+      event.target.value = ''; $('#mapMenu').hidden = true;
+      mapper.importProfile(file);
+    });
+    for (const tab of $$('#mapTabs button')) tab.addEventListener('click', () => {
+      mapper.stopListening(); mapper.tab = tab.dataset.tab; mapper.pick = null; mapper.render();
+    });
+    $('#mapStage').addEventListener('click', e => mapper.clickPicture(e));
+    window.addEventListener('keydown', e => { if (!mapView.hidden && mapper.keyboard()) mapper.onKey(e); }, true);
+    window.addEventListener('keyup', e => { mapper.keysDown.delete(e.code); });
+    window.addEventListener('resize', () => mapper.renderChips());
+
+
+    // Standard mapping: https://w3c.github.io/gamepad/#remapping
+    const gamepadsAvailable = typeof navigator.getGamepads === 'function';
 
     function pollGamepads(t) {
       if (!gamepadsAvailable) return;
@@ -2206,7 +3847,10 @@
       try {
         list = navigator.getGamepads();
       } catch (e) {
-        for (const src of gamepadSources.values()) Object.assign(src, blankSource(src.pad));
+        for (const src of gamepadSources.values()) clearDevice(src);
+        mapper.cancelCapture();
+        mapper.pollFailed = true;
+        mapper.status('The browser stopped giving this page the gamepads.');
         return;
       }
       const seen = new Set();
@@ -2214,12 +3858,20 @@
         if (!gp || !gp.connected) continue;
         seen.add(gp.index);
         let src = gamepadSources.get(gp.index);
+        const signature = ControllerMapping.signature(gp);
+        if (src && ControllerMapping.signatureKey(src.signature) !== ControllerMapping.signatureKey(signature)) {
+          if (mapper.index === gp.index) mapper.close();
+          clearDevice(src); gamepadSources.delete(gp.index); src = null;
+        }
         if (!src) {
           // A new gamepad drives the controller opened on this page; elsewhere
           // it waits until one is picked for it.
           const pad = primaryPad >= 0 && ![...gamepadSources.values()].some(s => s.pad === primaryPad) ? primaryPad : -1;
           src = blankSource(pad);
           src.gp = gp;
+          src.signature = signature;
+          src.profileId = profileStore.preferred[ControllerMapping.signatureKey(signature)] || 'default';
+          clearDevice(src);
           src.activeAt = 0;
           gamepadSources.set(gp.index, src);
           renderGamepads();
@@ -2227,25 +3879,25 @@
           toast(pad >= 0 ? 'Gamepad ' + (gp.index + 1) + ' plays as Controller ' + (pad + 1) : 'Gamepad ' + (gp.index + 1) + ' connected. Pick its controller on the home screen.');
         }
         src.gp = gp;
-        let buttons = 0;
-        gp.buttons.forEach((b, i) => {
-          const bit = GP_BUTTONS[i];
-          if (bit && (b.pressed || b.value > 0.5)) buttons |= bit;
-        });
+        src.snapshot = ControllerMapping.read(gp);
+        const profile = profileFor(src);
         const before = src.buttons + ',' + src.lx + ',' + src.ly + ',' + src.rx + ',' + src.ry + ',' + src.l2 + ',' + src.r2;
-        src.buttons = buttons;
-        src.l2 = gp.buttons[6] ? Math.round(gp.buttons[6].value * 255) : 0;
-        src.r2 = gp.buttons[7] ? Math.round(gp.buttons[7].value * 255) : 0;
-        src.lx = axisByte(gp.axes[0] || 0);
-        src.ly = axisByte(gp.axes[1] || 0);
-        src.rx = axisByte(gp.axes[2] || 0);
-        src.ry = axisByte(gp.axes[3] || 0);
+        if (!src.hold) src.hold = ControllerMapping.holdBack(profile);
+        ControllerMapping.letGo(src.snapshot, profile, src.hold);
+        const waiting = Object.keys(src.hold).length > 0;
+        if (waiting !== src.waitNeutral) { src.waitNeutral = waiting; renderGamepads(); }
+        if (mapper.index === gp.index || ControllerMapping.unresolved(profile, signature)) src.mapped = ControllerMapping.empty();
+        else src.mapped = ControllerMapping.evaluate(src.snapshot, profile, src.transient, src.hold);
+        Object.assign(src, ControllerMapping.toSource(src.mapped));
         const after = src.buttons + ',' + src.lx + ',' + src.ly + ',' + src.rx + ',' + src.ry + ',' + src.l2 + ',' + src.r2;
         if (before !== after) src.activeAt = t;
       }
       let removed = false;
       for (const index of gamepadSources.keys()) {
-        if (!seen.has(index)) { gamepadSources.delete(index); removed = true; }
+        if (!seen.has(index)) {
+          if (mapper.index === index) mapper.close();
+          clearDevice(gamepadSources.get(index)); gamepadSources.delete(index); removed = true;
+        }
       }
       if (removed) { renderGamepads(); sendClaim(); }
       // Light up the row of a controller in use, so you can tell which one is which
@@ -2258,20 +3910,11 @@
     function setGamepadPad(index, pad) {
       const src = gamepadSources.get(index);
       if (!src) return;
-      // One controller per pad on this device: the controller that had this pad lets go of it
-      if (pad >= 0) {
-        for (const [other, s] of gamepadSources) {
-          if (other !== index && s.pad === pad) {
-            s.pad = -1;
-            if (s.gp) gpAssign[gpKey(s.gp)] = -1;
-          }
-        }
-      }
+      if (mapper.index === index) mapper.close();
       const old = src.pad;
       src.pad = pad;
       if (old >= 0 && old !== pad && !claimedPads().includes(old)) releasePad(old);
-      if (src.gp) gpAssign[gpKey(src.gp)] = pad;
-      store.set('gamepads', gpAssign);
+      clearDevice(src);
       renderGamepads();
       renderPads();
       sendClaim();
@@ -2348,6 +3991,7 @@
 
     function renderPads() {
       const grid = $('#padGrid');
+      const focused = document.activeElement?.closest('#padGrid [data-pad]')?.dataset.pad;
       const mine = new Set(claimedPads());
       grid.textContent = '';
       status.forEach((s, i) => {
@@ -2382,6 +4026,7 @@
         tile.addEventListener('click', () => openPad(i));
         grid.appendChild(tile);
       });
+      if (focused !== undefined) $(`[data-pad="${focused}"]`, grid)?.focus({ preventScroll: true });
     }
 
     // Whether this browser can rumble this gamepad. Chrome and Edge can rumble
@@ -2396,7 +4041,11 @@
 
     function renderGamepads() {
       const list = $('#gamepadList');
+      const focused = document.activeElement;
+      const focusIndex = focused?.closest('.gp-row')?.dataset.index;
+      const focusKey = focused?.dataset.focus;
       list.textContent = '';
+      $('#gamepadHelp').hidden = !gamepadsAvailable || !gamepadSources.size;
       if (!gamepadsAvailable) {
         $('#gamepadHint').textContent = window.isSecureContext
           ? 'This browser does not support gamepads.'
@@ -2404,25 +4053,28 @@
         return;
       }
       $('#gamepadHint').textContent = gamepadSources.size
-        ? 'Pick the controller each gamepad plays as. A row lights up while you use it. Keep this window in front: browsers only read gamepads on the active window.'
+        ? 'Choose which PS4 controller each gamepad controls.'
         : 'Connect gamepads to this device and press a button on each one. Each one can play as a different controller.';
       for (const [index, src] of gamepadSources) {
         const row = el('li', 'gp-row');
         row.dataset.index = index;
-        row.insertAdjacentHTML('afterbegin', '<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M7 7h10a5 5 0 0 1 4.8 6.4l-1 3.4a2.6 2.6 0 0 1-4.4 1.2L14.4 16H9.6l-2 2a2.6 2.6 0 0 1-4.4-1.2l-1-3.4A5 5 0 0 1 7 7z"/></svg>');
-        const text = el('div');
-        const name = (src.gp && src.gp.id || 'Gamepad').replace(/\s*\(.*?\)\s*/g, ' ').trim();
-        text.appendChild(el('div', 'gp-name', name || 'Gamepad'));
+        const device = gamepadDevice(src, index);
+        const text = $('.gp-details', device);
         const mapped = src.gp && src.gp.mapping === 'standard';
-        text.appendChild(el('div', 'gp-sub', 'Gamepad ' + (index + 1) + (mapped ? '' : ' · buttons may be mixed up') +
-                                              (canRumble(src.gp) ? '' : ' · no rumble in this browser')));
-        row.appendChild(text);
+        if (!mapped) text.appendChild(el('div', 'gp-note warning', 'Buttons may be mixed up. Check Mapping.'));
+        if (!canRumble(src.gp)) text.appendChild(el('div', 'gp-note', 'No rumble in this browser'));
+        if (src.waitNeutral) text.appendChild(el('div', 'gp-note warning', 'Let go of the held buttons'));
+        row.appendChild(device);
+        const actions = el('div', 'gp-actions');
+        const assignment = el('div', 'gp-assignment');
+        assignment.appendChild(el('span', 'gp-assignment-label', 'PS4 controller'));
         const seg = el('div', 'seg');
         seg.setAttribute('role', 'radiogroup');
         seg.setAttribute('aria-label', 'Controller for gamepad ' + (index + 1));
         for (let pad = -1; pad < PADS; pad++) {
           const b = el('button', '', pad < 0 ? 'Off' : String(pad + 1));
           b.type = 'button';
+          b.dataset.focus = 'pad-' + pad;
           b.setAttribute('role', 'radio');
           b.setAttribute('aria-checked', String(src.pad === pad));
           if (pad >= 0) {
@@ -2432,7 +4084,44 @@
           b.addEventListener('click', () => setGamepadPad(index, pad));
           seg.appendChild(b);
         }
-        row.appendChild(seg);
+        assignment.appendChild(seg);
+        actions.appendChild(assignment);
+        const configure = el('button', 'btn gp-mapping', 'Mapping');
+        configure.type = 'button'; configure.dataset.focus = 'configure';
+        configure.addEventListener('click', () => mapper.open(index));
+        actions.appendChild(configure);
+        row.appendChild(actions);
+        list.appendChild(row);
+      }
+      if (focusIndex !== undefined && focusKey) $(`.gp-row[data-index="${focusIndex}"] [data-focus="${focusKey}"]`, list)?.focus({ preventScroll: true });
+      renderGamepadSettings();
+    }
+
+    function gamepadDevice(src, index) {
+      const device = el('div', 'gp-device');
+      device.insertAdjacentHTML('afterbegin', '<span class="gp-device-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 7h10a5 5 0 0 1 4.8 6.4l-1 3.4a2.6 2.6 0 0 1-4.4 1.2L14.4 16H9.6l-2 2a2.6 2.6 0 0 1-4.4-1.2l-1-3.4A5 5 0 0 1 7 7zM7 10v4m-2-2h4"/><circle cx="16" cy="10.5" r=".6" fill="currentColor"/><circle cx="18" cy="13" r=".6" fill="currentColor"/></svg></span>');
+      const text = el('div', 'gp-details');
+      text.appendChild(el('div', 'gp-name', gamepadName(src)));
+      const meta = el('div', 'gp-sub gp-meta');
+      meta.appendChild(el('span', '', 'Gamepad ' + (index + 1)));
+      meta.appendChild(el('span', 'gp-profile', profileFor(src).name));
+      text.appendChild(meta);
+      device.appendChild(text);
+      return device;
+    }
+
+    // Settings → Gamepads: each connected gamepad, its profile, and the way to its mapping.
+    function renderGamepadSettings() {
+      const list = $('#gpSettings');
+      list.textContent = '';
+      $('#gpSettingsEmpty').hidden = gamepadSources.size > 0;
+      for (const [index, src] of gamepadSources) {
+        const row = el('li', 'gp-row gp-row--settings');
+        row.appendChild(gamepadDevice(src, index));
+        const map = el('button', 'btn gp-mapping', 'Mapping');
+        map.type = 'button';
+        map.addEventListener('click', () => mapper.open(index));
+        row.appendChild(map);
         list.appendChild(row);
       }
     }
@@ -2467,35 +4156,37 @@
       $('#leaveBtn').hidden = !s.mine;
     }
 
-    // Light up on-screen controls for every source driving this pad (keyboard and controllers too)
-    let shownButtons = -1, shownL2 = -1, shownR2 = -1;
-    const shownStick = { L: '', R: '' };
-    function renderPressed() {
-      if (primaryPad < 0) return;
-      const s = mergedState(primaryPad);
-      if (s.buttons !== shownButtons) {
-        shownButtons = s.buttons;
-        for (const k of $$('[data-btn]', padView)) k.classList.toggle('on', !!(s.buttons & B[k.dataset.btn]));
-        for (const a of $$('[data-arm]', padView)) a.classList.toggle('on', !!(s.buttons & B[a.dataset.arm]));
-        for (const st of $$('[data-stick]', padView)) st.classList.toggle('clicked', !!(s.buttons & B[st.dataset.stick + '3']));
-        touchpad.classList.toggle('clicked', !!(s.buttons & B.TOUCH));
+    // Lights up a set of DualShock 4 controls with a state: the controller
+    // screen's (every source driving its pad), or the mapping view's copy.
+    function renderControls(root, s, shown, skipStick = {}) {
+      if (s.buttons !== shown.buttons) {
+        shown.buttons = s.buttons;
+        for (const k of $$('[data-btn]', root)) k.classList.toggle('on', !!(s.buttons & B[k.dataset.btn]));
+        for (const a of $$('[data-arm]', root)) a.classList.toggle('on', !!(s.buttons & B[a.dataset.arm]));
+        for (const st of $$('[data-stick]', root)) st.classList.toggle('clicked', !!(s.buttons & B[st.dataset.stick + '3']));
+        $('.touchpad', root).classList.toggle('clicked', !!(s.buttons & B.TOUCH));
       }
-      if (s.l2 !== shownL2) { shownL2 = s.l2; $('[data-fill="L2"]').style.height = (s.l2 / 2.55) + '%'; }
-      if (s.r2 !== shownR2) { shownR2 = s.r2; $('[data-fill="R2"]').style.height = (s.r2 / 2.55) + '%'; }
+      if (s.l2 !== shown.l2) { shown.l2 = s.l2; $('[data-fill="L2"]', root).style.height = (s.l2 / 2.55) + '%'; }
+      if (s.r2 !== shown.r2) { shown.r2 = s.r2; $('[data-fill="R2"]', root).style.height = (s.r2 / 2.55) + '%'; }
       // Sticks follow controllers and keys too, unless a finger is moving them
       for (const side of ['L', 'R']) {
-        if (draggingStick[side]) continue;
+        if (skipStick[side]) continue;
         const x = side === 'L' ? s.lx : s.rx;
         const y = side === 'L' ? s.ly : s.ry;
         const key = x + ',' + y;
-        if (key === shownStick[side]) continue;
-        shownStick[side] = key;
-        const stick = $(`[data-stick="${side}"]`, padView);
+        if (key === shown.stick[side]) continue;
+        shown.stick[side] = key;
+        const stick = $(`[data-stick="${side}"]`, root);
         const travel = stick.offsetWidth * KNOB_TRAVEL;
         const knob = $('.knob', stick);
         knob.style.transform = key === '128,128' ? '' : `translate(${(x - 128) / 127.5 * travel}px, ${(y - 128) / 127.5 * travel}px)`;
         stick.classList.toggle('on', key !== '128,128');
       }
+    }
+
+    const padShown = { buttons: -1, l2: -1, r2: -1, stick: { L: '', R: '' } };
+    function renderPressed() {
+      if (primaryPad >= 0) renderControls(padView, mergedState(primaryPad), padShown, draggingStick);
     }
 
     function openPad(pad) {
@@ -2526,8 +4217,8 @@
       document.body.classList.add('in-pad');
       document.title = 'Controller ' + (pad + 1) + ' · Control4Free';
       history.replaceState(null, '', updateQuery('pad', String(pad + 1)));
-      shownButtons = -1;
-      shownStick.L = shownStick.R = '';
+      padShown.buttons = -1;
+      padShown.stick.L = padShown.stick.R = '';
       renderPadLabel();
       sendClaim();
       renderPads();
@@ -2709,57 +4400,20 @@
 
     // ---------------------------------------------------------------- keyboard settings
 
-    let listeningKey = null;
-
-    function renderKeyRows() {
-      const rows = $('#keyRows');
-      rows.textContent = '';
-      for (const [action, label] of KEY_ACTIONS) {
-        const row = el('div', 'key-row');
-        row.appendChild(el('span', 'row-label', label));
-        const b = el('button', 'key-btn', keyLabel(keymap[action]));
-        b.type = 'button';
-        b.addEventListener('click', () => {
-          if (listeningKey) listeningKey.button.classList.remove('listening');
-          listeningKey = { action, button: b };
-          b.classList.add('listening');
-          b.textContent = 'Press a key';
-        });
-        row.appendChild(b);
-        rows.appendChild(row);
-      }
-    }
-
-    window.addEventListener('keydown', e => {
-      if (!listeningKey) return;
-      e.preventDefault();
-      e.stopPropagation();
-      const { action } = listeningKey;
-      // A key drives one action: whatever had it before loses it
-      for (const [other, code] of Object.entries(keymap)) if (code === e.code && other !== action) keymap[other] = '';
-      keymap[action] = e.code;
-      store.set('keymap', keymap);
-      listeningKey = null;
-      rebuildKeymap();
-      renderKeyRows();
-    }, true);
-
+    $('#mapKeys').addEventListener('click', () => mapper.open('keyboard'));
     $('#resetKeys').addEventListener('click', () => {
       keymap = defaultKeys();
       store.set('keymap', keymap);
       rebuildKeymap();
-      renderKeyRows();
       toast('Keyboard keys reset');
     });
 
     rebuildKeymap();
-    renderKeyRows();
 
     // ---------------------------------------------------------------- local settings only
     function showPage(page) {
       for (const tab of $$('.nav-item')) tab.setAttribute('aria-selected', String(tab.dataset.page === page));
       for (const section of $$('.settings-pages section')) section.hidden = section.dataset.page !== page;
-      if (listeningKey) { listeningKey.button.classList.remove('listening'); listeningKey = null; renderKeyRows(); }
     }
     for (const tab of $$('.nav-item')) tab.addEventListener('click', () => showPage(tab.dataset.page));
     function openSettings(page) {
@@ -2775,7 +4429,7 @@
     }
     $('#openSettings').addEventListener('click', () => openSettings('device'));
     $('#settingsBack').addEventListener('click', closeSettings);
-    $('#keysLink').addEventListener('click', () => openSettings('keyboard'));
+    $('#keysLink').addEventListener('click', () => mapper.open('keyboard'));
     $('#stopBtn').addEventListener('click', () => {
       if (!confirm('Disconnect your controllers and stop Control4Free on the PS4?')) return;
       send({ method: 'stop', params: [] });
@@ -2795,6 +4449,7 @@
     // hidden, the console sees the controller disconnect after 3 seconds without keepalives.
     document.addEventListener('visibilitychange', () => {
       if (document.hidden) {
+        mapper.cancelCapture(); mapper.keysDown.clear();
         releaseScreen();
         heldKeys.clear();
         Object.assign(keySource, blankSource(keySource.pad));
@@ -2803,6 +4458,7 @@
           lastSent[pad] = '';
         }
         stopAllRumble();
+        for (const src of gamepadSources.values()) clearDevice(src);
         keepAwake.off();
       } else {
         resendAll();
@@ -2816,17 +4472,25 @@
       measurePing(t);
       driveRumble(t);
       renderPressed();
+      mapper.tick(t);
       requestAnimationFrame(frame);
     }
 
     window.addEventListener('gamepadconnected', () => { pollGamepads(now()); renderGamepads(); });
-    window.addEventListener('gamepaddisconnected', () => pollGamepads(now()));
+    window.addEventListener('gamepaddisconnected', event => {
+      // An identical replacement may already occupy the reused index when this
+      // event is delivered. Explicitly discard the old source's transient state.
+      const index = event.gamepad.index, src = gamepadSources.get(index);
+      if (mapper.index === index) mapper.close();
+      if (src) { clearDevice(src); gamepadSources.delete(index); }
+      pollGamepads(now()); renderGamepads(); sendClaim();
+    });
 
     renderPads();
     renderGamepads();
     const address = initialAddress();
     $('#address').value = address;
-    if (!servedByConsole) $('#addressForm').hidden = false;
+    $('#addressForm').hidden = !openedFromFile || !!address;
     connect(address);
 
 

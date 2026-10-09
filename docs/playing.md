@@ -46,8 +46,9 @@ and landscape.
 
 ## Keyboard
 
-On a computer the keyboard drives the controller open on the page. Change any key in **All settings →
-Keyboard**, and turn on **Show keyboard keys** to see them on the buttons.
+On a computer the keyboard drives the controller open on the page. To change a key, press **Keyboard keys** at
+the bottom of the home screen: click a control on the picture of the controller, then press its new key (see
+[Gamepad mapping](gamepad-mapping.md#the-keyboard)). Turn on **Show keyboard keys** to see them on the buttons.
 
 | Controller | Key | Controller | Key |
 |---|---|---|---|
@@ -67,7 +68,9 @@ appears under **Gamepads on this device**:
 
 - a gamepad that turns up while a controller is open on the page drives that controller;
 - otherwise, pick the controller each gamepad plays as. One computer can run all four controllers this way;
-- a row lights up while you use its gamepad, so you can tell which is which.
+- a row lights up while you use its gamepad, so you can tell which is which;
+- several gamepads can play as the same controller, a wheel and its pedals for example;
+- **Mapping** changes what its buttons and sticks do. See [Gamepad mapping](gamepad-mapping.md).
 
 Keep the page's window in front: browsers only read gamepads for the active window.
 
@@ -79,6 +82,7 @@ way.
 ## Settings
 
 **☰ → All settings** has this device's settings. They stay in this browser.
+**Gamepads** in the settings changes each gamepad's mapping, and **Keyboard** the keys.
 
 | Setting | What it does |
 |---|---|
@@ -125,7 +129,8 @@ whatever colour the game sets. Until one is set, a controller shows its own colo
 
 - **☰ → Disconnect controller** removes it from the PS4 straight away.
 - **Closing the page or locking the phone** releases its buttons at once. After 3 seconds without input the
-  controller goes idle, and after 15 seconds it's removed. Come back within 15 seconds and you keep it.
+  controller goes idle, and after 15 seconds it's removed. Pick it again within those 15 seconds and you keep
+  it, still signed in.
 - **☰ → Stop Control4Free** stops the service and disconnects everyone. It's refused while someone else is
   still playing; the app on the PS4 can always stop it.
 

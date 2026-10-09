@@ -59,12 +59,17 @@ class Client:
         self.sock.sendall(head + (mask if masked else b'') + bytes(b ^ (mask[i % 4] if masked else 0) for i, b in enumerate(payload)))
 
     def receive(self):
-        first, second = self.exact(2)
-        size = second & 127
-        if size == 126:
-            size = struct.unpack('!H', self.exact(2))[0]
-        assert not second & 128
-        return first & 15, self.exact(size)
+        while True:
+            first, second = self.exact(2)
+            size = second & 127
+            if size == 126:
+                size = struct.unpack('!H', self.exact(2))[0]
+            assert not second & 128
+            data = self.exact(size)
+            if first & 15 == 9:
+                self.frame(data, op=10)
+                continue
+            return first & 15, data
 
     def request(self, method, params=()):
         ident = self.next_id
@@ -378,7 +383,12 @@ def main():
         c.wait_for(rumble(0, 200, 40))
         time.sleep(.05)
         assert c.request('status')['result']['pads'][0]['color'] == [255, 0, 0], 'player 2 red, at full'
-        assert 'web controller 1 light bar 40 00 00' in server.rows(), 'the colour is logged for diagnosis'
+        # Latest colour is logged within a second, while feedback itself stays fast.
+        end = time.monotonic() + 1.2
+        while 'web controller 1 light bar 40 00 00' not in server.rows():
+            assert time.monotonic() < end, 'latest colour never logged'
+            c.input(0)
+            time.sleep(.02)
         watcher = Client()
         os.write(server.log, b'C4F-TEST-FEEDBACK 11030d 0 0 0 64 0\n')
         c.wait_for(rumble(0, 0, 0))
@@ -480,5 +490,94 @@ def main():
         server.close()
 
 
+def reliability():
+    # Reserve retained and newly-created slots throughout a multi-device claim.
+    server = Server(C4F_TEST_ADD_DELAY='1250')
+    clients = []
+    try:
+        first = server.c
+        first.request('claim', [0])
+        first.close()
+        owner = Client(); observer = Client(); clients += [owner, observer]
+        owner.frame(json.dumps(dict(id=80, method='claim', params=[0, 1, 2])))
+        time.sleep(.25)
+        assert observer.request('claim', [0])['error']['code'] == 409
+        owner.frame(json.dumps(dict(id=81, method='claim', params=[])))
+        owner.frame(json.dumps(dict(id=82, method='claim', params=[3])))
+        replies = {}
+        while 80 not in replies:
+            op, data = owner.receive()
+            if op == 1:
+                msg = json.loads(data)
+                if 'id' in msg: replies[msg['id']] = msg
+        assert replies[81]['error']['code'] == 409 and replies[82]['error']['code'] == 409
+        assert all(replies[80]['result']['pads'][i]['mine'] for i in (0, 1, 2))
+        assert len([r for r in server.rows() if r.startswith('ADD')]) == 3
+        assert not any(r.startswith('REMOVE') for r in server.rows()), 'retained reservation was reaped'
+        print('PASS full-claim reservations, retained-pad reaper protection and same-client competing claims', flush=True)
+    finally:
+        for c in clients: c.close()
+        server.close()
+
+    # A departing client must not cause the remaining AddDevice calls to run.
+    server = Server(C4F_TEST_ADD_DELAY='600')
+    try:
+        c = server.c
+        c.request('claim', [0])
+        c.frame(json.dumps(dict(id=70, method='claim', params=[0, 1, 2, 3])))
+        end = time.monotonic() + 2
+        while len([r for r in server.rows() if r.startswith('ADD')]) < 2:
+            assert time.monotonic() < end
+            time.sleep(.01)
+        c.close()
+        time.sleep(.75)
+        server.c = Client()
+        assert len([r for r in server.rows() if r.startswith('ADD')]) == 2
+        assert any(r == 'REMOVE 12030d' for r in server.rows())
+        assert not any(r == 'REMOVE 11030d' for r in server.rows()), 'pre-existing device rolled back'
+        assert server.c.request('claim', [0])['result']['pads'][0]['mine']
+        print('PASS cancellation captures issued creation, skips remaining work and preserves pre-existing pads', flush=True)
+    finally:
+        server.close()
+
+    server = Server(C4F_FAIL_INPUT='1')
+    try:
+        server.c.request('claim', [0]); server.c.input(0, 0x4000)
+        time.sleep(.08)
+        assert any('InsertData = ' in r for r in server.rows())
+        server.c.input(0); time.sleep(.04)
+        assert server.c.request('status')['result']['pads'][0]['error'] == 0
+        print('PASS successful input insertion clears transient errors', flush=True)
+    finally:
+        server.close()
+
+    server = Server()
+    abandoned = []
+    try:
+        abandoned = [Client() for _ in range(5)]
+        handshake = (b'GET /ws HTTP/1.1\r\nHost: 127.0.0.1:4264\r\nUpgrade: websocket\r\nConnection: Upgrade\r\n'
+                     b'Sec-WebSocket-Version: 13\r\nSec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==\r\n\r\n')
+        assert b'503' in http(handshake), 'seventh upgrade accepted'
+        assert b'200 OK' in http(b'GET /api/status HTTP/1.1\r\nHost: 127.0.0.1:4264\r\nX-Control4Free-Launcher: 1\r\n\r\n')
+        start = time.monotonic()
+        # Unrelated text and wrong pongs cannot refresh a challenge deadline.
+        noisy = abandoned[0]
+        while time.monotonic() - start < 15.6:
+            assert server.c.request('ping')['result'] == {}
+            try: noisy.frame(b'wrong-token', op=10); noisy.frame('{"method":"ping","params":[]}')
+            except OSError: pass
+            time.sleep(.15)
+        for c in abandoned:
+            c.sock.settimeout(1)
+            while c.sock.recv(65536): pass
+        newcomer = Client(); newcomer.close()
+        assert server.c.request('info')['result']['pads'] == 4
+        print('PASS six-WebSocket cap preserves HTTP; matching pong keeps live client; abandoned/noisy sockets reclaimed', flush=True)
+    finally:
+        for c in abandoned: c.close()
+        server.close()
+
+
 if __name__ == '__main__':
     main()
+    reliability()

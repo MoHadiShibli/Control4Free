@@ -5,10 +5,17 @@
 #include <stdint.h>
 
 #define C4F_NET_CLIENTS 8
+#define C4F_NET_WEBSOCKETS 6
+#ifndef C4F_NET_PING_MS
+#define C4F_NET_PING_MS 5000
+#endif
+#ifndef C4F_NET_PONG_MS
+#define C4F_NET_PONG_MS 10000
+#endif
 #define C4F_NET_MESSAGE 4096
 typedef struct C4fNetClient {
     int fd, websocket, closing, fragmented;
-    uint64_t openedMs;
+    uint64_t openedMs, pingAt, pongDeadline, pingToken;
     unsigned char rx[8192], tx[8192];
     size_t rxUsed, txUsed, txSent, messageUsed;
     char message[C4F_NET_MESSAGE + 1];

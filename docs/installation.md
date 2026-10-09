@@ -89,7 +89,7 @@ screen, that's fine too: the app doesn't get in the way of Control4Free.
    again to start the new one (this needs GoldHEN's PayLoader). Or restart the PS4 and run the jailbreak:
    auto-start then starts the new one.
 
-Your controller layouts and keys live in each phone's browser, so they survive updates.
+Your controller layouts, keys and gamepad mappings live in each phone's or computer's browser, so they survive updates.
 
 ## Without the app
 
@@ -127,4 +127,5 @@ or remove the `control4free.elf` line from `/data/GoldHEN/payloads.ini` by hand 
 | `/data/payloads/control4free.elf` | The copy of the service that AutoRun starts. |
 | `/data/GoldHEN/payloads.ini` | GoldHEN's AutoRun list. The app adds or removes one line. |
 | `/data/control4free/control4free.log` | The service's log, with the previous run in `control4free.log.previous`. |
+| `/data/control4free/control4free.log.1` | The older part of the log, once it passes 1 MB. |
 | `/data/control4free/instance.lock` | Keeps a second copy from starting next to the first. |

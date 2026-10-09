@@ -1,0 +1,545 @@
+{
+  "name": "crkd-les-paul-chrome-win-dongle-mode1-pre3",
+  "label": "CRKD Gibson Les Paul — PC Mode 1 (earlier firmware, inferred)",
+  "gamepad": {
+    "id": {
+      "value": "Xbox 360 Controller (XInput STANDARD GAMEPAD)",
+      "status": "inferred",
+      "sources": [
+        {
+          "url": "https://github.com/sanjay900/xinputemu/pull/1",
+          "says": "Patch author tested two CRKD guitars; VID/PID match a first-party 360 gamepad (045e:028e in patch); whammy is Z/LT, converted to signed right-stick range for old PC guitar games."
+        },
+        {
+          "url": "https://raw.githubusercontent.com/chromium/chromium/main/device/gamepad/xinput_data_fetcher_win.cc",
+          "says": "XInput fetcher uses STANDARD GAMEPAD for subtype 1; 17 buttons when XInputGetStateEx exists; four axes LX, inverted LY, RX, inverted RY; triggers are analog buttons; exposes dual-rumble unconditionally."
+        }
+      ],
+      "reason": "The hardware-tested original Mode 1 report uses the first-party 360 VID/PID and YARG identifies it as an XInput gamepad. Applying Chromium's subtype-1 name is a source-derived candidate, not a raw CRKD browser capture."
+    },
+    "mapping": {
+      "value": "standard",
+      "status": "confirmed",
+      "sources": [
+        {
+          "url": "https://raw.githubusercontent.com/chromium/chromium/main/device/gamepad/xinput_data_fetcher_win.cc",
+          "says": "XInput fetcher uses STANDARD GAMEPAD for subtype 1; 17 buttons when XInputGetStateEx exists; four axes LX, inverted LY, RX, inverted RY; triggers are analog buttons; exposes dual-rumble unconditionally."
+        }
+      ]
+    },
+    "buttons": {
+      "value": 17,
+      "status": "confirmed",
+      "sources": [
+        {
+          "url": "https://raw.githubusercontent.com/chromium/chromium/main/device/gamepad/xinput_data_fetcher_win.cc",
+          "says": "XInput fetcher uses STANDARD GAMEPAD for subtype 1; 17 buttons when XInputGetStateEx exists; four axes LX, inverted LY, RX, inverted RY; triggers are analog buttons; exposes dual-rumble unconditionally."
+        }
+      ]
+    },
+    "axesRest": {
+      "value": [
+        1.52587890625E-05,
+        -1.52587890625E-05,
+        1.52587890625E-05,
+        -1.52587890625E-05
+      ],
+      "status": "inferred",
+      "sources": [
+        {
+          "url": "https://raw.githubusercontent.com/chromium/chromium/main/device/gamepad/xinput_data_fetcher_win.cc",
+          "says": "XInput fetcher uses STANDARD GAMEPAD for subtype 1; 17 buttons when XInputGetStateEx exists; four axes LX, inverted LY, RX, inverted RY; triggers are analog buttons; exposes dual-rumble unconditionally."
+        },
+        {
+          "url": "https://cdn.shopify.com/s/files/1/0679/3392/9791/files/Guitar_User_Guide_Multi_V1.4_08Jan26.pdf?v=1767902895",
+          "says": "CK25GM PC connections include USB cable and included USB wireless receiver; PC slider and mode dial select game preset; the hardware includes both sticks, View/Capture/Menu, CTRL, Home and D-pad."
+        }
+      ],
+      "reason": "Nominal neutral signed XInput stick words are assumed to be zero. Chromium normalizes signed zero to +0.0000152587890625 and negates Y; physical CRKD neutral raw words were not captured."
+    },
+    "timestampPolicy": {
+      "value": "poll",
+      "status": "confirmed",
+      "sources": [
+        {
+          "url": "https://raw.githubusercontent.com/chromium/chromium/main/device/gamepad/xinput_data_fetcher_win.cc",
+          "says": "GetXInputPadData assigns CurrentTimeInMicroseconds to pad.timestamp after every successful XInput state poll, even if the input values did not change."
+        }
+      ]
+    },
+    "vibration": {
+      "presence": "object",
+      "value": {
+        "type": "dual-rumble",
+        "effects": [
+          "dual-rumble"
+        ]
+      },
+      "status": "confirmed",
+      "sources": [
+        {
+          "url": "https://raw.githubusercontent.com/chromium/chromium/main/device/gamepad/xinput_data_fetcher_win.cc",
+          "says": "XInput fetcher uses STANDARD GAMEPAD for subtype 1; 17 buttons when XInputGetStateEx exists; four axes LX, inverted LY, RX, inverted RY; triggers are analog buttons; exposes dual-rumble unconditionally."
+        }
+      ]
+    }
+  },
+  "controls": {
+    "Green fret": {
+      "kind": "button",
+      "index": 0,
+      "pressedThreshold": 0,
+      "evidence": {
+        "status": "inferred",
+        "sources": [
+          {
+            "url": "https://github.com/YARC-Official/YARG/blob/f5bfbe6996b4af35722d4204a93c6cc5c8f52a45/Assets/Script/Input/Bindings/Defaults/BindingCollection.Gamepad.cs",
+            "says": "CrkdGuitar_Mode1 maps Green/Red/Yellow/Blue/Orange to A/B/Y/X/LB, strum up/down to D-pad, star power to Select, whammy to leftTrigger; no dedicated tilt axis. Menu includes left-stick and D-pad."
+          },
+          {
+            "url": "https://raw.githubusercontent.com/chromium/chromium/main/device/gamepad/xinput_data_fetcher_win.cc",
+            "says": "XInput fetcher uses STANDARD GAMEPAD for subtype 1; 17 buttons when XInputGetStateEx exists; four axes LX, inverted LY, RX, inverted RY; triggers are analog buttons; exposes dual-rumble unconditionally."
+          }
+        ],
+        "reason": "YARG's CRKD Mode 1 Green fret binding is translated through Chromium's XInput button order. Factory button aliases are inferred, not a browser dump."
+      }
+    },
+    "Red fret": {
+      "kind": "button",
+      "index": 1,
+      "pressedThreshold": 0,
+      "evidence": {
+        "status": "inferred",
+        "sources": [
+          {
+            "url": "https://github.com/YARC-Official/YARG/blob/f5bfbe6996b4af35722d4204a93c6cc5c8f52a45/Assets/Script/Input/Bindings/Defaults/BindingCollection.Gamepad.cs",
+            "says": "CrkdGuitar_Mode1 maps Green/Red/Yellow/Blue/Orange to A/B/Y/X/LB, strum up/down to D-pad, star power to Select, whammy to leftTrigger; no dedicated tilt axis. Menu includes left-stick and D-pad."
+          },
+          {
+            "url": "https://raw.githubusercontent.com/chromium/chromium/main/device/gamepad/xinput_data_fetcher_win.cc",
+            "says": "XInput fetcher uses STANDARD GAMEPAD for subtype 1; 17 buttons when XInputGetStateEx exists; four axes LX, inverted LY, RX, inverted RY; triggers are analog buttons; exposes dual-rumble unconditionally."
+          }
+        ],
+        "reason": "YARG's CRKD Mode 1 Red fret binding is translated through Chromium's XInput button order. Factory button aliases are inferred, not a browser dump."
+      }
+    },
+    "Yellow fret": {
+      "kind": "button",
+      "index": 3,
+      "pressedThreshold": 0,
+      "evidence": {
+        "status": "inferred",
+        "sources": [
+          {
+            "url": "https://github.com/YARC-Official/YARG/blob/f5bfbe6996b4af35722d4204a93c6cc5c8f52a45/Assets/Script/Input/Bindings/Defaults/BindingCollection.Gamepad.cs",
+            "says": "CrkdGuitar_Mode1 maps Green/Red/Yellow/Blue/Orange to A/B/Y/X/LB, strum up/down to D-pad, star power to Select, whammy to leftTrigger; no dedicated tilt axis. Menu includes left-stick and D-pad."
+          },
+          {
+            "url": "https://raw.githubusercontent.com/chromium/chromium/main/device/gamepad/xinput_data_fetcher_win.cc",
+            "says": "XInput fetcher uses STANDARD GAMEPAD for subtype 1; 17 buttons when XInputGetStateEx exists; four axes LX, inverted LY, RX, inverted RY; triggers are analog buttons; exposes dual-rumble unconditionally."
+          }
+        ],
+        "reason": "YARG's CRKD Mode 1 Yellow fret binding is translated through Chromium's XInput button order. Factory button aliases are inferred, not a browser dump."
+      }
+    },
+    "Blue fret": {
+      "kind": "button",
+      "index": 2,
+      "pressedThreshold": 0,
+      "evidence": {
+        "status": "inferred",
+        "sources": [
+          {
+            "url": "https://github.com/YARC-Official/YARG/blob/f5bfbe6996b4af35722d4204a93c6cc5c8f52a45/Assets/Script/Input/Bindings/Defaults/BindingCollection.Gamepad.cs",
+            "says": "CrkdGuitar_Mode1 maps Green/Red/Yellow/Blue/Orange to A/B/Y/X/LB, strum up/down to D-pad, star power to Select, whammy to leftTrigger; no dedicated tilt axis. Menu includes left-stick and D-pad."
+          },
+          {
+            "url": "https://raw.githubusercontent.com/chromium/chromium/main/device/gamepad/xinput_data_fetcher_win.cc",
+            "says": "XInput fetcher uses STANDARD GAMEPAD for subtype 1; 17 buttons when XInputGetStateEx exists; four axes LX, inverted LY, RX, inverted RY; triggers are analog buttons; exposes dual-rumble unconditionally."
+          }
+        ],
+        "reason": "YARG's CRKD Mode 1 Blue fret binding is translated through Chromium's XInput button order. Factory button aliases are inferred, not a browser dump."
+      }
+    },
+    "Orange fret": {
+      "kind": "button",
+      "index": 4,
+      "pressedThreshold": 0,
+      "evidence": {
+        "status": "inferred",
+        "sources": [
+          {
+            "url": "https://github.com/YARC-Official/YARG/blob/f5bfbe6996b4af35722d4204a93c6cc5c8f52a45/Assets/Script/Input/Bindings/Defaults/BindingCollection.Gamepad.cs",
+            "says": "CrkdGuitar_Mode1 maps Green/Red/Yellow/Blue/Orange to A/B/Y/X/LB, strum up/down to D-pad, star power to Select, whammy to leftTrigger; no dedicated tilt axis. Menu includes left-stick and D-pad."
+          },
+          {
+            "url": "https://raw.githubusercontent.com/chromium/chromium/main/device/gamepad/xinput_data_fetcher_win.cc",
+            "says": "XInput fetcher uses STANDARD GAMEPAD for subtype 1; 17 buttons when XInputGetStateEx exists; four axes LX, inverted LY, RX, inverted RY; triggers are analog buttons; exposes dual-rumble unconditionally."
+          }
+        ],
+        "reason": "YARG's CRKD Mode 1 Orange fret binding is translated through Chromium's XInput button order. Factory button aliases are inferred, not a browser dump."
+      }
+    },
+    "Strum up": {
+      "kind": "button",
+      "index": 12,
+      "pressedThreshold": 0,
+      "evidence": {
+        "status": "inferred",
+        "sources": [
+          {
+            "url": "https://github.com/YARC-Official/YARG/blob/f5bfbe6996b4af35722d4204a93c6cc5c8f52a45/Assets/Script/Input/Bindings/Defaults/BindingCollection.Gamepad.cs",
+            "says": "CrkdGuitar_Mode1 maps Green/Red/Yellow/Blue/Orange to A/B/Y/X/LB, strum up/down to D-pad, star power to Select, whammy to leftTrigger; no dedicated tilt axis. Menu includes left-stick and D-pad."
+          },
+          {
+            "url": "https://raw.githubusercontent.com/chromium/chromium/main/device/gamepad/xinput_data_fetcher_win.cc",
+            "says": "XInput fetcher uses STANDARD GAMEPAD for subtype 1; 17 buttons when XInputGetStateEx exists; four axes LX, inverted LY, RX, inverted RY; triggers are analog buttons; exposes dual-rumble unconditionally."
+          }
+        ],
+        "reason": "YARG's CRKD Mode 1 Strum up binding is translated through Chromium's XInput button order. Factory button aliases are inferred, not a browser dump."
+      }
+    },
+    "Strum down": {
+      "kind": "button",
+      "index": 13,
+      "pressedThreshold": 0,
+      "evidence": {
+        "status": "inferred",
+        "sources": [
+          {
+            "url": "https://github.com/YARC-Official/YARG/blob/f5bfbe6996b4af35722d4204a93c6cc5c8f52a45/Assets/Script/Input/Bindings/Defaults/BindingCollection.Gamepad.cs",
+            "says": "CrkdGuitar_Mode1 maps Green/Red/Yellow/Blue/Orange to A/B/Y/X/LB, strum up/down to D-pad, star power to Select, whammy to leftTrigger; no dedicated tilt axis. Menu includes left-stick and D-pad."
+          },
+          {
+            "url": "https://raw.githubusercontent.com/chromium/chromium/main/device/gamepad/xinput_data_fetcher_win.cc",
+            "says": "XInput fetcher uses STANDARD GAMEPAD for subtype 1; 17 buttons when XInputGetStateEx exists; four axes LX, inverted LY, RX, inverted RY; triggers are analog buttons; exposes dual-rumble unconditionally."
+          }
+        ],
+        "reason": "YARG's CRKD Mode 1 Strum down binding is translated through Chromium's XInput button order. Factory button aliases are inferred, not a browser dump."
+      }
+    },
+    "CTRL": {
+      "kind": "button",
+      "index": 8,
+      "pressedThreshold": 0,
+      "evidence": {
+        "status": "inferred",
+        "sources": [
+          {
+            "url": "https://github.com/YARC-Official/YARG/blob/f5bfbe6996b4af35722d4204a93c6cc5c8f52a45/Assets/Script/Input/Bindings/Defaults/BindingCollection.Gamepad.cs",
+            "says": "CrkdGuitar_Mode1 maps Green/Red/Yellow/Blue/Orange to A/B/Y/X/LB, strum up/down to D-pad, star power to Select, whammy to leftTrigger; no dedicated tilt axis. Menu includes left-stick and D-pad."
+          },
+          {
+            "url": "https://raw.githubusercontent.com/chromium/chromium/main/device/gamepad/xinput_data_fetcher_win.cc",
+            "says": "XInput fetcher uses STANDARD GAMEPAD for subtype 1; 17 buttons when XInputGetStateEx exists; four axes LX, inverted LY, RX, inverted RY; triggers are analog buttons; exposes dual-rumble unconditionally."
+          }
+        ],
+        "reason": "YARG's CRKD Mode 1 star-power/select binding is translated through Chromium's XInput button order. Factory button aliases are inferred, not a browser dump."
+      }
+    },
+    "View": {
+      "kind": "button",
+      "index": 8,
+      "pressedThreshold": 0,
+      "evidence": {
+        "status": "inferred",
+        "sources": [
+          {
+            "url": "https://github.com/YARC-Official/YARG/blob/f5bfbe6996b4af35722d4204a93c6cc5c8f52a45/Assets/Script/Input/Bindings/Defaults/BindingCollection.Gamepad.cs",
+            "says": "CrkdGuitar_Mode1 maps Green/Red/Yellow/Blue/Orange to A/B/Y/X/LB, strum up/down to D-pad, star power to Select, whammy to leftTrigger; no dedicated tilt axis. Menu includes left-stick and D-pad."
+          },
+          {
+            "url": "https://raw.githubusercontent.com/chromium/chromium/main/device/gamepad/xinput_data_fetcher_win.cc",
+            "says": "XInput fetcher uses STANDARD GAMEPAD for subtype 1; 17 buttons when XInputGetStateEx exists; four axes LX, inverted LY, RX, inverted RY; triggers are analog buttons; exposes dual-rumble unconditionally."
+          }
+        ],
+        "reason": "YARG's CRKD Mode 1 View binding is translated through Chromium's XInput button order. Factory button aliases are inferred, not a browser dump."
+      }
+    },
+    "Menu": {
+      "kind": "button",
+      "index": 9,
+      "pressedThreshold": 0,
+      "evidence": {
+        "status": "inferred",
+        "sources": [
+          {
+            "url": "https://github.com/YARC-Official/YARG/blob/f5bfbe6996b4af35722d4204a93c6cc5c8f52a45/Assets/Script/Input/Bindings/Defaults/BindingCollection.Gamepad.cs",
+            "says": "CrkdGuitar_Mode1 maps Green/Red/Yellow/Blue/Orange to A/B/Y/X/LB, strum up/down to D-pad, star power to Select, whammy to leftTrigger; no dedicated tilt axis. Menu includes left-stick and D-pad."
+          },
+          {
+            "url": "https://raw.githubusercontent.com/chromium/chromium/main/device/gamepad/xinput_data_fetcher_win.cc",
+            "says": "XInput fetcher uses STANDARD GAMEPAD for subtype 1; 17 buttons when XInputGetStateEx exists; four axes LX, inverted LY, RX, inverted RY; triggers are analog buttons; exposes dual-rumble unconditionally."
+          }
+        ],
+        "reason": "YARG's CRKD Mode 1 Menu binding is translated through Chromium's XInput button order. Factory button aliases are inferred, not a browser dump."
+      }
+    },
+    "D-pad up": {
+      "kind": "button",
+      "index": 12,
+      "pressedThreshold": 0,
+      "evidence": {
+        "status": "inferred",
+        "sources": [
+          {
+            "url": "https://github.com/YARC-Official/YARG/blob/f5bfbe6996b4af35722d4204a93c6cc5c8f52a45/Assets/Script/Input/Bindings/Defaults/BindingCollection.Gamepad.cs",
+            "says": "CrkdGuitar_Mode1 maps Green/Red/Yellow/Blue/Orange to A/B/Y/X/LB, strum up/down to D-pad, star power to Select, whammy to leftTrigger; no dedicated tilt axis. Menu includes left-stick and D-pad."
+          },
+          {
+            "url": "https://raw.githubusercontent.com/chromium/chromium/main/device/gamepad/xinput_data_fetcher_win.cc",
+            "says": "XInput fetcher uses STANDARD GAMEPAD for subtype 1; 17 buttons when XInputGetStateEx exists; four axes LX, inverted LY, RX, inverted RY; triggers are analog buttons; exposes dual-rumble unconditionally."
+          }
+        ],
+        "reason": "YARG's CRKD Mode 1 D-pad up binding is translated through Chromium's XInput button order. Factory button aliases are inferred, not a browser dump."
+      }
+    },
+    "D-pad down": {
+      "kind": "button",
+      "index": 13,
+      "pressedThreshold": 0,
+      "evidence": {
+        "status": "inferred",
+        "sources": [
+          {
+            "url": "https://github.com/YARC-Official/YARG/blob/f5bfbe6996b4af35722d4204a93c6cc5c8f52a45/Assets/Script/Input/Bindings/Defaults/BindingCollection.Gamepad.cs",
+            "says": "CrkdGuitar_Mode1 maps Green/Red/Yellow/Blue/Orange to A/B/Y/X/LB, strum up/down to D-pad, star power to Select, whammy to leftTrigger; no dedicated tilt axis. Menu includes left-stick and D-pad."
+          },
+          {
+            "url": "https://raw.githubusercontent.com/chromium/chromium/main/device/gamepad/xinput_data_fetcher_win.cc",
+            "says": "XInput fetcher uses STANDARD GAMEPAD for subtype 1; 17 buttons when XInputGetStateEx exists; four axes LX, inverted LY, RX, inverted RY; triggers are analog buttons; exposes dual-rumble unconditionally."
+          }
+        ],
+        "reason": "YARG's CRKD Mode 1 D-pad down binding is translated through Chromium's XInput button order. Factory button aliases are inferred, not a browser dump."
+      }
+    },
+    "D-pad left": {
+      "kind": "button",
+      "index": 14,
+      "pressedThreshold": 0,
+      "evidence": {
+        "status": "inferred",
+        "sources": [
+          {
+            "url": "https://github.com/YARC-Official/YARG/blob/f5bfbe6996b4af35722d4204a93c6cc5c8f52a45/Assets/Script/Input/Bindings/Defaults/BindingCollection.Gamepad.cs",
+            "says": "CrkdGuitar_Mode1 maps Green/Red/Yellow/Blue/Orange to A/B/Y/X/LB, strum up/down to D-pad, star power to Select, whammy to leftTrigger; no dedicated tilt axis. Menu includes left-stick and D-pad."
+          },
+          {
+            "url": "https://raw.githubusercontent.com/chromium/chromium/main/device/gamepad/xinput_data_fetcher_win.cc",
+            "says": "XInput fetcher uses STANDARD GAMEPAD for subtype 1; 17 buttons when XInputGetStateEx exists; four axes LX, inverted LY, RX, inverted RY; triggers are analog buttons; exposes dual-rumble unconditionally."
+          }
+        ],
+        "reason": "YARG's CRKD Mode 1 D-pad left binding is translated through Chromium's XInput button order. Factory button aliases are inferred, not a browser dump."
+      }
+    },
+    "D-pad right": {
+      "kind": "button",
+      "index": 15,
+      "pressedThreshold": 0,
+      "evidence": {
+        "status": "inferred",
+        "sources": [
+          {
+            "url": "https://github.com/YARC-Official/YARG/blob/f5bfbe6996b4af35722d4204a93c6cc5c8f52a45/Assets/Script/Input/Bindings/Defaults/BindingCollection.Gamepad.cs",
+            "says": "CrkdGuitar_Mode1 maps Green/Red/Yellow/Blue/Orange to A/B/Y/X/LB, strum up/down to D-pad, star power to Select, whammy to leftTrigger; no dedicated tilt axis. Menu includes left-stick and D-pad."
+          },
+          {
+            "url": "https://raw.githubusercontent.com/chromium/chromium/main/device/gamepad/xinput_data_fetcher_win.cc",
+            "says": "XInput fetcher uses STANDARD GAMEPAD for subtype 1; 17 buttons when XInputGetStateEx exists; four axes LX, inverted LY, RX, inverted RY; triggers are analog buttons; exposes dual-rumble unconditionally."
+          }
+        ],
+        "reason": "YARG's CRKD Mode 1 D-pad right binding is translated through Chromium's XInput button order. Factory button aliases are inferred, not a browser dump."
+      }
+    },
+    "Whammy": {
+      "kind": "button",
+      "index": 6,
+      "steps": 255,
+      "pressedThreshold": 0.11764705882352941,
+      "pressedInclusive": true,
+      "evidence": {
+        "status": "inferred",
+        "sources": [
+          {
+            "url": "https://github.com/YARC-Official/YARG/blob/f5bfbe6996b4af35722d4204a93c6cc5c8f52a45/Assets/Script/Input/Bindings/Defaults/BindingCollection.Gamepad.cs",
+            "says": "CrkdGuitar_Mode1 maps Green/Red/Yellow/Blue/Orange to A/B/Y/X/LB, strum up/down to D-pad, star power to Select, whammy to leftTrigger; no dedicated tilt axis. Menu includes left-stick and D-pad."
+          },
+          {
+            "url": "https://github.com/sanjay900/xinputemu/pull/1",
+            "says": "Patch author tested two CRKD guitars; VID/PID match a first-party 360 gamepad (045e:028e in patch); whammy is Z/LT, converted to signed right-stick range for old PC guitar games."
+          },
+          {
+            "url": "https://raw.githubusercontent.com/chromium/chromium/main/device/gamepad/xinput_data_fetcher_win.cc",
+            "says": "XInput fetcher uses STANDARD GAMEPAD for subtype 1; 17 buttons when XInputGetStateEx exists; four axes LX, inverted LY, RX, inverted RY; triggers are analog buttons; exposes dual-rumble unconditionally."
+          }
+        ],
+        "reason": "YARG binds CRKD Mode 1 whammy to LT; Chromium exposes LT as analog button 6, divided by 255, pressed inclusively at byte 30. No -1 whammy axis is claimed."
+      },
+      "analog": true
+    },
+    "Left stick": {
+      "kind": "stick",
+      "x": 0,
+      "y": 1,
+      "evidence": {
+        "status": "inferred",
+        "sources": [
+          {
+            "url": "https://github.com/YARC-Official/YARG/blob/f5bfbe6996b4af35722d4204a93c6cc5c8f52a45/Assets/Script/Input/Bindings/Defaults/BindingCollection.Gamepad.cs",
+            "says": "CrkdGuitar_Mode1 maps Green/Red/Yellow/Blue/Orange to A/B/Y/X/LB, strum up/down to D-pad, star power to Select, whammy to leftTrigger; no dedicated tilt axis. Menu includes left-stick and D-pad."
+          },
+          {
+            "url": "https://raw.githubusercontent.com/chromium/chromium/main/device/gamepad/xinput_data_fetcher_win.cc",
+            "says": "XInput fetcher uses STANDARD GAMEPAD for subtype 1; 17 buttons when XInputGetStateEx exists; four axes LX, inverted LY, RX, inverted RY; triggers are analog buttons; exposes dual-rumble unconditionally."
+          }
+        ],
+        "reason": "YARG's CRKD Mode 1 menu accepts the left stick; Chromium's XInput axes 0/1 carry LX/inverted LY."
+      }
+    },
+    "Right stick": {
+      "kind": "stick",
+      "x": 2,
+      "y": 3,
+      "evidence": {
+        "status": "inferred",
+        "sources": [
+          {
+            "url": "https://cdn.shopify.com/s/files/1/0679/3392/9791/files/Guitar_User_Guide_Multi_V1.4_08Jan26.pdf?v=1767902895",
+            "says": "CK25GM PC connections include USB cable and included USB wireless receiver; PC slider and mode dial select game preset; the hardware includes both sticks, View/Capture/Menu, CTRL, Home and D-pad."
+          },
+          {
+            "url": "https://raw.githubusercontent.com/chromium/chromium/main/device/gamepad/xinput_data_fetcher_win.cc",
+            "says": "XInput fetcher uses STANDARD GAMEPAD for subtype 1; 17 buttons when XInputGetStateEx exists; four axes LX, inverted LY, RX, inverted RY; triggers are analog buttons; exposes dual-rumble unconditionally."
+          }
+        ],
+        "reason": "Manufacturer identifies a right analog stick. Standard XInput axes 2/3 carry RX/inverted RY; its factory operation in this earlier Mode 1 preset is inferred."
+      }
+    },
+    "L3": {
+      "kind": "button",
+      "index": 10,
+      "pressedThreshold": 0,
+      "evidence": {
+        "status": "inferred",
+        "sources": [
+          {
+            "url": "https://cdn.shopify.com/s/files/1/0679/3392/9791/files/Guitar_User_Guide_Multi_V1.4_08Jan26.pdf?v=1767902895",
+            "says": "CK25GM PC connections include USB cable and included USB wireless receiver; PC slider and mode dial select game preset; the hardware includes both sticks, View/Capture/Menu, CTRL, Home and D-pad."
+          },
+          {
+            "url": "https://raw.githubusercontent.com/chromium/chromium/main/device/gamepad/xinput_data_fetcher_win.cc",
+            "says": "XInput fetcher uses STANDARD GAMEPAD for subtype 1; 17 buttons when XInputGetStateEx exists; four axes LX, inverted LY, RX, inverted RY; triggers are analog buttons; exposes dual-rumble unconditionally."
+          }
+        ],
+        "reason": "Manufacturer names this physical control; its normal XInput button correspondence is inferred from the standard browser path, not observed on hardware."
+      }
+    },
+    "R3": {
+      "kind": "button",
+      "index": 11,
+      "pressedThreshold": 0,
+      "evidence": {
+        "status": "inferred",
+        "sources": [
+          {
+            "url": "https://cdn.shopify.com/s/files/1/0679/3392/9791/files/Guitar_User_Guide_Multi_V1.4_08Jan26.pdf?v=1767902895",
+            "says": "CK25GM PC connections include USB cable and included USB wireless receiver; PC slider and mode dial select game preset; the hardware includes both sticks, View/Capture/Menu, CTRL, Home and D-pad."
+          },
+          {
+            "url": "https://raw.githubusercontent.com/chromium/chromium/main/device/gamepad/xinput_data_fetcher_win.cc",
+            "says": "XInput fetcher uses STANDARD GAMEPAD for subtype 1; 17 buttons when XInputGetStateEx exists; four axes LX, inverted LY, RX, inverted RY; triggers are analog buttons; exposes dual-rumble unconditionally."
+          }
+        ],
+        "reason": "Manufacturer names this physical control; its normal XInput button correspondence is inferred from the standard browser path, not observed on hardware."
+      }
+    },
+    "CRKD Home": {
+      "kind": "button",
+      "index": 16,
+      "pressedThreshold": 0,
+      "evidence": {
+        "status": "inferred",
+        "sources": [
+          {
+            "url": "https://cdn.shopify.com/s/files/1/0679/3392/9791/files/Guitar_User_Guide_Multi_V1.4_08Jan26.pdf?v=1767902895",
+            "says": "CK25GM PC connections include USB cable and included USB wireless receiver; PC slider and mode dial select game preset; the hardware includes both sticks, View/Capture/Menu, CTRL, Home and D-pad."
+          },
+          {
+            "url": "https://raw.githubusercontent.com/chromium/chromium/main/device/gamepad/xinput_data_fetcher_win.cc",
+            "says": "XInput fetcher uses STANDARD GAMEPAD for subtype 1; 17 buttons when XInputGetStateEx exists; four axes LX, inverted LY, RX, inverted RY; triggers are analog buttons; exposes dual-rumble unconditionally."
+          }
+        ],
+        "reason": "Manufacturer names this physical control; its normal XInput button correspondence is inferred from the standard browser path, not observed on hardware."
+      }
+    },
+    "Capture": {
+      "kind": "unreported",
+      "reason": "No independent XInput capture bit exists; the factory action or alias was not found.",
+      "evidence": {
+        "status": "inferred",
+        "sources": [
+          {
+            "url": "https://cdn.shopify.com/s/files/1/0679/3392/9791/files/Guitar_User_Guide_Multi_V1.4_08Jan26.pdf?v=1767902895",
+            "says": "CK25GM PC connections include USB cable and included USB wireless receiver; PC slider and mode dial select game preset; the hardware includes both sticks, View/Capture/Menu, CTRL, Home and D-pad."
+          },
+          {
+            "url": "https://raw.githubusercontent.com/chromium/chromium/main/device/gamepad/xinput_data_fetcher_win.cc",
+            "says": "XInput fetcher uses STANDARD GAMEPAD for subtype 1; 17 buttons when XInputGetStateEx exists; four axes LX, inverted LY, RX, inverted RY; triggers are analog buttons; exposes dual-rumble unconditionally."
+          }
+        ],
+        "reason": "The manual confirms Capture exists physically but its PC report is not established; no browser index is invented."
+      }
+    }
+  },
+  "switches": {
+    "Mode dial": {
+      "kind": "unreported",
+      "reason": "Only the earlier PC Mode 1 mapping is sourced. Factory presets, firmware 3 and legacy Mode 8 change reports and need separately researched profiles.",
+      "evidence": {
+        "value": null,
+        "status": "confirmed",
+        "sources": [
+          {
+            "url": "https://cdn.shopify.com/s/files/1/0679/3392/9791/files/Guitar_User_Guide_Multi_V1.4_08Jan26.pdf?v=1767902895",
+            "says": "CK25GM PC connections include USB cable and included USB wireless receiver; PC slider and mode dial select game preset; the hardware includes both sticks, View/Capture/Menu, CTRL, Home and D-pad."
+          },
+          {
+            "url": "https://github.com/YARC-Official/YARG/blob/f5bfbe6996b4af35722d4204a93c6cc5c8f52a45/Assets/Script/Input/Bindings/Defaults/BindingCollection.Gamepad.cs",
+            "says": "CrkdGuitar_Mode1 maps Green/Red/Yellow/Blue/Orange to A/B/Y/X/LB, strum up/down to D-pad, star power to Select, whammy to leftTrigger; no dedicated tilt axis. Menu includes left-stick and D-pad."
+          }
+        ]
+      }
+    },
+    "Platform slider": {
+      "kind": "unreported",
+      "reason": "PC Mode 1 only. NS, AN and P3 identifiers and raw reports have not been established.",
+      "evidence": {
+        "value": null,
+        "status": "confirmed",
+        "sources": [
+          {
+            "url": "https://cdn.shopify.com/s/files/1/0679/3392/9791/files/Guitar_User_Guide_Multi_V1.4_08Jan26.pdf?v=1767902895",
+            "says": "CK25GM PC connections include USB cable and included USB wireless receiver; PC slider and mode dial select game preset; the hardware includes both sticks, View/Capture/Menu, CTRL, Home and D-pad."
+          }
+        ]
+      }
+    }
+  },
+  "notes": [
+    "Local source-derived emulation, not a hardware/browser capture. This profile models the earlier CRKD Mode 1 preset identified by YARG as CrkdGuitar_Mode1, before firmware 3 changed star power to D-pad left.",
+    "Use the Multi-platform Gibson Les Paul CK25GM; Nitro Deck is a separate Switch controller product.",
+    "Stock Windows XInputGetStateEx availability is assumed for button 16. Without it Chromium exposes 16 buttons; that separate variant is omitted.",
+    "All unpressed buttons, including whammy and unused RT, are modeled at zero; those physical resting bytes are inferred. The tested conversion patch supports whammy LT with rest zero, but no raw browser rest dump was located.",
+    "Whammy is analog button 6 (0..1), not an axis. D-pad and strum share standard button indices; there is no numeric hat axis or independent tilt axis in this preset.",
+    "Browser indices: 0 A/Green; 1 B/Red; 2 X/Blue; 3 Y/Yellow; 4 LB/Orange; 5 RB (physical alias unconfirmed); 6 LT/Whammy; 7 RT (physical alias unconfirmed); 8 View/Select/CTRL inferred; 9 Menu/Start; 10 L3; 11 R3; 12 D-pad/Strum up; 13 D-pad/Strum down; 14 D-pad left; 15 D-pad right; 16 Home/Guide. Axes 0/1 Left stick; 2/3 Right stick, nominal rest inferred.",
+    "The dual-rumble object is Chromium's unconditional XInput API exposure. It does not confirm browser-controlled physical vibration or equate to the guitar's local strum haptics.",
+    "Chromium XInput id hides VID/PID. Hardware-tested old Mode 1 uses 045e:028e; newer native CRKD IDs from Linux/SDL are not transplanted into this earlier profile.",
+    "Factory names whose report is unknown are omitted or explicitly unreported. Capture, firmware/current platform modes and remapped presets need real captures."
+  ],
+  "environment": {
+    "browser": "Chrome / Edge (Chromium XInput path)",
+    "os": "Windows 10 / 11",
+    "connection": "2.4 GHz dongle",
+    "mode": "PC slider; Mode 1; earlier firmware preset"
+  }
+}

@@ -15,6 +15,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <sys/select.h>
+#include <sys/stat.h>
 #include <unistd.h>
 #include <orbis/libkernel.h>
 #include "autorun.h"
@@ -22,7 +23,9 @@
 #include "sandbox.h"
 #include "service.h"
 
+#ifndef C4F_DIAG_DIR
 #define C4F_DIAG_DIR      "/user/data/control4free"
+#endif
 #define C4F_DIAG_LOG      C4F_DIAG_DIR "/control4free.log"
 #define C4F_DIAG_REPORT   C4F_DIAG_DIR "/diag-report.txt"
 #define C4F_DIAG_KLOG     C4F_DIAG_DIR "/diag-klog.txt"
@@ -181,18 +184,19 @@ static int c4fContains(const char *haystack, const char *needle)
     return 0;
 }
 
-static void c4fWriteAll(const char *path, const char *text, int append)
+static int c4fWriteAll(const char *path, const char *text, int append)
 {
     int fd = open(path, O_WRONLY | O_CREAT | (append ? O_APPEND : O_TRUNC), 0666);
-    if (fd < 0) return;
+    if (fd < 0) return -1;
     size_t size = strlen(text);
     while (size) {
         ssize_t n = write(fd, text, size);
         if (n < 0 && errno == EINTR) continue;
-        if (n <= 0) break;
+        if (n <= 0) { int saved = n < 0 ? errno : EIO; close(fd); errno = saved; return -1; }
         text += n; size -= (size_t)n;
     }
-    close(fd);
+    if (fsync(fd)) { int saved = errno; close(fd); errno = saved; return -1; }
+    return close(fd);
 }
 
 /* ---- the kernel log ---- */
@@ -284,6 +288,8 @@ void c4fDiagCapture(unsigned milliseconds)
 
 void c4fDiagStart(int sandboxResult, int sandboxError)
 {
+    /* A pre-main payload failure has never created this directory. */
+    (void)mkdir(C4F_DIAG_DIR, 0777);
     c4fBootMs = c4fLauncherTimeMs();
     OrbisKernelSwVersion version;
     memset(&version, 0, sizeof(version));
@@ -447,7 +453,20 @@ static char *c4fLogPage(const char *path)
         c4fAdd(&t, "%s is not there (errno %d).\n", path, errno);
         return c4fTake(&t);
     }
-    return text;
+    C4fText t = {0};
+    c4fAdd(&t, "===== %s (%lld bytes%s) =====\n%s", path, size,
+           size > C4F_LOG_TAIL ? "; truncated to last 64 KiB" : "", text);
+    free(text);
+    return c4fTake(&t);
+}
+
+static char *c4fCurrentLogPage(void)
+{
+    char *rollover = c4fLogPage(C4F_DIAG_LOG ".1"), *active = c4fLogPage(C4F_DIAG_LOG);
+    C4fText t = {0};
+    c4fAdd(&t, "%s\n%s", rollover, active);
+    free(rollover); free(active);
+    return c4fTake(&t);
 }
 
 /* Lines that tend to say why a payload did not run. */
@@ -484,18 +503,19 @@ static void c4fSaveReport(void)
         c4fAdd(&t, "===== %s =====\n%s\n", c4fPageNames[i], c4fPages[i] ? c4fPages[i] : "");
     pthread_mutex_unlock(&c4fLock);
     char *text = c4fTake(&t);
-    c4fWriteAll(C4F_DIAG_REPORT, text, 0);
-    snprintf(c4fReportNote, sizeof(c4fReportNote), "/data/control4free/diag-report.txt");
+    if (!c4fWriteAll(C4F_DIAG_REPORT, text, 0))
+        snprintf(c4fReportNote, sizeof(c4fReportNote), "Saved /data/control4free/diag-report.txt");
+    else snprintf(c4fReportNote, sizeof(c4fReportNote), "Internal save failed (errno %d)", errno);
     static const char *const usb[] = { "/mnt/usb0", "/mnt/usb1" };
     for (int i = 0; i < 2; i++) {
         char path[64];
         snprintf(path, sizeof(path), "%s/control4free-diag.txt", usb[i]);
-        int fd = open(path, O_WRONLY | O_CREAT | O_TRUNC, 0666);
-        if (fd < 0) continue;
-        close(fd);
-        c4fWriteAll(path, text, 0);
+        struct stat info;
+        if (stat(usb[i], &info) || !S_ISDIR(info.st_mode)) continue;
+        int result = c4fWriteAll(path, text, 0), saved = errno;
         size_t used = strlen(c4fReportNote);
-        snprintf(c4fReportNote + used, sizeof(c4fReportNote) - used, " and %s", path);
+        if (!result) snprintf(c4fReportNote + used, sizeof(c4fReportNote) - used, "; saved %s", path);
+        else snprintf(c4fReportNote + used, sizeof(c4fReportNote) - used, "; USB%d save failed (%d)", i, saved);
     }
     free(text);
 }
@@ -508,7 +528,7 @@ unsigned c4fDiagRefresh(const C4fDiagState *state)
     pthread_mutex_unlock(&c4fLock);
     if (!c4fRefreshed++ && state->running != 1) c4fDiagCapture(4000);
     char *pages[C4F_DIAG_PAGES] = {
-        c4fSummary(state), c4fLogPage(C4F_DIAG_LOG), c4fLogPage(C4F_DIAG_LOG ".previous"),
+        c4fSummary(state), c4fCurrentLogPage(), c4fLogPage(C4F_DIAG_LOG ".previous"),
         c4fKlogPage(1), c4fKlogPage(0),
     };
     int changed = 0;

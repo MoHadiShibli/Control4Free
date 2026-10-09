@@ -174,11 +174,21 @@ int c4fAutorunCheck(char *problem, size_t size)
     if (c4fSandboxLeave()) { snprintf(problem, size, "GoldHEN did not let the app check (errno %d)", errno); return C4F_AUTORUN_UNKNOWN; }
     int state = C4F_AUTORUN_OFF;
     char *ini = c4fPath(path, sizeof(path), "GoldHEN/payloads.ini") ? NULL : (char *)c4fReadFile(path, &length, 1u << 20);
+    if (!ini && errno != ENOENT) {
+        snprintf(problem, size, "Could not inspect AutoRun (errno %d)", errno); return C4F_AUTORUN_UNKNOWN;
+    }
     if (ini && c4fIniEnabled(ini) && !c4fPath(path, sizeof(path), "payloads/control4free.elf")) {
         size_t installedSize = 0;
         unsigned char *installed = c4fReadFile(path, &installedSize, 16u << 20);
         if (installed)
             state = installedSize == c4fBundledSize && !memcmp(installed, c4fBundled, installedSize) ? C4F_AUTORUN_ON : C4F_AUTORUN_OUTDATED;
+        else if (errno == ENOENT) {
+            state = C4F_AUTORUN_OUTDATED;
+            snprintf(problem, size, "Enabled, but the payload is missing; Triangle repairs it");
+        } else {
+            state = C4F_AUTORUN_UNKNOWN;
+            snprintf(problem, size, "Enabled, but the payload cannot be inspected (errno %d)", errno);
+        }
         free(installed);
     }
     free(ini);

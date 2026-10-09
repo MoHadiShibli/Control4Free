@@ -15,7 +15,7 @@ const sendClaimSource = extract("    let lastClaim = '';", '    const lastSent =
 const pollSource = extract('    function pollGamepads(t)', '    function setGamepadPad(');
 
 function padStatus(fields) {
-  return Object.assign({ known: true, mine: false, open: false }, fields);
+  return Object.assign({ known: true, mine: false, open: false, clients: 0 }, fields);
 }
 
 (async () => {
@@ -26,7 +26,7 @@ function padStatus(fields) {
     conn: { state: 'open' },
     keepAwake: { update() {} },
     primaryPad: -1,
-    status: [padStatus({ open: true }), padStatus({ mine: true, open: true }), padStatus({}), padStatus({})],
+    status: [padStatus({ open: true, clients: 1 }), padStatus({ mine: true, open: true, clients: 1 }), padStatus({}), padStatus({})],
     claimedPads: () => [...ctx.gamepadSources.values()].map(s => s.pad).filter(p => p >= 0).sort(),
     gamepadSources: new Map([[0, { pad: 0 }], [1, { pad: 1 }]]),
     call(method, params) {
@@ -47,6 +47,45 @@ function padStatus(fields) {
                    'the remaining controller is claimed again');
   console.log('PASS a refused claim gives up only the controllers owned elsewhere');
 
+  // Rapid selections serialize one claim and retain the latest desired set,
+  // including an empty selection. Creation-busy is not another owner.
+  const serialClaims = [], deferred = [];
+  const serial = {
+    conn: { state: 'open' }, keepAwake: { update() {} }, primaryPad: -1,
+    status: [padStatus({ open: true, clients: 0 }), padStatus({ mine: true, clients: 1 }), padStatus({}), padStatus({})],
+    gamepadSources: new Map([[0, { pad: 0 }], [1, { pad: 1 }]]),
+    claimedPads: () => [...new Set([...serial.gamepadSources.values()].map(s => s.pad).filter(p => p >= 0))].sort(),
+    call(method, params) {
+      if (method === 'status') return Promise.resolve({ pads: [] });
+      serialClaims.push(params); return new Promise((resolve, reject) => deferred.push({ resolve, reject }));
+    }, applyStatus() {}, toast() {}, closePad() {}, renderGamepads() {},
+  };
+  vm.createContext(serial); vm.runInContext(sendClaimSource, serial);
+  vm.runInContext('sendClaim(true)', serial);
+  serial.gamepadSources.get(0).pad = 2; vm.runInContext('sendClaim()', serial);
+  for (const s of serial.gamepadSources.values()) s.pad = -1;
+  vm.runInContext('sendClaim()', serial);
+  assert.equal(serialClaims.length, 1);
+  deferred.shift().resolve({ pads: [] });
+  for (let i = 0; i < 4; i++) await new Promise(setImmediate);
+  assert.deepEqual(serialClaims, [[0, 1], []]);
+  deferred.shift().resolve({ pads: [] });
+  for (let i = 0; i < 4; i++) await new Promise(setImmediate);
+  serial.gamepadSources.get(0).pad = 0; serial.gamepadSources.get(1).pad = 1;
+  vm.runInContext('sendClaim(true)', serial);
+  deferred.shift().reject({ code: 409, message: 'Creation busy' });
+  for (let i = 0; i < 4; i++) await new Promise(setImmediate);
+  assert.equal(serial.gamepadSources.get(0).pad, 0);
+  assert.equal(serial.gamepadSources.get(1).pad, 1);
+  assert.equal(serialClaims.length, 3, 'busy refusal cannot loop');
+  vm.runInContext('sendClaim(true); resetClaims(); sendClaim(true)', serial);
+  assert.equal(deferred.length, 2);
+  deferred.shift().reject({ message: 'old connection' });
+  deferred.shift().resolve({ pads: [] });
+  for (let i = 0; i < 4; i++) await new Promise(setImmediate);
+  assert.equal(serial.gamepadSources.get(1).pad, 1, 'old connection failure cannot drop new selections');
+  console.log('PASS serialized claims, latest empty selection and unowned-busy preservation');
+
   // getGamepads() can start throwing after it has worked. Held buttons must not
   // stay in the source: nothing would be left to release them.
   const pads = {
@@ -55,7 +94,9 @@ function padStatus(fields) {
     navigator: { getGamepads() { throw Error('SecurityError'); } },
     gamepadSources: new Map([[0, { pad: 0, buttons: 0x4000, lx: 0, ly: 255, rx: 0, ry: 0, l2: 255, r2: 255, touches: [{}] }]]),
     blankSource: pad => ({ pad, buttons: 0, lx: 128, ly: 128, rx: 128, ry: 128, l2: 0, r2: 0, touches: [] }),
-    renderGamepads() {}, sendClaim() {}, $: () => null,
+    renderGamepads() {}, sendClaim() {}, $: () => ({ textContent: '' }),
+    clearDevice(src) { Object.assign(src, pads.blankSource(src.pad)); },
+    mapper: { index: null, cancelCapture() {}, status() {} },
   };
   vm.createContext(pads);
   vm.runInContext(pollSource, pads);

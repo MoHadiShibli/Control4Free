@@ -1,0 +1,12 @@
+{
+  "profiles": [
+    "crkd-les-paul-chrome-win-dongle-mode1-pre3.json",
+    "crkd-les-paul-chrome-win-usb-mode1-pre3.json",
+    "elite2-chromium-win-adapter-wgi-conditional.json",
+    "elite2-chromium-win-usb-wgi-conditional.json",
+    "elite2-firefox-win-adapter-xinput.json",
+    "elite2-firefox-win-bt-xinput.json",
+    "elite2-firefox-win-usb-xinput.json",
+    "wheel-g920-chrome-win-usb.json"
+  ]
+}

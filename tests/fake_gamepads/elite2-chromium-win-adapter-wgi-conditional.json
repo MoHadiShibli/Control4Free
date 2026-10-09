@@ -1,0 +1,566 @@
+{
+  "name": "elite2-chromium-win-adapter-wgi-conditional",
+  "label": "Xbox Elite Series 2 — Xbox Wireless Adapter / Chromium WGI (conditional paddles)",
+  "environment": {
+    "browser": "Chrome / Edge (Chromium WGI backend)",
+    "os": "Windows 10 RS1+ / Windows 11",
+    "connection": "Xbox Wireless Adapter",
+    "mode": "Default hardware profile; four WGI paddle labels assumed",
+    "backend": "Windows.Gaming.Input",
+    "status": "inferred",
+    "sources": [
+      {
+        "url": "https://www.xbox.com/en-US/accessories/controllers/elite-wireless-controller-series-2",
+        "says": "Windows 10/11 supports USB, Bluetooth and Xbox Wireless Adapter."
+      }
+    ],
+    "reason": "Browser source is confirmed; controller-specific WGI paddle labels were not captured."
+  },
+  "hardwareIds": {
+    "value": {
+      "vendor": null,
+      "product": null
+    },
+    "status": "inferred",
+    "sources": [
+      {
+        "url": "https://www.xbox.com/en-US/accessories/controllers/elite-wireless-controller-series-2",
+        "says": "Xbox Wireless Adapter is a supported connection."
+      }
+    ],
+    "reason": "No RawGameController VID/PID dump for adapter was found; adapter USB PID is not asserted to be the gamepad PID."
+  },
+  "gamepad": {
+    "timestampPolicy": {
+      "value": "poll",
+      "status": "confirmed",
+      "sources": [
+        {
+          "url": "https://chromium.googlesource.com/chromium/src/+/refs/heads/main/device/gamepad/wgi_data_fetcher_win.cc",
+          "says": "GetGamepadData updates timestamp on each successful WGI reading."
+        }
+      ]
+    },
+    "id": {
+      "value": "Xbox 360 Controller (XInput STANDARD GAMEPAD)",
+      "status": "inferred",
+      "sources": [
+        {
+          "url": "https://chromium.googlesource.com/chromium/src/+/refs/heads/main/device/gamepad/wgi_data_fetcher_win.cc",
+          "says": "Known XInput devices retain this literal ID."
+        },
+        {
+          "url": "https://raw.githubusercontent.com/chromium/chromium/main/device/gamepad/gamepad_id_list.cc",
+          "says": "045e:0b00 has XInput type XboxOne."
+        }
+      ],
+      "reason": "Assumes the adapter exposes the physical Elite via a known-XInput product ID, as expected for GIP. No adapter browser dump was found."
+    },
+    "mapping": {
+      "value": "standard",
+      "status": "confirmed",
+      "sources": [
+        {
+          "url": "https://chromium.googlesource.com/chromium/src/+/refs/heads/main/device/gamepad/wgi_data_fetcher_win.cc",
+          "says": "WGI fetcher always sets standard mapping."
+        }
+      ]
+    },
+    "buttons": {
+      "value": 21,
+      "status": "inferred",
+      "sources": [
+        {
+          "url": "https://chromium.googlesource.com/chromium/src/+/refs/heads/main/device/gamepad/wgi_data_fetcher_win.cc",
+          "says": "Length is standard count (17) plus number of non-None paddle labels."
+        },
+        {
+          "url": "https://raw.githubusercontent.com/chromium/chromium/main/device/gamepad/gamepad_standard_mappings.h",
+          "says": "Standard button count is 17."
+        },
+        {
+          "url": "https://www.xbox.com/en-US/accessories/controllers/elite-wireless-controller-series-2",
+          "says": "Controller has four paddles."
+        }
+      ],
+      "reason": "Conditional 17+4 branch. Four physical paddles do not prove four WGI labels; this is not an exact Elite hardware clone."
+    },
+    "axesRest": {
+      "value": [
+        0,
+        0,
+        0,
+        0
+      ],
+      "status": "inferred",
+      "sources": [
+        {
+          "url": "https://chromium.googlesource.com/chromium/src/+/refs/heads/main/device/gamepad/wgi_data_fetcher_win.cc",
+          "says": "Four axes contain the two sticks."
+        },
+        {
+          "url": "https://learn.microsoft.com/en-us/windows/uwp/gaming/gamepad-and-vibration",
+          "says": "Centered sticks approximately report zero and can drift."
+        }
+      ],
+      "reason": "Ideal zero-center fixture; an actual resting sample varies and was not captured. Triggers are buttons 6/7, not extra axes."
+    },
+    "vibration": {
+      "value": {
+        "type": "dual-rumble",
+        "effects": [
+          "trigger-rumble",
+          "dual-rumble"
+        ]
+      },
+      "status": "inferred",
+      "sources": [
+        {
+          "url": "https://chromium.googlesource.com/chromium/src/+/refs/heads/main/device/gamepad/wgi_data_fetcher_win.cc",
+          "says": "WGI actuator is non-null, with internal trigger rumble for supported IDs."
+        },
+        {
+          "url": "https://raw.githubusercontent.com/chromium/chromium/main/device/gamepad/gamepad_id_list.cc",
+          "says": "Elite Series 2 USB/Bluetooth IDs are in trigger-rumble support set."
+        },
+        {
+          "url": "https://chromium.googlesource.com/chromium/src/+/refs/heads/main/third_party/blink/renderer/modules/gamepad/gamepad_haptic_actuator.cc",
+          "says": "Trigger rumble publishes type dual-rumble and both supported effects."
+        }
+      ],
+      "reason": "Conditional on the adapter exposing a recognized Elite controller ID in Chromium's trigger-rumble set. The adapter's own USB PID is not used as a controller PID; an exact adapter browser dump was not found.",
+      "presence": "object"
+    }
+  },
+  "controls": {
+    "A": {
+      "kind": "button",
+      "index": 0,
+      "evidence": {
+        "status": "confirmed",
+        "sources": [
+          {
+            "url": "https://chromium.googlesource.com/chromium/src/+/refs/heads/main/device/gamepad/wgi_data_fetcher_win.cc",
+            "says": "Browser backend sends A to standard button 0."
+          }
+        ]
+      }
+    },
+    "B": {
+      "kind": "button",
+      "index": 1,
+      "evidence": {
+        "status": "confirmed",
+        "sources": [
+          {
+            "url": "https://chromium.googlesource.com/chromium/src/+/refs/heads/main/device/gamepad/wgi_data_fetcher_win.cc",
+            "says": "Browser backend sends B to standard button 1."
+          }
+        ]
+      }
+    },
+    "X": {
+      "kind": "button",
+      "index": 2,
+      "evidence": {
+        "status": "confirmed",
+        "sources": [
+          {
+            "url": "https://chromium.googlesource.com/chromium/src/+/refs/heads/main/device/gamepad/wgi_data_fetcher_win.cc",
+            "says": "Browser backend sends X to standard button 2."
+          }
+        ]
+      }
+    },
+    "Y": {
+      "kind": "button",
+      "index": 3,
+      "evidence": {
+        "status": "confirmed",
+        "sources": [
+          {
+            "url": "https://chromium.googlesource.com/chromium/src/+/refs/heads/main/device/gamepad/wgi_data_fetcher_win.cc",
+            "says": "Browser backend sends Y to standard button 3."
+          }
+        ]
+      }
+    },
+    "Left bumper": {
+      "kind": "button",
+      "index": 4,
+      "evidence": {
+        "status": "confirmed",
+        "sources": [
+          {
+            "url": "https://chromium.googlesource.com/chromium/src/+/refs/heads/main/device/gamepad/wgi_data_fetcher_win.cc",
+            "says": "Browser backend sends Left bumper to standard button 4."
+          }
+        ]
+      }
+    },
+    "Right bumper": {
+      "kind": "button",
+      "index": 5,
+      "evidence": {
+        "status": "confirmed",
+        "sources": [
+          {
+            "url": "https://chromium.googlesource.com/chromium/src/+/refs/heads/main/device/gamepad/wgi_data_fetcher_win.cc",
+            "says": "Browser backend sends Right bumper to standard button 5."
+          }
+        ]
+      }
+    },
+    "Left trigger": {
+      "kind": "button",
+      "index": 6,
+      "evidence": {
+        "status": "confirmed",
+        "sources": [
+          {
+            "url": "https://chromium.googlesource.com/chromium/src/+/refs/heads/main/device/gamepad/wgi_data_fetcher_win.cc",
+            "says": "Trigger 6 copies WGI 0..1 reading; pressed above 30/255."
+          },
+          {
+            "url": "https://raw.githubusercontent.com/chromium/chromium/main/device/gamepad/public/cpp/gamepad.h",
+            "says": "Chromium default pressed threshold is 30/255."
+          }
+        ]
+      },
+      "analog": true,
+      "pressedThreshold": 0.11764705882352941,
+      "pressedInclusive": false
+    },
+    "Right trigger": {
+      "kind": "button",
+      "index": 7,
+      "evidence": {
+        "status": "confirmed",
+        "sources": [
+          {
+            "url": "https://chromium.googlesource.com/chromium/src/+/refs/heads/main/device/gamepad/wgi_data_fetcher_win.cc",
+            "says": "Trigger 7 copies WGI 0..1 reading; pressed above 30/255."
+          },
+          {
+            "url": "https://raw.githubusercontent.com/chromium/chromium/main/device/gamepad/public/cpp/gamepad.h",
+            "says": "Chromium default pressed threshold is 30/255."
+          }
+        ]
+      },
+      "analog": true,
+      "pressedThreshold": 0.11764705882352941,
+      "pressedInclusive": false
+    },
+    "View": {
+      "kind": "button",
+      "index": 8,
+      "evidence": {
+        "status": "confirmed",
+        "sources": [
+          {
+            "url": "https://chromium.googlesource.com/chromium/src/+/refs/heads/main/device/gamepad/wgi_data_fetcher_win.cc",
+            "says": "Browser backend sends View to standard button 8."
+          }
+        ]
+      }
+    },
+    "Menu": {
+      "kind": "button",
+      "index": 9,
+      "evidence": {
+        "status": "confirmed",
+        "sources": [
+          {
+            "url": "https://chromium.googlesource.com/chromium/src/+/refs/heads/main/device/gamepad/wgi_data_fetcher_win.cc",
+            "says": "Browser backend sends Menu to standard button 9."
+          }
+        ]
+      }
+    },
+    "Left stick click": {
+      "kind": "button",
+      "index": 10,
+      "evidence": {
+        "status": "confirmed",
+        "sources": [
+          {
+            "url": "https://chromium.googlesource.com/chromium/src/+/refs/heads/main/device/gamepad/wgi_data_fetcher_win.cc",
+            "says": "Browser backend sends Left stick click to standard button 10."
+          }
+        ]
+      }
+    },
+    "Right stick click": {
+      "kind": "button",
+      "index": 11,
+      "evidence": {
+        "status": "confirmed",
+        "sources": [
+          {
+            "url": "https://chromium.googlesource.com/chromium/src/+/refs/heads/main/device/gamepad/wgi_data_fetcher_win.cc",
+            "says": "Browser backend sends Right stick click to standard button 11."
+          }
+        ]
+      }
+    },
+    "D-pad up": {
+      "kind": "button",
+      "index": 12,
+      "evidence": {
+        "status": "confirmed",
+        "sources": [
+          {
+            "url": "https://chromium.googlesource.com/chromium/src/+/refs/heads/main/device/gamepad/wgi_data_fetcher_win.cc",
+            "says": "Browser backend sends D-pad up to standard button 12."
+          }
+        ]
+      }
+    },
+    "D-pad down": {
+      "kind": "button",
+      "index": 13,
+      "evidence": {
+        "status": "confirmed",
+        "sources": [
+          {
+            "url": "https://chromium.googlesource.com/chromium/src/+/refs/heads/main/device/gamepad/wgi_data_fetcher_win.cc",
+            "says": "Browser backend sends D-pad down to standard button 13."
+          }
+        ]
+      }
+    },
+    "D-pad left": {
+      "kind": "button",
+      "index": 14,
+      "evidence": {
+        "status": "confirmed",
+        "sources": [
+          {
+            "url": "https://chromium.googlesource.com/chromium/src/+/refs/heads/main/device/gamepad/wgi_data_fetcher_win.cc",
+            "says": "Browser backend sends D-pad left to standard button 14."
+          }
+        ]
+      }
+    },
+    "D-pad right": {
+      "kind": "button",
+      "index": 15,
+      "evidence": {
+        "status": "confirmed",
+        "sources": [
+          {
+            "url": "https://chromium.googlesource.com/chromium/src/+/refs/heads/main/device/gamepad/wgi_data_fetcher_win.cc",
+            "says": "Browser backend sends D-pad right to standard button 15."
+          }
+        ]
+      }
+    },
+    "Xbox": {
+      "kind": "button",
+      "index": 16,
+      "evidence": {
+        "status": "confirmed",
+        "sources": [
+          {
+            "url": "https://chromium.googlesource.com/chromium/src/+/refs/heads/main/device/gamepad/wgi_data_fetcher_win.cc",
+            "says": "Browser backend sends Xbox to standard button 16."
+          }
+        ]
+      }
+    },
+    "Left stick": {
+      "kind": "stick",
+      "x": 0,
+      "y": 1,
+      "evidence": {
+        "status": "confirmed",
+        "sources": [
+          {
+            "url": "https://chromium.googlesource.com/chromium/src/+/refs/heads/main/device/gamepad/wgi_data_fetcher_win.cc",
+            "says": "Axes 0/1 are left X/Y; Y is inverted for down-positive."
+          }
+        ]
+      }
+    },
+    "Right stick": {
+      "kind": "stick",
+      "x": 2,
+      "y": 3,
+      "evidence": {
+        "status": "confirmed",
+        "sources": [
+          {
+            "url": "https://chromium.googlesource.com/chromium/src/+/refs/heads/main/device/gamepad/wgi_data_fetcher_win.cc",
+            "says": "Axes 2/3 are right X/Y; Y is inverted for down-positive."
+          }
+        ]
+      }
+    },
+    "P1": {
+      "kind": "button",
+      "index": 17,
+      "evidence": {
+        "status": "inferred",
+        "sources": [
+          {
+            "url": "https://chromium.googlesource.com/chromium/src/+/refs/heads/main/device/gamepad/wgi_data_fetcher_win.cc",
+            "says": "Paddle1 is read at button 17 when exposed by WGI."
+          },
+          {
+            "url": "https://www.xbox.com/en-US/accessories/controllers/elite-wireless-controller-series-2",
+            "says": "Controller has four removable paddles."
+          }
+        ],
+        "reason": "Conditional: physical Elite Series 2 paddle labels/readings from IGamepad2 were not found; this exercises the browser branch, not a verified hardware report."
+      }
+    },
+    "P2": {
+      "kind": "button",
+      "index": 18,
+      "evidence": {
+        "status": "inferred",
+        "sources": [
+          {
+            "url": "https://chromium.googlesource.com/chromium/src/+/refs/heads/main/device/gamepad/wgi_data_fetcher_win.cc",
+            "says": "Paddle2 is read at button 18 when exposed by WGI."
+          },
+          {
+            "url": "https://www.xbox.com/en-US/accessories/controllers/elite-wireless-controller-series-2",
+            "says": "Controller has four removable paddles."
+          }
+        ],
+        "reason": "Conditional: physical Elite Series 2 paddle labels/readings from IGamepad2 were not found; this exercises the browser branch, not a verified hardware report."
+      }
+    },
+    "P3": {
+      "kind": "button",
+      "index": 19,
+      "evidence": {
+        "status": "inferred",
+        "sources": [
+          {
+            "url": "https://chromium.googlesource.com/chromium/src/+/refs/heads/main/device/gamepad/wgi_data_fetcher_win.cc",
+            "says": "Paddle3 is read at button 19 when exposed by WGI."
+          },
+          {
+            "url": "https://www.xbox.com/en-US/accessories/controllers/elite-wireless-controller-series-2",
+            "says": "Controller has four removable paddles."
+          }
+        ],
+        "reason": "Conditional: physical Elite Series 2 paddle labels/readings from IGamepad2 were not found; this exercises the browser branch, not a verified hardware report."
+      }
+    },
+    "P4": {
+      "kind": "button",
+      "index": 20,
+      "evidence": {
+        "status": "inferred",
+        "sources": [
+          {
+            "url": "https://chromium.googlesource.com/chromium/src/+/refs/heads/main/device/gamepad/wgi_data_fetcher_win.cc",
+            "says": "Paddle4 is read at button 20 when exposed by WGI."
+          },
+          {
+            "url": "https://www.xbox.com/en-US/accessories/controllers/elite-wireless-controller-series-2",
+            "says": "Controller has four removable paddles."
+          }
+        ],
+        "reason": "Conditional: physical Elite Series 2 paddle labels/readings from IGamepad2 were not found; this exercises the browser branch, not a verified hardware report."
+      }
+    },
+    "Profile button": {
+      "kind": "unreported",
+      "evidence": {
+        "status": "confirmed",
+        "sources": [
+          {
+            "url": "https://chromium.googlesource.com/chromium/src/+/refs/heads/main/device/gamepad/wgi_data_fetcher_win.cc",
+            "says": "Backend maps standard controls, not an Elite profile selector."
+          },
+          {
+            "url": "https://news.xbox.com/en-us/2019/06/09/meet-the-xbox-elite-wireless-controller-series-2-over-30-new-ways-to-play-like-a-pro/",
+            "says": "Dedicated button switches default and three saved custom profiles."
+          }
+        ]
+      },
+      "reason": "Stored profiles are programmable and their contents are unknown. The selector has no distinct button index here."
+    }
+  },
+  "switches": {
+    "Left trigger lock": {
+      "kind": "state",
+      "values": [
+        "full",
+        "medium",
+        "short"
+      ],
+      "effect": "none",
+      "evidence": {
+        "status": "inferred",
+        "sources": [
+          {
+            "url": "https://news.xbox.com/en-us/2019/11/07/xbox-elite-wireless-controller-series-2-available-now/",
+            "says": "Elite Series 2 has three levels of trigger depth."
+          },
+          {
+            "url": "https://news.xbox.com/en-us/2019/06/09/meet-the-xbox-elite-wireless-controller-series-2-over-30-new-ways-to-play-like-a-pro/",
+            "says": "Controller automatically recognizes trigger-lock adjustments."
+          },
+          {
+            "url": "https://chromium.googlesource.com/chromium/src/+/refs/heads/main/device/gamepad/wgi_data_fetcher_win.cc",
+            "says": "Browser exposes normalized trigger values, with no trigger-lock state field."
+          }
+        ],
+        "reason": "This switch records physical travel only. set() supplies the browser's normalized value, so no guessed travel-to-value curve is applied."
+      }
+    },
+    "Right trigger lock": {
+      "kind": "state",
+      "values": [
+        "full",
+        "medium",
+        "short"
+      ],
+      "effect": "none",
+      "evidence": {
+        "status": "inferred",
+        "sources": [
+          {
+            "url": "https://news.xbox.com/en-us/2019/11/07/xbox-elite-wireless-controller-series-2-available-now/",
+            "says": "Elite Series 2 has three levels of trigger depth."
+          },
+          {
+            "url": "https://news.xbox.com/en-us/2019/06/09/meet-the-xbox-elite-wireless-controller-series-2-over-30-new-ways-to-play-like-a-pro/",
+            "says": "Controller automatically recognizes trigger-lock adjustments."
+          },
+          {
+            "url": "https://chromium.googlesource.com/chromium/src/+/refs/heads/main/device/gamepad/wgi_data_fetcher_win.cc",
+            "says": "Browser exposes normalized trigger values, with no trigger-lock state field."
+          }
+        ],
+        "reason": "This switch records physical travel only. set() supplies the browser's normalized value, so no guessed travel-to-value curve is applied."
+      }
+    },
+    "Profile button": {
+      "kind": "unreported",
+      "evidence": {
+        "status": "confirmed",
+        "sources": [
+          {
+            "url": "https://news.xbox.com/en-us/2019/06/09/meet-the-xbox-elite-wireless-controller-series-2-over-30-new-ways-to-play-like-a-pro/",
+            "says": "Dedicated button selects default or one of three programmable profiles."
+          }
+        ]
+      },
+      "reason": "The stored remapping slots and firmware are not known. No invented paddle aliases or profile-button signal is emitted."
+    }
+  },
+  "notes": [
+    "Source-derived conditional browser fixture; no real-device Gamepad API dump was found. Never treat passing tests as hardware confirmation.",
+    "Buttons 0–16 and axes 0–3 follow the standard layout; P1–P4 conditionally occupy 17–20. No hat axis: D-pad is buttons 12–15.",
+    "All released button values are 0, pressed/touched false. Trigger value 0 is fully released and 1 fully pulled.",
+    "The Xbox/Guide button is redirected to the lowest-index WGI gamepad using XInput; tests connect this profile first.",
+    "Hardware trigger stops change travel; exact analog transfer curves and stored profile contents remain unknown.",
+    "Chromium source default enables WGI; Windows GameInput fetcher is feature-gated and disabled by default in the inspected source. Edge-specific overrides were not found."
+  ]
+}

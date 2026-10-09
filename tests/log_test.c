@@ -3,6 +3,7 @@
 #include <stdarg.h>
 #include <string.h>
 #include <time.h>
+#include <sys/stat.h>
 #include <unistd.h>
 #include "c4f_log.h"
 
@@ -32,5 +33,15 @@ int main(void)
     file = fopen(C4F_LOG_PATH ".previous", "r"); assert(file);
     char previous[8192]; size_t m = fread(previous, 1, sizeof(previous), file); fclose(file);
     assert(m == n && memcmp(data, previous, n) == 0);
+    c4fLogOpen();
+    for (int i = 0; i < 2400; i++) c4fLog("%s", large);
+    c4fLogClose();
+    struct stat active, rollover;
+    assert(!stat(C4F_LOG_PATH, &active) && !stat(C4F_LOG_PATH ".1", &rollover));
+    assert(active.st_size <= 1024 * 1024 && rollover.st_size <= 1024 * 1024);
+    assert(active.st_size > 0 && rollover.st_size > 0);
+    c4fLogOpen(); c4fLogClose();
+    assert(access(C4F_LOG_PATH ".1", F_OK) != 0);
+    puts("PASS bounded active/rollover segments and stale rollover removal on restart");
     puts("PASS elapsed timestamps, multiline/truncated messages and previous-log preservation");
 }

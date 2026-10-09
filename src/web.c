@@ -47,7 +47,9 @@ typedef struct {
     C4fPadFeedback feedback;
     int feedbackKnown, rumbleSentValid, feedbackFailed;
     uint8_t rumbleSent[2];
-    uint64_t feedbackAt;
+    uint64_t feedbackAt, colorLogAt;
+    uint8_t colorLogged[3];
+    int colorLogKnown;
     /* The signed-in user's name, once the PS4 will tell it. */
     char userName[72];
     int nameTries;
@@ -85,7 +87,7 @@ typedef struct {
 typedef struct {
     C4fNet net;
     C4fWebPad pads[C4F_MAX_PADS];
-    int klogFd, stop, changed, creationBlocked, feedbackMissing;
+    int klogFd, changed, creationBlocked, feedbackMissing;
     unsigned rumbleChanges;   /* since the last heartbeat, to tell a silent game from a silent phone */
     /* What reading rumble and light bar costs, since the last heartbeat. Every
      * microsecond here is one an arriving input could have to wait. */
@@ -260,6 +262,7 @@ static void c4fReportPad(C4fWeb *app, C4fWebPad *p, int index, uint64_t now)
         c4fNeutralize(p);
         c4fLog("web controller %d InsertData = 0x%08x\n", index+1, (uint32_t)ret);
     }
+    if (ret >= 0 && p->error) { p->error = 0; app->changed = 1; }
 }
 
 static void c4fReportPads(C4fWeb *app)
@@ -333,9 +336,13 @@ static void c4fPollFeedback(C4fWeb *app, uint64_t now)
             continue;
         }
         if (!p->feedbackKnown || f.r != p->feedback.r || f.g != p->feedback.g || f.b != p->feedback.b) {
-            /* Rare: a sign-in, or a game setting its colour. */
-            c4fLog("web controller %d light bar %02x %02x %02x\n", i + 1, f.r, f.g, f.b);
             app->changed = 1;
+        }
+        if ((!p->colorLogKnown || f.r != p->colorLogged[0] || f.g != p->colorLogged[1] ||
+             f.b != p->colorLogged[2]) && now >= p->colorLogAt) {
+            c4fLog("web controller %d light bar %02x %02x %02x\n", i + 1, f.r, f.g, f.b);
+            p->colorLogged[0] = f.r; p->colorLogged[1] = f.g; p->colorLogged[2] = f.b;
+            p->colorLogKnown = 1; p->colorLogAt = now + 1000;
         }
         if (p->feedbackKnown && (f.large != p->feedback.large || f.small != p->feedback.small))
             app->rumbleChanges++;
@@ -532,6 +539,16 @@ static void c4fAddFail(C4fWeb *app, int code, const char *message, int blocked)
     if (client) c4fError(client, reply.hasId ? &reply : NULL, code, message);
 }
 
+/* Never abandon an issued AddDevice: capture its handle, then roll it back.
+ * Unissued work can be canceled immediately without touching retained pads. */
+static void c4fCancelAdd(C4fWeb *app)
+{
+    if (!app->add.state) return;
+    app->add.client = NULL;
+    if (app->add.state != C4F_ADD_DEVICE)
+        c4fAddFail(app, 503, "Controller connection canceled", 0);
+}
+
 /* Issues AddDevice for the lowest slot still waiting. */
 static void c4fAddNextDevice(C4fWeb *app, uint64_t now)
 {
@@ -593,7 +610,6 @@ static void c4fAdvanceAdd(C4fWeb *app, uint64_t now, long klogBytes)
             app->add.created |= 1u << app->add.slot;
             app->add.pending &= ~(1u << app->add.slot);
             app->changed = 1;
-            if (app->add.pending) { c4fAddNextDevice(app, now); return; }
             /* Done. If the player left while we worked, the devices have nobody
              * to drive them. */
             if (!app->add.client) {
@@ -602,12 +618,19 @@ static void c4fAdvanceAdd(C4fWeb *app, uint64_t now, long klogBytes)
                 c4fAddReset(app);
                 return;
             }
+            if (app->add.pending) { c4fAddNextDevice(app, now); return; }
             {
                 C4fNetClient *client = app->add.client;
                 unsigned wanted = app->add.wanted;
                 C4fRequest reply;
                 memset(&reply, 0, sizeof(reply));
                 reply.id = app->add.id; reply.hasId = app->add.hasId;
+                for (int i = 0; i < C4F_MAX_PADS; i++) if (wanted & (1u << i)) {
+                    if (!app->pads[i].active || (app->pads[i].owner && app->pads[i].owner != client)) {
+                        c4fAddFail(app, 409, "Controller ownership changed; select controllers again", 0);
+                        return;
+                    }
+                }
                 c4fAddReset(app);
                 c4fApplyClaim(app, client, wanted, reply.hasId ? &reply : NULL);
             }
@@ -633,6 +656,9 @@ static void c4fClaim(C4fWeb *app, C4fNetClient *c, C4fRequest *r)
     for (unsigned i = 0; i < r->argc; i++) {
         if (r->args[i] < 0 || r->args[i] >= C4F_MAX_PADS) { c4fError(c, r, 400, "There is no controller with that number"); return; }
         wanted |= 1u << r->args[i];
+    }
+    if (app->add.state && (app->add.client == c || (wanted & app->add.wanted))) {
+        c4fError(c, r, 409, "A pending controller claim reserves these slots; try again in a moment"); return;
     }
     /* Validate all claims before changing any ownership. */
     for (int i = 0; i < C4F_MAX_PADS; i++) if (wanted & (1u << i)) {
@@ -746,7 +772,7 @@ static void c4fWebEvent(C4fNetClient *c, int event, const char *text, size_t len
         c4fNetHttpJson(c, reply); return;
     }
     if (event == C4F_NET_HTTP_STOP) {
-        if (app->add.state) c4fAddFail(app, 503, "Control4Free is shutting down", 0);
+        c4fCancelAdd(app);
         for (int i = 0; i < C4F_MAX_PADS; i++) c4fRemove(app, &app->pads[i]);
         c4fNetHttpJson(c, "{\"application\":\"Control4Free\",\"stopping\":true}");
         if (!app->stopAt) app->stopAt = c4fTimeMs() + 250;
@@ -755,7 +781,7 @@ static void c4fWebEvent(C4fNetClient *c, int event, const char *text, size_t len
     if (event == C4F_NET_OPEN) { c4fStatus(app, c, NULL); return; }
     if (event == C4F_NET_CLOSE) {
         /* Before the slot can be reused by someone else. */
-        if (app->add.client == c) app->add.client = NULL;
+        if (app->add.client == c) c4fCancelAdd(app);
         for (int i = 0; i < C4F_MAX_PADS; i++) if (app->pads[i].owner == c) {
             C4fWebPad *p = &app->pads[i];
             c4fNeutralize(p); p->owner = NULL; p->detachedAt = c4fTimeMs(); app->changed = 1;
@@ -777,13 +803,15 @@ static void c4fWebEvent(C4fNetClient *c, int event, const char *text, size_t len
     else if (!strcmp(r.method, "claim")) c4fClaim(app, c, &r);
     else if (!strcmp(r.method, "u")) c4fUpdate(app, c, &r);
     else if (!strcmp(r.method, "leave")) {
+        if (app->add.client == c) { c4fError(c, &r, 409, "Wait for the pending controller claim"); return; }
         if (r.argc != 1 || r.args[0] < 0 || r.args[0] >= C4F_MAX_PADS || app->pads[r.args[0]].owner != c) { c4fError(c, &r, 409, "That controller is not yours to disconnect"); return; }
         c4fRemove(app, &app->pads[r.args[0]]); c4fStatus(app, c, &r);
     } else if (!strcmp(r.method, "stop")) {
         int occupied = 0;
         for (int i = 0; i < C4F_MAX_PADS; i++) if (app->pads[i].owner && app->pads[i].owner != c) occupied = 1;
         if (occupied) { c4fError(c, &r, 409, "Someone else is still using a controller. Ask them to disconnect, or stop Control4Free from its app on the PS4."); return; }
-        app->stop = 1;
+        c4fCancelAdd(app);
+        app->stopAt = c4fTimeMs() + 250;
     } else c4fError(c, &r, 404, "Control4Free on the PS4 is older than this page. Update the PS4 side.");
 }
 
@@ -812,19 +840,18 @@ int c4fWebRun(int klogFd)
     }
     uint64_t previous = c4fTimeMs(), retryAt = 0;
     time_t previousWall = time(NULL);
-    while (!app->stop) {
+    for (;;) {
         uint64_t now = c4fTimeMs();
         time_t wall = time(NULL);
-        if (app->stopAt && now >= app->stopAt) break;
+        if (app->stopAt && now >= app->stopAt && !app->add.state) break;
         /* Some clocks exclude suspension. Wall time is only a second signal
          * for a gap, never an input deadline or a trusted calendar timestamp. */
         if (now < previous || now - previous > 5000 || wall - previousWall > 5) {
             c4fLog("service resumed after a gap (monotonic=%lldms wall=%llds); resetting connections\n",
                    (long long)now - (long long)previous, (long long)wall - (long long)previousWall);
             c4fNetClose(&app->net); /* close events neutralize and discard queued input */
-            c4fReleaseKlog(app);
-            if (app->add.state) c4fAddFail(app, 503, "The PS4 paused while the controller was being connected. Try again.",
-                                           app->add.state == C4F_ADD_DEVICE);
+            c4fCancelAdd(app);
+            if (!app->add.state) c4fReleaseKlog(app);
             for (int i = 0; i < C4F_MAX_PADS; i++) if (app->pads[i].active)
                 app->pads[i].nextReport = now;
             app->broadcastAt = app->heartbeatAt = now;
@@ -847,7 +874,7 @@ int c4fWebRun(int klogFd)
         now = c4fTimeMs();
         for (int i = 0; i < C4F_MAX_PADS; i++) {
             C4fWebPad *p = &app->pads[i];
-            if (app->add.created & (1u << i)) continue;   /* mid-claim, not abandoned */
+            if (app->add.state && (app->add.wanted & (1u << i))) continue;
             if (p->active && ((!p->owner && c4fSince(now, p->detachedAt) > C4F_RELEASE_MS) ||
                               (p->owner && c4fSince(now, p->lastInput) > C4F_RELEASE_MS))) {
                 C4fNetClient *owner = p->owner;
@@ -896,9 +923,8 @@ int c4fWebRun(int klogFd)
                 if (result == -2) c4fLog("service resumed after a gap in select; resetting connections\n");
                 else c4fLog("network failed errno=%d; resetting connections\n", errno);
                 c4fNetClose(&app->net);
-                c4fReleaseKlog(app);
-                if (app->add.state) c4fAddFail(app, 503, "The connection dropped while the controller was being connected. Try again.",
-                                               app->add.state == C4F_ADD_DEVICE);
+                c4fCancelAdd(app);
+                if (!app->add.state) c4fReleaseKlog(app);
                 for (int i = 0; i < C4F_MAX_PADS; i++) if (app->pads[i].active)
                     app->pads[i].nextReport = c4fTimeMs();
                 retryAt = c4fTimeMs() + (result == -2 ? 0 : 1000);

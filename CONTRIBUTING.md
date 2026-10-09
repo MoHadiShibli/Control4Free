@@ -54,6 +54,8 @@ The suites build the real sources for the host with only the PS4 calls stubbed, 
   and checks the package's `param.sfo`;
 - `test_logging` covers the log, the kernel-log opener and DeviceId matching.
 
+`tests/fake_gamepads_test.cjs` runs researched gamepad emulations against the controller page in the Playwright Docker image, without console access or hardware compatibility claims.
+
 Add a test with your fix: one that fails without it. Then test on a real console if you can, and say in your
 pull request which firmware, GoldHEN version and games you tried.
 

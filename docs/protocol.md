@@ -86,7 +86,16 @@ ignored: input never claims a controller.
 Send the state whenever it changes, and at least once a second while the controller is in use. After 3
 seconds without input the controller goes neutral and shows as `paused`; after 15 it's removed. When a
 connection closes, its controllers' buttons are released at once, and they're removed 15 seconds later unless
-a connection claims them again; the page does so when it reconnects.
+a connection claims them again. The page doesn't do that by itself after reconnecting: the player picks the
+controller again.
+
+At most six WebSocket connections are open at once; a seventh handshake gets `503`. The service pings each
+connection every 5 seconds and closes it if the matching pong hasn't come back within 10. Browsers answer
+pings by themselves; another client has to answer them too. Other messages don't count as an answer.
+
+While a claim is being answered, every controller in it is reserved: another `claim` from the same
+connection, or one that wants any of those controllers, gets `409`, and so does `leave` from that connection.
+Send one claim at a time. Creating all four controllers can take up to about 18 seconds.
 
 **`stop`** is refused with `409` while another connection owns a controller.
 

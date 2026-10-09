@@ -1,0 +1,575 @@
+{
+  "name": "wheel-g920-chrome-win-usb",
+  "label": "Logitech G920 — Chrome Windows USB, pedals unplugged (inferred)",
+  "environment": {
+    "browser": "Chrome",
+    "os": "Windows",
+    "connection": "USB",
+    "mode": "Native HID, separate pedals; driver version unknown"
+  },
+  "environmentEvidence": {
+    "status": "inferred",
+    "sources": [
+      {
+        "url": "https://www.reddit.com/r/Stadia/comments/fdc7sh/",
+        "says": "A G920 owner pasted a Chrome Gamepad object on 2020-03-04: this exact ID, empty mapping, 18 buttons, 10 axes with the saved resting vector, and vibrationActuator null. The report does not specify the OS, driver version, or whether pedals were disconnected."
+      },
+      {
+        "url": "https://github.com/chromium/chromium/blob/main/device/gamepad/raw_input_gamepad_device_win.cc",
+        "says": "Windows RawInput assigns a button index from HID button usage minus one, and an axis index from HID Generic Desktop usage minus 0x30. It normalizes to [-1,+1], preserving an out-of-range hat null state."
+      },
+      {
+        "url": "https://www.logitech.com/assets/54557/2/g920-driving-forcetm-racing-wheel.pdf",
+        "says": "The G920 manual identifies A/B/X/Y, directional pad, left/right bumpers and stick buttons, View/Menu, Xbox, USB, and separate pedal/shifter connectors; its numbered callouts are physical labels, not browser indices."
+      }
+    ],
+    "reason": "Chrome is explicit in the dump; Windows is inferred from its sparse 10-axis HID usage layout. USB is the wheel's physical host connection. This historical report does not prove current Edge/Chrome behavior under every Logitech driver."
+  },
+  "gamepad": {
+    "id": {
+      "value": "G920 Driving Force Racing Wheel for Xbox One (Vendor: 046d Product: c262)",
+      "status": "confirmed",
+      "sources": [
+        {
+          "url": "https://www.reddit.com/r/Stadia/comments/fdc7sh/",
+          "says": "A G920 owner pasted a Chrome Gamepad object on 2020-03-04: this exact ID, empty mapping, 18 buttons, 10 axes with the saved resting vector, and vibrationActuator null. The report does not specify the OS, driver version, or whether pedals were disconnected."
+        }
+      ]
+    },
+    "mapping": {
+      "value": "",
+      "status": "confirmed",
+      "sources": [
+        {
+          "url": "https://www.reddit.com/r/Stadia/comments/fdc7sh/",
+          "says": "A G920 owner pasted a Chrome Gamepad object on 2020-03-04: this exact ID, empty mapping, 18 buttons, 10 axes with the saved resting vector, and vibrationActuator null. The report does not specify the OS, driver version, or whether pedals were disconnected."
+        }
+      ]
+    },
+    "buttons": {
+      "value": 18,
+      "status": "confirmed",
+      "sources": [
+        {
+          "url": "https://www.reddit.com/r/Stadia/comments/fdc7sh/",
+          "says": "A G920 owner pasted a Chrome Gamepad object on 2020-03-04: this exact ID, empty mapping, 18 buttons, 10 axes with the saved resting vector, and vibrationActuator null. The report does not specify the OS, driver version, or whether pedals were disconnected."
+        },
+        {
+          "url": "https://forum.scssoft.com/viewtopic.php?p=1313821",
+          "says": "A real 046d:c262 G920 HID dump has 18 button usages, X usage 0x30 (0..65535), Y 0x31/Z 0x32/Rz 0x35 (0..255), and hat 0x39 (0..7). The dump is from macOS native HID, not Safari."
+        }
+      ]
+    },
+    "axesRest": {
+      "value": [
+        -0.0013580322265625,
+        1,
+        1,
+        0,
+        0,
+        1,
+        0,
+        0,
+        0,
+        1.2857143878936768
+      ],
+      "status": "inferred",
+      "sources": [
+        {
+          "url": "https://www.reddit.com/r/Stadia/comments/fdc7sh/",
+          "says": "A G920 owner pasted a Chrome Gamepad object on 2020-03-04: this exact ID, empty mapping, 18 buttons, 10 axes with the saved resting vector, and vibrationActuator null. The report does not specify the OS, driver version, or whether pedals were disconnected."
+        },
+        {
+          "url": "https://spenibus.net/b/p/F/PC-steering-wheel-viewer-prototype-in-html-javascript",
+          "says": "The author's 2018 G920 Firefox/Chrome browser prototype reads steering axis 0, throttle 1, brake 2, and clutch 3 or 5; its pedal conversion treats +1 as released and -1 as pressed."
+        },
+        {
+          "url": "https://forum.scssoft.com/viewtopic.php?p=1313821",
+          "says": "A real 046d:c262 G920 HID dump has 18 button usages, X usage 0x30 (0..65535), Y 0x31/Z 0x32/Rz 0x35 (0..255), and hat 0x39 (0..7). The dump is from macOS native HID, not Safari."
+        }
+      ],
+      "reason": "The complete vector is copied exactly from the real Chrome snapshot, including zeros at HID axis gaps and steering sensor offset. The snapshot never says pedals were unplugged; using its released-pedal +1 values for unplugged pedals is explicitly inferred."
+    },
+    "vibration": {
+      "value": null,
+      "status": "confirmed",
+      "sources": [
+        {
+          "url": "https://www.reddit.com/r/Stadia/comments/fdc7sh/",
+          "says": "A G920 owner pasted a Chrome Gamepad object on 2020-03-04: this exact ID, empty mapping, 18 buttons, 10 axes with the saved resting vector, and vibrationActuator null. The report does not specify the OS, driver version, or whether pedals were disconnected."
+        }
+      ],
+      "presence": "null"
+    }
+  },
+  "controls": {
+    "A": {
+      "kind": "button",
+      "index": 0,
+      "evidence": {
+        "status": "inferred",
+        "sources": [
+          {
+            "url": "https://steamcommunity.com/sharedfiles/filedetails/?id=2489644810",
+            "says": "The author's G920 Windows DirectInput setup lists raw indices 0 A, 1 B, 2 X, 3 Y, 4 right paddle, 5 left paddle, 6 Menu, 7 View, 8 RSB, and 9 LSB. The guide warns the G HUB product name differs."
+          },
+          {
+            "url": "https://github.com/chromium/chromium/blob/main/device/gamepad/raw_input_gamepad_device_win.cc",
+            "says": "Windows RawInput assigns a button index from HID button usage minus one, and an axis index from HID Generic Desktop usage minus 0x30. It normalizes to [-1,+1], preserving an out-of-range hat null state."
+          }
+        ],
+        "reason": "The G920 owner's native Windows indices are projected to Chrome's unremapped HID button order; no Chrome dump of this individual button was found."
+      }
+    },
+    "B": {
+      "kind": "button",
+      "index": 1,
+      "evidence": {
+        "status": "inferred",
+        "sources": [
+          {
+            "url": "https://steamcommunity.com/sharedfiles/filedetails/?id=2489644810",
+            "says": "The author's G920 Windows DirectInput setup lists raw indices 0 A, 1 B, 2 X, 3 Y, 4 right paddle, 5 left paddle, 6 Menu, 7 View, 8 RSB, and 9 LSB. The guide warns the G HUB product name differs."
+          },
+          {
+            "url": "https://github.com/chromium/chromium/blob/main/device/gamepad/raw_input_gamepad_device_win.cc",
+            "says": "Windows RawInput assigns a button index from HID button usage minus one, and an axis index from HID Generic Desktop usage minus 0x30. It normalizes to [-1,+1], preserving an out-of-range hat null state."
+          }
+        ],
+        "reason": "The G920 owner's native Windows indices are projected to Chrome's unremapped HID button order; no Chrome dump of this individual button was found."
+      }
+    },
+    "X": {
+      "kind": "button",
+      "index": 2,
+      "evidence": {
+        "status": "inferred",
+        "sources": [
+          {
+            "url": "https://steamcommunity.com/sharedfiles/filedetails/?id=2489644810",
+            "says": "The author's G920 Windows DirectInput setup lists raw indices 0 A, 1 B, 2 X, 3 Y, 4 right paddle, 5 left paddle, 6 Menu, 7 View, 8 RSB, and 9 LSB. The guide warns the G HUB product name differs."
+          },
+          {
+            "url": "https://github.com/chromium/chromium/blob/main/device/gamepad/raw_input_gamepad_device_win.cc",
+            "says": "Windows RawInput assigns a button index from HID button usage minus one, and an axis index from HID Generic Desktop usage minus 0x30. It normalizes to [-1,+1], preserving an out-of-range hat null state."
+          }
+        ],
+        "reason": "The G920 owner's native Windows indices are projected to Chrome's unremapped HID button order; no Chrome dump of this individual button was found."
+      }
+    },
+    "Y": {
+      "kind": "button",
+      "index": 3,
+      "evidence": {
+        "status": "inferred",
+        "sources": [
+          {
+            "url": "https://steamcommunity.com/sharedfiles/filedetails/?id=2489644810",
+            "says": "The author's G920 Windows DirectInput setup lists raw indices 0 A, 1 B, 2 X, 3 Y, 4 right paddle, 5 left paddle, 6 Menu, 7 View, 8 RSB, and 9 LSB. The guide warns the G HUB product name differs."
+          },
+          {
+            "url": "https://github.com/chromium/chromium/blob/main/device/gamepad/raw_input_gamepad_device_win.cc",
+            "says": "Windows RawInput assigns a button index from HID button usage minus one, and an axis index from HID Generic Desktop usage minus 0x30. It normalizes to [-1,+1], preserving an out-of-range hat null state."
+          }
+        ],
+        "reason": "The G920 owner's native Windows indices are projected to Chrome's unremapped HID button order; no Chrome dump of this individual button was found."
+      }
+    },
+    "Right paddle shifter": {
+      "kind": "button",
+      "index": 4,
+      "evidence": {
+        "status": "inferred",
+        "sources": [
+          {
+            "url": "https://steamcommunity.com/sharedfiles/filedetails/?id=2489644810",
+            "says": "The author's G920 Windows DirectInput setup lists raw indices 0 A, 1 B, 2 X, 3 Y, 4 right paddle, 5 left paddle, 6 Menu, 7 View, 8 RSB, and 9 LSB. The guide warns the G HUB product name differs."
+          },
+          {
+            "url": "https://github.com/chromium/chromium/blob/main/device/gamepad/raw_input_gamepad_device_win.cc",
+            "says": "Windows RawInput assigns a button index from HID button usage minus one, and an axis index from HID Generic Desktop usage minus 0x30. It normalizes to [-1,+1], preserving an out-of-range hat null state."
+          }
+        ],
+        "reason": "The G920 owner's native Windows indices are projected to Chrome's unremapped HID button order; no Chrome dump of this individual button was found."
+      }
+    },
+    "Left paddle shifter": {
+      "kind": "button",
+      "index": 5,
+      "evidence": {
+        "status": "inferred",
+        "sources": [
+          {
+            "url": "https://steamcommunity.com/sharedfiles/filedetails/?id=2489644810",
+            "says": "The author's G920 Windows DirectInput setup lists raw indices 0 A, 1 B, 2 X, 3 Y, 4 right paddle, 5 left paddle, 6 Menu, 7 View, 8 RSB, and 9 LSB. The guide warns the G HUB product name differs."
+          },
+          {
+            "url": "https://github.com/chromium/chromium/blob/main/device/gamepad/raw_input_gamepad_device_win.cc",
+            "says": "Windows RawInput assigns a button index from HID button usage minus one, and an axis index from HID Generic Desktop usage minus 0x30. It normalizes to [-1,+1], preserving an out-of-range hat null state."
+          }
+        ],
+        "reason": "The G920 owner's native Windows indices are projected to Chrome's unremapped HID button order; no Chrome dump of this individual button was found."
+      }
+    },
+    "Menu": {
+      "kind": "button",
+      "index": 6,
+      "evidence": {
+        "status": "inferred",
+        "sources": [
+          {
+            "url": "https://steamcommunity.com/sharedfiles/filedetails/?id=2489644810",
+            "says": "The author's G920 Windows DirectInput setup lists raw indices 0 A, 1 B, 2 X, 3 Y, 4 right paddle, 5 left paddle, 6 Menu, 7 View, 8 RSB, and 9 LSB. The guide warns the G HUB product name differs."
+          },
+          {
+            "url": "https://github.com/chromium/chromium/blob/main/device/gamepad/raw_input_gamepad_device_win.cc",
+            "says": "Windows RawInput assigns a button index from HID button usage minus one, and an axis index from HID Generic Desktop usage minus 0x30. It normalizes to [-1,+1], preserving an out-of-range hat null state."
+          }
+        ],
+        "reason": "The G920 owner's native Windows indices are projected to Chrome's unremapped HID button order; no Chrome dump of this individual button was found."
+      }
+    },
+    "View": {
+      "kind": "button",
+      "index": 7,
+      "evidence": {
+        "status": "inferred",
+        "sources": [
+          {
+            "url": "https://steamcommunity.com/sharedfiles/filedetails/?id=2489644810",
+            "says": "The author's G920 Windows DirectInput setup lists raw indices 0 A, 1 B, 2 X, 3 Y, 4 right paddle, 5 left paddle, 6 Menu, 7 View, 8 RSB, and 9 LSB. The guide warns the G HUB product name differs."
+          },
+          {
+            "url": "https://github.com/chromium/chromium/blob/main/device/gamepad/raw_input_gamepad_device_win.cc",
+            "says": "Windows RawInput assigns a button index from HID button usage minus one, and an axis index from HID Generic Desktop usage minus 0x30. It normalizes to [-1,+1], preserving an out-of-range hat null state."
+          }
+        ],
+        "reason": "The G920 owner's native Windows indices are projected to Chrome's unremapped HID button order; no Chrome dump of this individual button was found."
+      }
+    },
+    "RSB": {
+      "kind": "button",
+      "index": 8,
+      "evidence": {
+        "status": "inferred",
+        "sources": [
+          {
+            "url": "https://steamcommunity.com/sharedfiles/filedetails/?id=2489644810",
+            "says": "The author's G920 Windows DirectInput setup lists raw indices 0 A, 1 B, 2 X, 3 Y, 4 right paddle, 5 left paddle, 6 Menu, 7 View, 8 RSB, and 9 LSB. The guide warns the G HUB product name differs."
+          },
+          {
+            "url": "https://github.com/chromium/chromium/blob/main/device/gamepad/raw_input_gamepad_device_win.cc",
+            "says": "Windows RawInput assigns a button index from HID button usage minus one, and an axis index from HID Generic Desktop usage minus 0x30. It normalizes to [-1,+1], preserving an out-of-range hat null state."
+          }
+        ],
+        "reason": "The G920 owner's native Windows indices are projected to Chrome's unremapped HID button order; no Chrome dump of this individual button was found."
+      }
+    },
+    "LSB": {
+      "kind": "button",
+      "index": 9,
+      "evidence": {
+        "status": "inferred",
+        "sources": [
+          {
+            "url": "https://steamcommunity.com/sharedfiles/filedetails/?id=2489644810",
+            "says": "The author's G920 Windows DirectInput setup lists raw indices 0 A, 1 B, 2 X, 3 Y, 4 right paddle, 5 left paddle, 6 Menu, 7 View, 8 RSB, and 9 LSB. The guide warns the G HUB product name differs."
+          },
+          {
+            "url": "https://github.com/chromium/chromium/blob/main/device/gamepad/raw_input_gamepad_device_win.cc",
+            "says": "Windows RawInput assigns a button index from HID button usage minus one, and an axis index from HID Generic Desktop usage minus 0x30. It normalizes to [-1,+1], preserving an out-of-range hat null state."
+          }
+        ],
+        "reason": "The G920 owner's native Windows indices are projected to Chrome's unremapped HID button order; no Chrome dump of this individual button was found."
+      }
+    },
+    "Xbox": {
+      "kind": "button",
+      "index": 10,
+      "evidence": {
+        "status": "inferred",
+        "sources": [
+          {
+            "url": "https://www.logitech.com/assets/54557/2/g920-driving-forcetm-racing-wheel.pdf",
+            "says": "The G920 manual identifies A/B/X/Y, directional pad, left/right bumpers and stick buttons, View/Menu, Xbox, USB, and separate pedal/shifter connectors; its numbered callouts are physical labels, not browser indices."
+          },
+          {
+            "url": "https://www.reddit.com/r/LogitechG/comments/lzmpf3/",
+            "says": "A G920 and G HUB owner reports Windows joy.cpl buttons 1-11 on the wheel, button 12 for reverse, and buttons 13-18 for forward gears; pushing the lever down and moving it bottom right selects reverse."
+          },
+          {
+            "url": "https://github.com/chromium/chromium/blob/main/device/gamepad/raw_input_gamepad_device_win.cc",
+            "says": "Windows RawInput assigns a button index from HID button usage minus one, and an axis index from HID Generic Desktop usage minus 0x30. It normalizes to [-1,+1], preserving an out-of-range hat null state."
+          }
+        ],
+        "reason": "The manual identifies Xbox as the remaining wheel button; the owner's Windows report puts wheel buttons at one-based 1..11. Assigning Xbox to zero-based 10 is inferred."
+      }
+    },
+    "Reverse gear": {
+      "kind": "button",
+      "index": 11,
+      "evidence": {
+        "status": "inferred",
+        "sources": [
+          {
+            "url": "https://www.reddit.com/r/LogitechG/comments/lzmpf3/",
+            "says": "A G920 and G HUB owner reports Windows joy.cpl buttons 1-11 on the wheel, button 12 for reverse, and buttons 13-18 for forward gears; pushing the lever down and moving it bottom right selects reverse."
+          },
+          {
+            "url": "https://github.com/chromium/chromium/blob/main/device/gamepad/raw_input_gamepad_device_win.cc",
+            "says": "Windows RawInput assigns a button index from HID button usage minus one, and an axis index from HID Generic Desktop usage minus 0x30. It normalizes to [-1,+1], preserving an out-of-range hat null state."
+          }
+        ],
+        "reason": "One-based Windows button 12 is projected to unremapped browser index 11. LGS documentation uses a conflicting 19-button order; this is only a G HUB-style candidate."
+      }
+    },
+    "Gear 1": {
+      "kind": "button",
+      "index": 12,
+      "evidence": {
+        "status": "inferred",
+        "sources": [
+          {
+            "url": "https://www.reddit.com/r/LogitechG/comments/lzmpf3/",
+            "says": "A G920 and G HUB owner reports Windows joy.cpl buttons 1-11 on the wheel, button 12 for reverse, and buttons 13-18 for forward gears; pushing the lever down and moving it bottom right selects reverse."
+          },
+          {
+            "url": "https://github.com/chromium/chromium/blob/main/device/gamepad/raw_input_gamepad_device_win.cc",
+            "says": "Windows RawInput assigns a button index from HID button usage minus one, and an axis index from HID Generic Desktop usage minus 0x30. It normalizes to [-1,+1], preserving an out-of-range hat null state."
+          }
+        ],
+        "reason": "The owner's one-based Windows forward-gear buttons 13..18 are projected to browser indices 12..17. The optional shifter is assumed disconnected by default."
+      }
+    },
+    "Gear 2": {
+      "kind": "button",
+      "index": 13,
+      "evidence": {
+        "status": "inferred",
+        "sources": [
+          {
+            "url": "https://www.reddit.com/r/LogitechG/comments/lzmpf3/",
+            "says": "A G920 and G HUB owner reports Windows joy.cpl buttons 1-11 on the wheel, button 12 for reverse, and buttons 13-18 for forward gears; pushing the lever down and moving it bottom right selects reverse."
+          },
+          {
+            "url": "https://github.com/chromium/chromium/blob/main/device/gamepad/raw_input_gamepad_device_win.cc",
+            "says": "Windows RawInput assigns a button index from HID button usage minus one, and an axis index from HID Generic Desktop usage minus 0x30. It normalizes to [-1,+1], preserving an out-of-range hat null state."
+          }
+        ],
+        "reason": "The owner's one-based Windows forward-gear buttons 13..18 are projected to browser indices 12..17. The optional shifter is assumed disconnected by default."
+      }
+    },
+    "Gear 3": {
+      "kind": "button",
+      "index": 14,
+      "evidence": {
+        "status": "inferred",
+        "sources": [
+          {
+            "url": "https://www.reddit.com/r/LogitechG/comments/lzmpf3/",
+            "says": "A G920 and G HUB owner reports Windows joy.cpl buttons 1-11 on the wheel, button 12 for reverse, and buttons 13-18 for forward gears; pushing the lever down and moving it bottom right selects reverse."
+          },
+          {
+            "url": "https://github.com/chromium/chromium/blob/main/device/gamepad/raw_input_gamepad_device_win.cc",
+            "says": "Windows RawInput assigns a button index from HID button usage minus one, and an axis index from HID Generic Desktop usage minus 0x30. It normalizes to [-1,+1], preserving an out-of-range hat null state."
+          }
+        ],
+        "reason": "The owner's one-based Windows forward-gear buttons 13..18 are projected to browser indices 12..17. The optional shifter is assumed disconnected by default."
+      }
+    },
+    "Gear 4": {
+      "kind": "button",
+      "index": 15,
+      "evidence": {
+        "status": "inferred",
+        "sources": [
+          {
+            "url": "https://www.reddit.com/r/LogitechG/comments/lzmpf3/",
+            "says": "A G920 and G HUB owner reports Windows joy.cpl buttons 1-11 on the wheel, button 12 for reverse, and buttons 13-18 for forward gears; pushing the lever down and moving it bottom right selects reverse."
+          },
+          {
+            "url": "https://github.com/chromium/chromium/blob/main/device/gamepad/raw_input_gamepad_device_win.cc",
+            "says": "Windows RawInput assigns a button index from HID button usage minus one, and an axis index from HID Generic Desktop usage minus 0x30. It normalizes to [-1,+1], preserving an out-of-range hat null state."
+          }
+        ],
+        "reason": "The owner's one-based Windows forward-gear buttons 13..18 are projected to browser indices 12..17. The optional shifter is assumed disconnected by default."
+      }
+    },
+    "Gear 5": {
+      "kind": "button",
+      "index": 16,
+      "evidence": {
+        "status": "inferred",
+        "sources": [
+          {
+            "url": "https://www.reddit.com/r/LogitechG/comments/lzmpf3/",
+            "says": "A G920 and G HUB owner reports Windows joy.cpl buttons 1-11 on the wheel, button 12 for reverse, and buttons 13-18 for forward gears; pushing the lever down and moving it bottom right selects reverse."
+          },
+          {
+            "url": "https://github.com/chromium/chromium/blob/main/device/gamepad/raw_input_gamepad_device_win.cc",
+            "says": "Windows RawInput assigns a button index from HID button usage minus one, and an axis index from HID Generic Desktop usage minus 0x30. It normalizes to [-1,+1], preserving an out-of-range hat null state."
+          }
+        ],
+        "reason": "The owner's one-based Windows forward-gear buttons 13..18 are projected to browser indices 12..17. The optional shifter is assumed disconnected by default."
+      }
+    },
+    "Gear 6": {
+      "kind": "button",
+      "index": 17,
+      "evidence": {
+        "status": "inferred",
+        "sources": [
+          {
+            "url": "https://www.reddit.com/r/LogitechG/comments/lzmpf3/",
+            "says": "A G920 and G HUB owner reports Windows joy.cpl buttons 1-11 on the wheel, button 12 for reverse, and buttons 13-18 for forward gears; pushing the lever down and moving it bottom right selects reverse."
+          },
+          {
+            "url": "https://github.com/chromium/chromium/blob/main/device/gamepad/raw_input_gamepad_device_win.cc",
+            "says": "Windows RawInput assigns a button index from HID button usage minus one, and an axis index from HID Generic Desktop usage minus 0x30. It normalizes to [-1,+1], preserving an out-of-range hat null state."
+          }
+        ],
+        "reason": "The owner's one-based Windows forward-gear buttons 13..18 are projected to browser indices 12..17. The optional shifter is assumed disconnected by default."
+      }
+    },
+    "Wheel": {
+      "kind": "axis",
+      "index": 0,
+      "rest": -0.0013580322265625,
+      "min": -1,
+      "max": 1,
+      "evidence": {
+        "status": "confirmed",
+        "sources": [
+          {
+            "url": "https://www.reddit.com/r/Stadia/comments/fdc7sh/",
+            "says": "A G920 owner pasted a Chrome Gamepad object on 2020-03-04: this exact ID, empty mapping, 18 buttons, 10 axes with the saved resting vector, and vibrationActuator null. The report does not specify the OS, driver version, or whether pedals were disconnected."
+          },
+          {
+            "url": "https://spenibus.net/b/p/F/PC-steering-wheel-viewer-prototype-in-html-javascript",
+            "says": "The author's 2018 G920 Firefox/Chrome browser prototype reads steering axis 0, throttle 1, brake 2, and clutch 3 or 5; its pedal conversion treats +1 as released and -1 as pressed."
+          }
+        ],
+        "reason": "The dump preserves a small observed steering offset; the author's browser code identifies axis 0 as steering. Positive values turn right by the browser axis convention."
+      }
+    },
+    "Accelerator pedal": {
+      "kind": "axis",
+      "index": 1,
+      "rest": 1,
+      "min": -1,
+      "max": 1,
+      "evidence": {
+        "status": "inferred",
+        "sources": [
+          {
+            "url": "https://www.reddit.com/r/Stadia/comments/fdc7sh/",
+            "says": "A G920 owner pasted a Chrome Gamepad object on 2020-03-04: this exact ID, empty mapping, 18 buttons, 10 axes with the saved resting vector, and vibrationActuator null. The report does not specify the OS, driver version, or whether pedals were disconnected."
+          },
+          {
+            "url": "https://spenibus.net/b/p/F/PC-steering-wheel-viewer-prototype-in-html-javascript",
+            "says": "The author's 2018 G920 Firefox/Chrome browser prototype reads steering axis 0, throttle 1, brake 2, and clutch 3 or 5; its pedal conversion treats +1 as released and -1 as pressed."
+          },
+          {
+            "url": "https://forum.scssoft.com/viewtopic.php?p=1313821",
+            "says": "A real 046d:c262 G920 HID dump has 18 button usages, X usage 0x30 (0..65535), Y 0x31/Z 0x32/Rz 0x35 (0..255), and hat 0x39 (0..7). The dump is from macOS native HID, not Safari."
+          }
+        ],
+        "reason": "The real Chrome snapshot has +1 here and the owner's browser prototype supplies the pedal identity/range. Retaining +1 with the pedal connector unplugged is a scenario assumption, not an observed disconnected-pedal capture."
+      }
+    },
+    "Brake pedal": {
+      "kind": "axis",
+      "index": 2,
+      "rest": 1,
+      "min": -1,
+      "max": 1,
+      "evidence": {
+        "status": "inferred",
+        "sources": [
+          {
+            "url": "https://www.reddit.com/r/Stadia/comments/fdc7sh/",
+            "says": "A G920 owner pasted a Chrome Gamepad object on 2020-03-04: this exact ID, empty mapping, 18 buttons, 10 axes with the saved resting vector, and vibrationActuator null. The report does not specify the OS, driver version, or whether pedals were disconnected."
+          },
+          {
+            "url": "https://spenibus.net/b/p/F/PC-steering-wheel-viewer-prototype-in-html-javascript",
+            "says": "The author's 2018 G920 Firefox/Chrome browser prototype reads steering axis 0, throttle 1, brake 2, and clutch 3 or 5; its pedal conversion treats +1 as released and -1 as pressed."
+          },
+          {
+            "url": "https://forum.scssoft.com/viewtopic.php?p=1313821",
+            "says": "A real 046d:c262 G920 HID dump has 18 button usages, X usage 0x30 (0..65535), Y 0x31/Z 0x32/Rz 0x35 (0..255), and hat 0x39 (0..7). The dump is from macOS native HID, not Safari."
+          }
+        ],
+        "reason": "The real Chrome snapshot has +1 here and the owner's browser prototype supplies the pedal identity/range. Retaining +1 with the pedal connector unplugged is a scenario assumption, not an observed disconnected-pedal capture."
+      }
+    },
+    "Clutch pedal": {
+      "kind": "axis",
+      "index": 5,
+      "rest": 1,
+      "min": -1,
+      "max": 1,
+      "evidence": {
+        "status": "inferred",
+        "sources": [
+          {
+            "url": "https://www.reddit.com/r/Stadia/comments/fdc7sh/",
+            "says": "A G920 owner pasted a Chrome Gamepad object on 2020-03-04: this exact ID, empty mapping, 18 buttons, 10 axes with the saved resting vector, and vibrationActuator null. The report does not specify the OS, driver version, or whether pedals were disconnected."
+          },
+          {
+            "url": "https://spenibus.net/b/p/F/PC-steering-wheel-viewer-prototype-in-html-javascript",
+            "says": "The author's 2018 G920 Firefox/Chrome browser prototype reads steering axis 0, throttle 1, brake 2, and clutch 3 or 5; its pedal conversion treats +1 as released and -1 as pressed."
+          },
+          {
+            "url": "https://forum.scssoft.com/viewtopic.php?p=1313821",
+            "says": "A real 046d:c262 G920 HID dump has 18 button usages, X usage 0x30 (0..65535), Y 0x31/Z 0x32/Rz 0x35 (0..255), and hat 0x39 (0..7). The dump is from macOS native HID, not Safari."
+          }
+        ],
+        "reason": "The real Chrome snapshot has +1 here and the owner's browser prototype supplies the pedal identity/range. Retaining +1 with the pedal connector unplugged is a scenario assumption, not an observed disconnected-pedal capture."
+      }
+    },
+    "D-pad": {
+      "kind": "hat",
+      "index": 9,
+      "neutral": 1.2857143878936768,
+      "directions": {
+        "up": -1,
+        "up-right": -0.7142857313156128,
+        "right": -0.4285714030265808,
+        "down-right": -0.1428571343421936,
+        "down": 0.14285719394683838,
+        "down-left": 0.4285714626312256,
+        "left": 0.7142857313156128,
+        "up-left": 1
+      },
+      "evidence": {
+        "status": "inferred",
+        "sources": [
+          {
+            "url": "https://www.reddit.com/r/Stadia/comments/fdc7sh/",
+            "says": "A G920 owner pasted a Chrome Gamepad object on 2020-03-04: this exact ID, empty mapping, 18 buttons, 10 axes with the saved resting vector, and vibrationActuator null. The report does not specify the OS, driver version, or whether pedals were disconnected."
+          },
+          {
+            "url": "https://github.com/chromium/chromium/blob/main/device/gamepad/raw_input_gamepad_device_win.cc",
+            "says": "Windows RawInput assigns a button index from HID button usage minus one, and an axis index from HID Generic Desktop usage minus 0x30. It normalizes to [-1,+1], preserving an out-of-range hat null state."
+          },
+          {
+            "url": "https://forum.scssoft.com/viewtopic.php?p=1313821",
+            "says": "A real 046d:c262 G920 HID dump has 18 button usages, X usage 0x30 (0..65535), Y 0x31/Z 0x32/Rz 0x35 (0..255), and hat 0x39 (0..7). The dump is from macOS native HID, not Safari."
+          }
+        ],
+        "reason": "Hat axis 9 and neutral 1.2857143878936768 are confirmed by the Chrome dump. Direction values are derived using Chromium float normalization of the G920 HID hat range 0..7, clockwise from north."
+      }
+    }
+  },
+  "switches": {},
+  "notes": [
+    "This profile is a historical Chrome/HID report plus named-control inferences, not a claim of hardware compatibility.",
+    "Axes 3,4,6,7,8 are preserved zero-valued gaps in the reported array, not imaginary sticks.",
+    "The hat neutral is 1.2857143878936768 for this dump; do not replace it with the often-seen 3.2857.",
+    "Pedal axes remain in the fixed HID report descriptor when the separate pedal unit is absent. Their +1 unplugged rests are unconfirmed and intentionally inferred.",
+    "Buttons rest at value 0, pressed false, touched false, using Chromium's binary raw HID button semantics; pedals are axes, not analog buttons.",
+    "No user-operated platform/mode switch is documented for G920. Driver-generated XInput and combined-pedal variants are outside this profile.",
+    "Optional shifter indices use a firsthand G HUB native report; Logitech's LGS shifter guide disagrees. Do not silently apply that LGS layout to this 18-button snapshot.",
+    "No Firefox, Safari, Edge, current-G-HUB Chrome, or second-wheel profile is emitted without a full matching browser report."
+  ]
+}

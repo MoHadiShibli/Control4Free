@@ -78,7 +78,17 @@ turns it into a `ScePadData` sample and hands it to `scePadVirtualDeviceInsertDa
   stick movement only ever keeps the latest position.
 
 When a page stops sending, its buttons are released at once; after 3 seconds the controller goes neutral, and
-after 15 it's removed. A page that reconnects within 15 seconds gets its controller back.
+after 15 it's removed. A page that reconnects forgets which controllers it had; picking the same one again
+within those 15 seconds gets it back, still signed in.
+
+Gamepad mapping happens on the page, before anything is sent. Each gamepad's inputs go through its profile's
+bindings, and everything driving one controller is combined: buttons are pressed if any source presses them,
+triggers take the strongest pull, and sticks take the input pushed furthest. See
+[Gamepad mapping](gamepad-mapping.md).
+
+The service sends each page a WebSocket ping every 5 seconds and closes a connection that hasn't answered
+within 10, so a phone that left the network doesn't hold a connection for ever. At most six pages are
+connected at once, which keeps room for loading the page itself.
 
 ## Rumble and light bar
 

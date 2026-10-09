@@ -34,7 +34,9 @@
 - The on-screen DualShock 4 buttons in `client/index.html` are drawn after the
   [DualShock 4 layout diagram](https://commons.wikimedia.org/wiki/File:Dualshock_4_Layout.svg)
   by Tokyoship, licensed under CC BY 3.0
-  (https://creativecommons.org/licenses/by/3.0/).
+  (https://creativecommons.org/licenses/by/3.0/). The PS button's mark uses the
+  diagram's paths, resized and recolored; the surrounding buttons are adapted
+  to the interactive page.
 
 These license notices are also included inside the package.
 

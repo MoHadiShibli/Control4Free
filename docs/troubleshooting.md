@@ -79,8 +79,12 @@ front. And not every game rumbles every player.
 enter the console's address in its connection box. See [Gamepads](playing.md#gamepads).
 
 **The buttons are mixed up.** The page says *"buttons may be mixed up"* when the browser doesn't recognise the
-gamepad's layout. Try another browser, or connect the gamepad another way (cable instead of Bluetooth, or the
-other way round).
+gamepad's layout. Press **Mapping** on its row and change each control that's wrong: see
+[Gamepad mapping](gamepad-mapping.md). Another browser, or connecting the gamepad another way (cable instead
+of Bluetooth, or the other way round), can also help.
+
+**A gamepad button does nothing after changing its mapping.** Let go of it and press it again: a button held
+down while a gamepad starts playing waits until it's released.
 
 **The gamepad does nothing.** Keep the page's window in front, press a button on the gamepad after the page
 has loaded, and check it has a controller under **Gamepads on this device**.
@@ -137,5 +141,7 @@ When you're done, install the normal package again over the diagnostic one, open
 **Cross** to stop the diagnostic version, and **Cross** to start the normal one. That also puts the normal
 one back on auto-start.
 
-The service's own log is `/data/control4free/control4free.log` on the PS4, with the previous run in
-`control4free.log.previous`, readable over GoldHEN's FTP server (port 2121). The diagnostic app shows both.
+The service's own log is `/data/control4free/control4free.log` on the PS4, readable over GoldHEN's FTP
+server (port 2121). When it reaches 1 MB it moves to `control4free.log.1` and a new one starts; the previous
+run is in `control4free.log.previous`. The diagnostic app shows the end of each, and its first page says
+whether it managed to save the report.

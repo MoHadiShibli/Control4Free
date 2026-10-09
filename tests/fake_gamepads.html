@@ -1,0 +1,160 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Control4Free local gamepad lab</title>
+<style>
+  :root { color-scheme: dark; font: 15px/1.5 system-ui, sans-serif; background: #08152a; color: #f0f4fa; }
+  * { box-sizing: border-box; }
+  body { margin: 0; }
+  header { padding: 20px 24px; border-bottom: 1px solid #304158; }
+  h1 { font-size: 22px; margin: 0 0 4px; }
+  p { margin: 4px 0 12px; }
+  main { display: grid; grid-template-columns: 350px 1fr; min-height: calc(100vh - 125px); }
+  aside { padding: 20px; overflow: auto; max-height: calc(100vh - 125px); }
+  iframe { width: 100%; height: calc(100vh - 125px); border: 0; background: #04143a; }
+  label { display: block; margin-bottom: 6px; }
+  select, button, input { font: inherit; }
+  select, button { padding: 8px 10px; border: 1px solid #56708d; border-radius: 5px; background: #142b47; color: inherit; }
+  select { width: 100%; }
+  button { cursor: pointer; }
+  button:focus-visible, select:focus-visible, input:focus-visible { outline: 2px solid #a3caff; outline-offset: 3px; }
+  button:disabled { opacity: .5; cursor: default; }
+  .actions { display: flex; flex-wrap: wrap; gap: 8px; margin: 12px 0; }
+  .control { padding: 10px 0; border-bottom: 1px solid #304158; }
+  #controls { display: grid; grid-template-columns: 1fr 1fr; gap: 0 12px; }
+  .control input { width: 100%; }
+  .control small, #evidence { display: block; color: #b9c8da; font-size: 12px; }
+  details { margin: 16px 0; }
+  pre { font-size: 11px; white-space: pre-wrap; overflow-wrap: anywhere; }
+  #message { min-height: 24px; color: #ffcf9b; }
+  @media(max-width: 800px) { main { grid-template-columns: 1fr; } aside { max-height: 50vh; } iframe { height: 80vh; } }
+</style>
+<header>
+  <h1>Local gamepad lab</h1>
+  <p>Drive researched emulations through the existing controller page. Inferred values are test assumptions, not hardware results.</p>
+</header>
+<main>
+  <aside>
+    <label for="profile">Device and browser profile</label>
+    <select id="profile" disabled></select>
+    <div class="actions"><button id="connect" disabled>Connect</button><button id="disconnect" disabled>Disconnect</button><button id="reset" disabled>Let go of everything</button></div>
+    <p id="message" role="status">Loading local files…</p>
+    <p id="evidence"></p>
+    <div id="controls"></div>
+    <details><summary>Evidence and assumptions</summary><pre id="sources"></pre></details>
+    <details><summary>Opening from disk</summary><p>If the browser blocks local file reads, select the tests folder and the original controller page below.</p>
+      <label>Tests folder <input id="folder" type="file" webkitdirectory multiple></label>
+      <label>client/index.html <input id="pageFile" type="file" accept=".html"></label>
+      <button id="loadFiles">Load selected files</button>
+    </details>
+    <p><small>Run fake_gamepads_server.cjs in Docker for the local service and browser storage. This harness permits only the local test service. Choose Mapping on its gamepad row.</small></p>
+  </aside>
+  <iframe id="controller" title="Control4Free controller page with fake gamepads"></iframe>
+</main>
+<script>
+(() => {
+  const $ = id => document.getElementById(id), frame = $('controller');
+  let profiles = [], index = null;
+  const message = text => { $('message').textContent = text; };
+  const api = () => frame.contentWindow.fakePads;
+  function act(fn) { try { fn(); message(''); } catch (error) { message(error.message); } }
+  function selected() { return profiles.find(p => p.name === $('profile').value); }
+  function button(parent, text, fn) {
+    const b = document.createElement('button'); b.type = 'button'; b.textContent = text;
+    b.addEventListener('click', () => act(fn)); parent.appendChild(b); return b;
+  }
+  function render() {
+    const profile = selected(); if (!profile) return;
+    $('sources').textContent = JSON.stringify(profile, null, 2);
+    const status = Object.values(profile.gamepad).filter(e => e?.status === 'inferred').length;
+    $('evidence').textContent = status + ' inferred report fields; control bindings may also be inferred. See Evidence and assumptions below.';
+    $('controls').textContent = '';
+    $('connect').disabled = index !== null; $('disconnect').disabled = $('reset').disabled = index === null;
+    $('profile').disabled = index !== null;
+    if (index === null) return;
+    const sampled = frame.contentWindow.navigator.getGamepads()[index];
+    for (const [name, c] of Object.entries(profile.controls)) {
+      const row = document.createElement('div'); row.className = 'control'; $('controls').appendChild(row);
+      const title = document.createElement('label'); title.textContent = name; row.appendChild(title);
+      if (c.kind === 'unreported') {
+        const info = document.createElement('small'); info.textContent = c.reason || 'Not independently exposed'; row.appendChild(info); continue;
+      }
+      if (c.kind === 'button' || c.kind === 'alias') {
+        if (c.analog) {
+          const pressure = document.createElement('input'); pressure.type = 'range'; pressure.min = 0; pressure.max = 1; pressure.step = c.steps ? 1 / c.steps : .01;
+          pressure.value = sampled.buttons[c.index].value; pressure.setAttribute('aria-label', name + ' pressure');
+          pressure.addEventListener('input', () => act(() => api().set(index, name, +pressure.value))); row.appendChild(pressure);
+        }
+        const b = button(row, 'Hold', () => {});
+        const up = () => act(() => api().release(index, name));
+        b.addEventListener('pointerdown', e => { b.setPointerCapture(e.pointerId); act(() => api().press(index, name)); });
+        b.addEventListener('pointerup', up); b.addEventListener('pointercancel', up); b.addEventListener('lostpointercapture', up);
+        b.addEventListener('keydown', e => { if ([' ', 'Enter'].includes(e.key)) { e.preventDefault(); act(() => api().press(index, name)); } });
+        b.addEventListener('keyup', e => { if ([' ', 'Enter'].includes(e.key)) up(); });
+        b.addEventListener('blur', up);
+      } else if (c.kind === 'hat') {
+        const select = document.createElement('select'); select.setAttribute('aria-label', name);
+        for (const direction of ['none', ...Object.keys(c.directions)]) select.add(new Option(direction, direction));
+        select.value = Object.keys(c.directions).find(direction => c.directions[direction] === sampled.axes[c.index]) || 'none';
+        select.addEventListener('change', () => act(() => api().hat(index, select.value, name))); row.appendChild(select);
+      } else {
+        const values = c.kind === 'stick' ? [sampled.axes[c.x], sampled.axes[c.y]] : [sampled.axes[c.index]];
+        values.forEach((value, part) => {
+          const input = document.createElement('input'); input.type = 'range'; input.min = c.min ?? -1; input.max = c.max ?? 1; input.step = .01; input.value = value;
+          input.setAttribute('aria-label', name + (c.kind === 'stick' ? [' horizontal', ' vertical'][part] : ''));
+          input.addEventListener('input', () => act(() => { values[part] = +input.value;
+            if (c.kind === 'stick') api().tilt(index, name, ...values); else api().set(index, name, values[0]); })); row.appendChild(input);
+        });
+        button(row, 'Release', () => { api().release(index, name); render(); });
+      }
+      const note = document.createElement('small'); note.textContent = c.evidence.status; row.appendChild(note);
+    }
+    for (const [name, spec] of Object.entries(profile.switches || {})) {
+      const row = document.createElement('div'); row.className = 'control'; $('controls').appendChild(row);
+      const label = document.createElement('label'); label.textContent = name; row.appendChild(label);
+      if (spec.kind === 'unreported') { const note = document.createElement('small'); note.textContent = spec.reason; row.appendChild(note); continue; }
+      const select = document.createElement('select'); select.setAttribute('aria-label', name); select.add(new Option('Choose…', ''));
+      for (const value of spec.kind === 'profile' ? Object.keys(spec.values) : spec.values) select.add(new Option(value, value));
+      if (spec.kind === 'state') select.value = api().switchState(index)[name] || '';
+      select.addEventListener('change', () => act(() => { api().switch(index, name, select.value);
+        $('profile').value = api().describe(index).name; render(); })); row.appendChild(select);
+    }
+  }
+  function install(html, script, data) {
+    profiles = data; index = null;
+    $('profile').textContent = '';
+    for (const profile of profiles) $('profile').add(new Option(profile.label + ' — ' + profile.name, profile.name));
+    const relay = location.protocol === 'http:' && location.hostname === '127.0.0.1' ? 'ws://' + location.host + '/local-service' : null;
+    const bootstrap = script + '\nwindow.fakePads.loadProfiles(' + JSON.stringify(profiles).replace(/</g, '\\u003c') + ');\n' +
+      'try { localStorage.setItem("c4f.address", JSON.stringify("127.0.0.1:4264")); } catch(e) {}\n' +
+      'window.WebSocket = class LocalTestSocket extends WebSocket { constructor(address, protocols) {\n' +
+      'const url = new URL(address); if (url.protocol !== "ws:" || url.hostname !== "127.0.0.1" || url.port !== "4264") throw new Error("The gamepad lab only connects to the local test service");\n' +
+      'super(' + JSON.stringify(relay) + ' || address, protocols); } };';
+    frame.srcdoc = html.replace(/<head>/i, '<head><script>' + bootstrap.replace(/<\/script/gi, '<\\/script') + '<\/script>');
+    frame.onload = () => { $('profile').disabled = false; render(); message('Choose a profile, then Connect.'); };
+  }
+  $('profile').addEventListener('change', render);
+  $('connect').addEventListener('click', () => act(() => { index = api().connect(selected().name); render(); }));
+  $('disconnect').addEventListener('click', () => act(() => { api().disconnect(index); index = null; render(); }));
+  $('reset').addEventListener('click', () => act(() => { api().reset(index); render(); }));
+  $('loadFiles').addEventListener('click', async () => {
+    try {
+      const files = [...$('folder').files], html = await $('pageFile').files[0].text();
+      const script = await files.find(f => f.name === 'fake_gamepads.js').text();
+      const data = await Promise.all(files.filter(f => /fake_gamepads\//.test(f.webkitRelativePath) && f.name.endsWith('.json') && f.name !== 'manifest.json').map(async f => JSON.parse(await f.text())));
+      if (!data.length) throw Error('Select the tests folder containing the profile JSON files'); install(html, script, data);
+    } catch (error) { message(error.message); }
+  });
+  (async () => {
+    const read = async path => { const response = await fetch(path); if (!response.ok) throw Error('Could not read ' + path); return response; };
+    try {
+      const manifest = await (await read('fake_gamepads/manifest.json')).json();
+      const [html, script, data] = await Promise.all([(await read('../client/index.html')).text(), (await read('fake_gamepads.js')).text(),
+        Promise.all(manifest.profiles.map(async file => (await read('fake_gamepads/' + file)).json()))]);
+      install(html, script, data);
+    } catch (error) { message('Serve this folder locally, or use Opening from disk below. ' + error.message); }
+  })();
+})();
+</script>
+</html>

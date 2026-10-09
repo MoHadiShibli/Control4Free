@@ -3,6 +3,35 @@
 Versions follow [Semantic Versioning](https://semver.org): PATCH for fixes, MINOR for features that break
 nothing, MAJOR for anything people rely on that changes.
 
+## 1.2.0 — 2026-10-08
+
+Gamepad mapping.
+
+- Map a gamepad on a picture of a DualShock 4: each control shows what drives it and lights up when pressed.
+  Click a control, then press the gamepad button for it. It works for gamepads the browser doesn't know, and
+  for wheels, guitars, pedals and arcade sticks, as DualShock 4 buttons, sticks and triggers. Sticks and
+  triggers show their position with a dead zone and a curve. **Everything it sends** shows every button and
+  axis live, and sets an axis's range a step at a time. See [Gamepad mapping](docs/gamepad-mapping.md).
+- Keyboard keys are chosen on the same picture.
+- Mappings are saved as profiles in the browser, used for every gamepad of the same kind, and can be exported
+  to a file and imported on another device.
+- Several gamepads can play as the same controller, for example a wheel and its pedals.
+- A button still held when a gamepad starts playing does nothing until it's let go.
+- A phone that drops off the network no longer keeps a connection to the PS4 open for ever. Before, enough of
+  those could stop new phones and computers from opening the page.
+- When two people pick controllers at the same moment, one is asked to try again, instead of one taking the
+  other's controller.
+- A controller the console refused input for recovers once it accepts input again.
+- The page only asks for the PS4's address when it was saved to the device and opened from there.
+- The address box takes a full address, such as `http://192.168.1.20:4264/`, and adds `:4264` when it's
+  missing.
+- A touch on the touchpad that the browser cancels no longer clicks it.
+- Keys with Ctrl, Alt or the Windows key can't be chosen any more: they never worked in play.
+- The app on the PS4 says when the Control4Free running is a different version from the app, and how to switch.
+  It tells a missing auto-start copy apart from auto-start being off.
+- The service's log stays under 2 MB, however long it runs.
+- The diagnostic app says whether it managed to save its report.
+
 ## 1.1.1 — 2026-10-07
 
 Fixes.

@@ -524,7 +524,14 @@ void c4fDrawLauncher(uint32_t *pixels, const C4fLauncherScreen *s)
     /* .panel: whether GoldHEN starts it by itself. */
     const char *panelTitle, *panelText;
     C4fColor panelDot = C4F_FAINT;
-    if (s->autorun == C4F_AUTORUN_ON) {
+    char versions[160];
+    int mismatch = live && s->runningVersion[0] && strcmp(s->runningVersion, C4F_LAUNCHER_VERSION);
+    if (mismatch) {
+        snprintf(versions, sizeof(versions), "Installed %s; running %s", C4F_LAUNCHER_VERSION, s->runningVersion);
+        panelTitle = versions;
+        panelText = "To apply this app's version now, press Square, confirm the stop with Cross, then press Cross to start. This disconnects all players.";
+        panelDot = C4F_WARN;
+    } else if (s->autorun == C4F_AUTORUN_ON) {
         panelTitle = "Starts by itself with GoldHEN";
         panelText = "GoldHEN starts Control4Free each time it loads. Closing this app leaves your controllers "
                     "running. Turn off other controller plugins in your games.";

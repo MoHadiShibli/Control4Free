@@ -101,6 +101,7 @@ static void *c4fWorker(void *)
             }
             c4fScreen.running = running;
             c4fScreen.controllers = status.controllers;
+            snprintf(c4fScreen.runningVersion, sizeof(c4fScreen.runningVersion), "%s", running == 1 ? status.version : "");
             c4fScreen.autorun = autorun;
             snprintf(c4fScreen.autorunNote, sizeof(c4fScreen.autorunNote), "%s", autorunNote);
             snprintf(c4fScreen.address, sizeof(c4fScreen.address), "%s", address);

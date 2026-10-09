@@ -241,10 +241,14 @@ static void c4fHttp(C4fNet *net, C4fNetClient *c)
         }
         for (size_t i = 0; connection[i]; i++) connection[i] = (char)tolower((unsigned char)connection[i]);
         if (!strstr(connection, "upgrade")) { c4fHttpError(c, 400, "Upgrade required"); return; }
+        int sockets = 0;
+        for (int i = 0; i < C4F_NET_CLIENTS; i++) sockets += net->clients[i].websocket != 0;
+        if (sockets >= C4F_NET_WEBSOCKETS) { c4fHttpError(c, 503, "Controller connections full; close an unused page"); return; }
         c4fWebSocketAccept(key, accept);
         n = snprintf(reply, sizeof(reply), "HTTP/1.1 101 Switching Protocols\r\nUpgrade: websocket\r\nConnection: Upgrade\r\nSec-WebSocket-Accept: %s\r\n\r\n", accept);
         C4F_NET_LOG(c, "websocket open%s", "");
         c4fQueue(c, reply, (size_t)n); c->websocket = 1;
+        c->pingAt = c4fTimeMs() + C4F_NET_PING_MS;
         memmove(c->rx, c->rx+used, c->rxUsed-used); c->rxUsed -= used;
         net->handler(c, C4F_NET_OPEN, NULL, 0, net->context);
     } else if (asset) {
@@ -281,7 +285,14 @@ static void c4fWs(C4fNet *net, C4fNetClient *c)
         if (op == 8) {
             c4fFrame(c, 8, NULL, 0); c->closing = 2;
         } else if (op == 9) c4fFrame(c, 10, data, n);
-        else if (op == 10) { /* pong */ }
+        else if (op == 10) {
+            /* Only our current challenge proves the peer is still reachable. */
+            if (c->pongDeadline && n == sizeof(c->pingToken) &&
+                !memcmp(data, &c->pingToken, n) && c4fTimeMs() < c->pongDeadline) {
+                c->pongDeadline = 0;
+                c->pingAt = c4fTimeMs() + C4F_NET_PING_MS;
+            }
+        }
         else if ((op == 1 && !c->fragmented) || (op == 0 && c->fragmented)) {
             if (n > C4F_NET_MESSAGE - c->messageUsed) { c->closing = 1; break; }
             memcpy(c->message+c->messageUsed, data, n); c->messageUsed += n;
@@ -338,6 +349,14 @@ int c4fNetPoll(C4fNet *net, int timeoutMs)
     for (int i = 0; i < C4F_NET_CLIENTS; i++) {
         C4fNetClient *c = &net->clients[i];
         if (c->fd < 0) continue;
+        if (c->websocket && !c->closing) {
+            if (c->pongDeadline && now >= c->pongDeadline) c->closing = 1;
+            else if (!c->pongDeadline && now >= c->pingAt) {
+                c->pingToken++;
+                if (!c4fFrame(c, 9, &c->pingToken, sizeof(c->pingToken)))
+                    c->pongDeadline = now + C4F_NET_PONG_MS;
+            }
+        }
         if (c->closing == 1) { c4fDrop(net, c); continue; }
         if (!c->closing && !c->body) FD_SET(c->fd, &rd);
         if (c->txSent < c->txUsed || c->body) FD_SET(c->fd, &wr);

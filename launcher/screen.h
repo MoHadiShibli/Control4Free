@@ -10,7 +10,7 @@
 typedef struct {
     int running, busy, controllers, confirmStop, locked;
     int autorun; /* C4F_AUTORUN_* from autorun.h */
-    char address[64], message[160], autorunNote[96];
+    char address[64], message[160], autorunNote[96], runningVersion[32];
 #ifdef C4F_DIAG
     unsigned diagGeneration; /* bumped when a diagnostic page changes */
     int diagPage, diagScroll[8];

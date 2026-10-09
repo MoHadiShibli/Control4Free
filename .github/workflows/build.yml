@@ -34,6 +34,16 @@ jobs:
           docker run --rm --network none -v "$PWD:/src" -w /src \
             control4free-launcher-build python3 -B tests/run.py
 
+      - name: Browser editor checks
+        run: |
+          docker run --rm -v "$PWD:/src" -w /src mcr.microsoft.com/playwright:v1.63.0-noble \
+            bash -lc 'mkdir -p /tmp/c4f-browser; cd /tmp/c4f-browser; npm init -y >/dev/null; npm install playwright@1.63.0; cd /src; NODE_PATH=/tmp/c4f-browser/node_modules node tests/browser_test.cjs'
+
+      - name: Emulated gamepad checks
+        run: |
+          docker run --rm -v "$PWD:/src" -w /src mcr.microsoft.com/playwright:v1.63.0-noble \
+            bash -lc 'mkdir -p /tmp/c4f-browser; cd /tmp/c4f-browser; npm init -y >/dev/null; npm install playwright@1.63.0; cd /src; NODE_PATH=/tmp/c4f-browser/node_modules node tests/fake_gamepads_test.cjs'
+
       - name: Collect what was built
         run: |
           version=$(cat VERSION)
@@ -60,6 +70,6 @@ jobs:
         run: |
           # The release notes are this version's section of the changelog.
           version=$(cat VERSION)
-          awk -v head="## $version " 'index($0, head) == 1 { keep = 1; next } /^## / { keep = 0 } keep' CHANGELOG.md > notes.md
+          python3 tools/release_notes.py CHANGELOG.md "$version" "$GITHUB_REPOSITORY" > notes.md
           test -s notes.md || { echo "CHANGELOG.md has no section for $version"; exit 1; }
           gh release create "${GITHUB_REF#refs/tags/}" artifacts/* --verify-tag --title "Control4Free $version" --notes-file notes.md

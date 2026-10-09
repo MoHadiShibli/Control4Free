@@ -48,6 +48,11 @@ def one_reply(address, reply, check=None):
 def main():
     web.build()
     subprocess.run(['clang-18', '-std=gnu11', '-D_DEFAULT_SOURCE', '-Wall', '-Wextra', '-Werror',
+                    '-ffunction-sections', '-fdata-sections', '-Ilauncher', '-Itests/include',
+                    'tests/diag_test.c', '-Wl,--gc-sections,--wrap=write,--wrap=fsync', '-pthread',
+                    '-o', 'build/diag-host-test'], check=True)
+    subprocess.run(['build/diag-host-test'], check=True)
+    subprocess.run(['clang-18', '-std=gnu11', '-D_DEFAULT_SOURCE', '-Wall', '-Wextra', '-Werror',
                     '-Ilauncher', '-Ivendor/jsmn', 'launcher/service.c', 'launcher/autorun.c', 'launcher/sandbox.c',
                     'tests/launcher_cli.c', '-o', str(CLI)], check=True)
     assert command('probe').startswith('0 ')
@@ -143,6 +148,13 @@ def main():
     assert text.count('[AutoRun]') == 1 and '/user/data/payloads/other.bin = 1' in text and ours in text, text
     assert (root / 'payloads/control4free.elf').read_bytes() == BUNDLED.read_bytes()
     assert autorun('autorun-check', str(BUNDLED)).startswith('1|')
+    (root / 'payloads/control4free.elf').unlink()
+    assert autorun('autorun-check', str(BUNDLED)).startswith('2|Enabled, but the payload is missing')
+    autorun('autorun-on', str(BUNDLED))
+    original_ini = ini.read_bytes()
+    ini.unlink(); ini.mkdir()
+    assert autorun('autorun-check', str(BUNDLED)).startswith('-1|Could not inspect AutoRun')
+    ini.rmdir(); ini.write_bytes(original_ini)
     autorun('autorun-on', str(BUNDLED))
     assert ini.read_text().count('control4free.elf') == 1
     (root / 'payloads/control4free.elf').write_bytes(BUNDLED.read_bytes()[:-1] + b'\x01')
@@ -165,7 +177,7 @@ def main():
     sys.path.insert(0, str(ROOT / 'tools'))
     import package_launcher as package
     package.build_art_tool()
-    for state in ('setup', 'running', 'stopped', 'outdated', 'confirm', 'busy', 'locked', 'unknown'):
+    for state in ('setup', 'running', 'stopped', 'outdated', 'mismatch', 'confirm', 'busy', 'locked', 'unknown'):
         png = ROOT / f'build/launcher-preview-{state}.png'
         package.render(['screen', state], png, 1920, 1080)
         assert png.stat().st_size > 50000, png

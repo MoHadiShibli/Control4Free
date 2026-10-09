@@ -1,0 +1,530 @@
+{
+  "name": "elite2-firefox-win-bt-xinput",
+  "label": "Xbox Elite Series 2 — Bluetooth / Firefox XInput",
+  "environment": {
+    "browser": "Firefox",
+    "os": "Windows 10 / Windows 11",
+    "connection": "Bluetooth",
+    "mode": "XInput with unknown onboard paddle assignments",
+    "backend": "XInput",
+    "status": "inferred",
+    "sources": [
+      {
+        "url": "https://www.xbox.com/en-US/accessories/controllers/elite-wireless-controller-series-2",
+        "says": "All three connections are supported on Windows 10/11."
+      },
+      {
+        "url": "https://raw.githubusercontent.com/mozilla-firefox/firefox/main/dom/gamepad/windows/WindowsGamepad.cpp",
+        "says": "Windows XInput backend handles any successful XInputGetState device."
+      }
+    ],
+    "reason": "Conditional on Windows routing this connection through XInput. No per-connection physical browser dump was found."
+  },
+  "gamepad": {
+    "timestampPolicy": {
+      "value": "change",
+      "status": "inferred",
+      "sources": [
+        {
+          "url": "https://raw.githubusercontent.com/mozilla-firefox/firefox/main/dom/gamepad/windows/WindowsGamepad.cpp",
+          "says": "The XInput poll emits events only for changed buttons/axes."
+        },
+        {
+          "url": "https://raw.githubusercontent.com/mozilla-firefox/firefox/main/dom/gamepad/Gamepad.cpp",
+          "says": "Construction, input events and SyncState update the DOM timestamp using performance.now."
+        },
+        {
+          "url": "https://raw.githubusercontent.com/mozilla-firefox/firefox/main/dom/base/nsGlobalWindowInner.cpp",
+          "says": "GetGamepads returns existing objects without calling SyncState."
+        },
+        {
+          "url": "https://raw.githubusercontent.com/mozilla-firefox/firefox/main/dom/base/nsGlobalWindowOuter.cpp",
+          "says": "SetIsBackground invokes SyncGamepadState when returning to foreground and also some unchanged background-state calls."
+        }
+      ],
+      "reason": "Change policy models ordinary foreground polling; construction starts at performance.now. Browser background/foreground synchronization and timer precision reduction are outside this synthetic fixture."
+    },
+    "id": {
+      "value": "xinput",
+      "status": "confirmed",
+      "sources": [
+        {
+          "url": "https://raw.githubusercontent.com/mozilla-firefox/firefox/main/dom/gamepad/windows/WindowsGamepad.cpp",
+          "says": "ScanForXInputDevices passes literal xinput to AddGamepad, with no VID/PID."
+        }
+      ]
+    },
+    "mapping": {
+      "value": "standard",
+      "status": "confirmed",
+      "sources": [
+        {
+          "url": "https://raw.githubusercontent.com/mozilla-firefox/firefox/main/dom/gamepad/windows/WindowsGamepad.cpp",
+          "says": "XInput AddGamepad specifies Standard mapping."
+        }
+      ]
+    },
+    "buttons": {
+      "value": 17,
+      "status": "confirmed",
+      "sources": [
+        {
+          "url": "https://raw.githubusercontent.com/mozilla-firefox/firefox/main/dom/gamepad/windows/WindowsGamepad.cpp",
+          "says": "XInput adds kStandardGamepadButtons and only standard masks, including Guide."
+        }
+      ]
+    },
+    "axesRest": {
+      "value": [
+        0,
+        0,
+        0,
+        0
+      ],
+      "status": "inferred",
+      "sources": [
+        {
+          "url": "https://raw.githubusercontent.com/mozilla-firefox/firefox/main/dom/gamepad/windows/WindowsGamepad.cpp",
+          "says": "XInput exposes four normalized stick axes."
+        },
+        {
+          "url": "https://learn.microsoft.com/en-us/windows/uwp/gaming/gamepad-and-vibration",
+          "says": "Centered sticks approximately report zero and can drift."
+        }
+      ],
+      "reason": "Ideal zero center, not a captured resting sample. Trigger release is button value 0 and no trigger axes are returned."
+    },
+    "vibration": {
+      "value": null,
+      "status": "confirmed",
+      "sources": [
+        {
+          "url": "https://raw.githubusercontent.com/mozilla-firefox/firefox/main/dom/gamepad/windows/WindowsGamepad.cpp",
+          "says": "Windows backend supplies zero haptics and leaves a haptics TODO."
+        },
+        {
+          "url": "https://searchfox.org/firefox-main/source/dom/webidl/Gamepad.webidl",
+          "says": "Gamepad has hapticActuators but no vibrationActuator attribute."
+        }
+      ],
+      "presence": "absent"
+    }
+  },
+  "controls": {
+    "A": {
+      "kind": "button",
+      "index": 0,
+      "evidence": {
+        "status": "confirmed",
+        "sources": [
+          {
+            "url": "https://raw.githubusercontent.com/mozilla-firefox/firefox/main/dom/gamepad/windows/WindowsGamepad.cpp",
+            "says": "Browser backend sends A to standard button 0."
+          }
+        ]
+      }
+    },
+    "B": {
+      "kind": "button",
+      "index": 1,
+      "evidence": {
+        "status": "confirmed",
+        "sources": [
+          {
+            "url": "https://raw.githubusercontent.com/mozilla-firefox/firefox/main/dom/gamepad/windows/WindowsGamepad.cpp",
+            "says": "Browser backend sends B to standard button 1."
+          }
+        ]
+      }
+    },
+    "X": {
+      "kind": "button",
+      "index": 2,
+      "evidence": {
+        "status": "confirmed",
+        "sources": [
+          {
+            "url": "https://raw.githubusercontent.com/mozilla-firefox/firefox/main/dom/gamepad/windows/WindowsGamepad.cpp",
+            "says": "Browser backend sends X to standard button 2."
+          }
+        ]
+      }
+    },
+    "Y": {
+      "kind": "button",
+      "index": 3,
+      "evidence": {
+        "status": "confirmed",
+        "sources": [
+          {
+            "url": "https://raw.githubusercontent.com/mozilla-firefox/firefox/main/dom/gamepad/windows/WindowsGamepad.cpp",
+            "says": "Browser backend sends Y to standard button 3."
+          }
+        ]
+      }
+    },
+    "Left bumper": {
+      "kind": "button",
+      "index": 4,
+      "evidence": {
+        "status": "confirmed",
+        "sources": [
+          {
+            "url": "https://raw.githubusercontent.com/mozilla-firefox/firefox/main/dom/gamepad/windows/WindowsGamepad.cpp",
+            "says": "Browser backend sends Left bumper to standard button 4."
+          }
+        ]
+      }
+    },
+    "Right bumper": {
+      "kind": "button",
+      "index": 5,
+      "evidence": {
+        "status": "confirmed",
+        "sources": [
+          {
+            "url": "https://raw.githubusercontent.com/mozilla-firefox/firefox/main/dom/gamepad/windows/WindowsGamepad.cpp",
+            "says": "Browser backend sends Right bumper to standard button 5."
+          }
+        ]
+      }
+    },
+    "Left trigger": {
+      "kind": "button",
+      "index": 6,
+      "evidence": {
+        "status": "confirmed",
+        "sources": [
+          {
+            "url": "https://raw.githubusercontent.com/mozilla-firefox/firefox/main/dom/gamepad/windows/WindowsGamepad.cpp",
+            "says": "Trigger 6 copies XInput byte /255; pressed at byte >=30."
+          },
+          {
+            "url": "https://raw.githubusercontent.com/mozilla-firefox/firefox/main/dom/gamepad/GamepadPlatformService.cpp",
+            "says": "The pressed/value overload copies pressed into touched, including XInput triggers below the threshold."
+          }
+        ]
+      },
+      "analog": true,
+      "pressedThreshold": 0.11764705882352941,
+      "pressedInclusive": true,
+      "steps": 255,
+      "touchedPolicy": "pressed"
+    },
+    "Right trigger": {
+      "kind": "button",
+      "index": 7,
+      "evidence": {
+        "status": "confirmed",
+        "sources": [
+          {
+            "url": "https://raw.githubusercontent.com/mozilla-firefox/firefox/main/dom/gamepad/windows/WindowsGamepad.cpp",
+            "says": "Trigger 7 copies XInput byte /255; pressed at byte >=30."
+          },
+          {
+            "url": "https://raw.githubusercontent.com/mozilla-firefox/firefox/main/dom/gamepad/GamepadPlatformService.cpp",
+            "says": "The pressed/value overload copies pressed into touched, including XInput triggers below the threshold."
+          }
+        ]
+      },
+      "analog": true,
+      "pressedThreshold": 0.11764705882352941,
+      "pressedInclusive": true,
+      "steps": 255,
+      "touchedPolicy": "pressed"
+    },
+    "View": {
+      "kind": "button",
+      "index": 8,
+      "evidence": {
+        "status": "confirmed",
+        "sources": [
+          {
+            "url": "https://raw.githubusercontent.com/mozilla-firefox/firefox/main/dom/gamepad/windows/WindowsGamepad.cpp",
+            "says": "Browser backend sends View to standard button 8."
+          }
+        ]
+      }
+    },
+    "Menu": {
+      "kind": "button",
+      "index": 9,
+      "evidence": {
+        "status": "confirmed",
+        "sources": [
+          {
+            "url": "https://raw.githubusercontent.com/mozilla-firefox/firefox/main/dom/gamepad/windows/WindowsGamepad.cpp",
+            "says": "Browser backend sends Menu to standard button 9."
+          }
+        ]
+      }
+    },
+    "Left stick click": {
+      "kind": "button",
+      "index": 10,
+      "evidence": {
+        "status": "confirmed",
+        "sources": [
+          {
+            "url": "https://raw.githubusercontent.com/mozilla-firefox/firefox/main/dom/gamepad/windows/WindowsGamepad.cpp",
+            "says": "Browser backend sends Left stick click to standard button 10."
+          }
+        ]
+      }
+    },
+    "Right stick click": {
+      "kind": "button",
+      "index": 11,
+      "evidence": {
+        "status": "confirmed",
+        "sources": [
+          {
+            "url": "https://raw.githubusercontent.com/mozilla-firefox/firefox/main/dom/gamepad/windows/WindowsGamepad.cpp",
+            "says": "Browser backend sends Right stick click to standard button 11."
+          }
+        ]
+      }
+    },
+    "D-pad up": {
+      "kind": "button",
+      "index": 12,
+      "evidence": {
+        "status": "confirmed",
+        "sources": [
+          {
+            "url": "https://raw.githubusercontent.com/mozilla-firefox/firefox/main/dom/gamepad/windows/WindowsGamepad.cpp",
+            "says": "Browser backend sends D-pad up to standard button 12."
+          }
+        ]
+      }
+    },
+    "D-pad down": {
+      "kind": "button",
+      "index": 13,
+      "evidence": {
+        "status": "confirmed",
+        "sources": [
+          {
+            "url": "https://raw.githubusercontent.com/mozilla-firefox/firefox/main/dom/gamepad/windows/WindowsGamepad.cpp",
+            "says": "Browser backend sends D-pad down to standard button 13."
+          }
+        ]
+      }
+    },
+    "D-pad left": {
+      "kind": "button",
+      "index": 14,
+      "evidence": {
+        "status": "confirmed",
+        "sources": [
+          {
+            "url": "https://raw.githubusercontent.com/mozilla-firefox/firefox/main/dom/gamepad/windows/WindowsGamepad.cpp",
+            "says": "Browser backend sends D-pad left to standard button 14."
+          }
+        ]
+      }
+    },
+    "D-pad right": {
+      "kind": "button",
+      "index": 15,
+      "evidence": {
+        "status": "confirmed",
+        "sources": [
+          {
+            "url": "https://raw.githubusercontent.com/mozilla-firefox/firefox/main/dom/gamepad/windows/WindowsGamepad.cpp",
+            "says": "Browser backend sends D-pad right to standard button 15."
+          }
+        ]
+      }
+    },
+    "Xbox": {
+      "kind": "button",
+      "index": 16,
+      "evidence": {
+        "status": "confirmed",
+        "sources": [
+          {
+            "url": "https://raw.githubusercontent.com/mozilla-firefox/firefox/main/dom/gamepad/windows/WindowsGamepad.cpp",
+            "says": "Browser backend sends Xbox to standard button 16."
+          }
+        ]
+      }
+    },
+    "Left stick": {
+      "kind": "stick",
+      "x": 0,
+      "y": 1,
+      "evidence": {
+        "status": "confirmed",
+        "sources": [
+          {
+            "url": "https://raw.githubusercontent.com/mozilla-firefox/firefox/main/dom/gamepad/windows/WindowsGamepad.cpp",
+            "says": "Axes 0/1 are left X/Y; Y is inverted for down-positive."
+          }
+        ]
+      }
+    },
+    "Right stick": {
+      "kind": "stick",
+      "x": 2,
+      "y": 3,
+      "evidence": {
+        "status": "confirmed",
+        "sources": [
+          {
+            "url": "https://raw.githubusercontent.com/mozilla-firefox/firefox/main/dom/gamepad/windows/WindowsGamepad.cpp",
+            "says": "Axes 2/3 are right X/Y; Y is inverted for down-positive."
+          }
+        ]
+      }
+    },
+    "P1": {
+      "kind": "unreported",
+      "evidence": {
+        "status": "confirmed",
+        "sources": [
+          {
+            "url": "https://raw.githubusercontent.com/mozilla-firefox/firefox/main/dom/gamepad/windows/WindowsGamepad.cpp",
+            "says": "XInput backend only maps the standard 17 buttons; it has no paddle mask."
+          }
+        ]
+      },
+      "reason": "No independent paddle index in this backend. An onboard assignment may repeat another control; this fixture does not guess those assignments."
+    },
+    "P2": {
+      "kind": "unreported",
+      "evidence": {
+        "status": "confirmed",
+        "sources": [
+          {
+            "url": "https://raw.githubusercontent.com/mozilla-firefox/firefox/main/dom/gamepad/windows/WindowsGamepad.cpp",
+            "says": "XInput backend only maps the standard 17 buttons; it has no paddle mask."
+          }
+        ]
+      },
+      "reason": "No independent paddle index in this backend. An onboard assignment may repeat another control; this fixture does not guess those assignments."
+    },
+    "P3": {
+      "kind": "unreported",
+      "evidence": {
+        "status": "confirmed",
+        "sources": [
+          {
+            "url": "https://raw.githubusercontent.com/mozilla-firefox/firefox/main/dom/gamepad/windows/WindowsGamepad.cpp",
+            "says": "XInput backend only maps the standard 17 buttons; it has no paddle mask."
+          }
+        ]
+      },
+      "reason": "No independent paddle index in this backend. An onboard assignment may repeat another control; this fixture does not guess those assignments."
+    },
+    "P4": {
+      "kind": "unreported",
+      "evidence": {
+        "status": "confirmed",
+        "sources": [
+          {
+            "url": "https://raw.githubusercontent.com/mozilla-firefox/firefox/main/dom/gamepad/windows/WindowsGamepad.cpp",
+            "says": "XInput backend only maps the standard 17 buttons; it has no paddle mask."
+          }
+        ]
+      },
+      "reason": "No independent paddle index in this backend. An onboard assignment may repeat another control; this fixture does not guess those assignments."
+    },
+    "Profile button": {
+      "kind": "unreported",
+      "evidence": {
+        "status": "confirmed",
+        "sources": [
+          {
+            "url": "https://raw.githubusercontent.com/mozilla-firefox/firefox/main/dom/gamepad/windows/WindowsGamepad.cpp",
+            "says": "Backend maps standard controls, not an Elite profile selector."
+          },
+          {
+            "url": "https://news.xbox.com/en-us/2019/06/09/meet-the-xbox-elite-wireless-controller-series-2-over-30-new-ways-to-play-like-a-pro/",
+            "says": "Dedicated button switches default and three saved custom profiles."
+          }
+        ]
+      },
+      "reason": "Stored profiles are programmable and their contents are unknown. The selector has no distinct button index here."
+    }
+  },
+  "switches": {
+    "Left trigger lock": {
+      "kind": "state",
+      "values": [
+        "full",
+        "medium",
+        "short"
+      ],
+      "effect": "none",
+      "evidence": {
+        "status": "inferred",
+        "sources": [
+          {
+            "url": "https://news.xbox.com/en-us/2019/11/07/xbox-elite-wireless-controller-series-2-available-now/",
+            "says": "Elite Series 2 has three levels of trigger depth."
+          },
+          {
+            "url": "https://news.xbox.com/en-us/2019/06/09/meet-the-xbox-elite-wireless-controller-series-2-over-30-new-ways-to-play-like-a-pro/",
+            "says": "Controller automatically recognizes trigger-lock adjustments."
+          },
+          {
+            "url": "https://raw.githubusercontent.com/mozilla-firefox/firefox/main/dom/gamepad/windows/WindowsGamepad.cpp",
+            "says": "Browser exposes normalized trigger values, with no trigger-lock state field."
+          }
+        ],
+        "reason": "This switch records physical travel only. set() supplies the browser's normalized value, so no guessed travel-to-value curve is applied."
+      }
+    },
+    "Right trigger lock": {
+      "kind": "state",
+      "values": [
+        "full",
+        "medium",
+        "short"
+      ],
+      "effect": "none",
+      "evidence": {
+        "status": "inferred",
+        "sources": [
+          {
+            "url": "https://news.xbox.com/en-us/2019/11/07/xbox-elite-wireless-controller-series-2-available-now/",
+            "says": "Elite Series 2 has three levels of trigger depth."
+          },
+          {
+            "url": "https://news.xbox.com/en-us/2019/06/09/meet-the-xbox-elite-wireless-controller-series-2-over-30-new-ways-to-play-like-a-pro/",
+            "says": "Controller automatically recognizes trigger-lock adjustments."
+          },
+          {
+            "url": "https://raw.githubusercontent.com/mozilla-firefox/firefox/main/dom/gamepad/windows/WindowsGamepad.cpp",
+            "says": "Browser exposes normalized trigger values, with no trigger-lock state field."
+          }
+        ],
+        "reason": "This switch records physical travel only. set() supplies the browser's normalized value, so no guessed travel-to-value curve is applied."
+      }
+    },
+    "Profile button": {
+      "kind": "unreported",
+      "evidence": {
+        "status": "confirmed",
+        "sources": [
+          {
+            "url": "https://news.xbox.com/en-us/2019/06/09/meet-the-xbox-elite-wireless-controller-series-2-over-30-new-ways-to-play-like-a-pro/",
+            "says": "Dedicated button selects default or one of three programmable profiles."
+          }
+        ]
+      },
+      "reason": "The stored remapping slots and firmware are not known. No invented paddle aliases or profile-button signal is emitted."
+    }
+  },
+  "notes": [
+    "Exact browser backend layout, with connection routing inferred; no real-device Gamepad API dump was found.",
+    "Buttons 0–16 and axes 0–3 follow the standard layout. No hat axis; D-pad is buttons 12–15.",
+    "All released button values are 0, pressed/touched false. Trigger values are quantized byte/255.",
+    "P1–P4 cannot be bound as independent browser inputs here. Onboard remappings may repeat existing controls, but their stored assignments are deliberately unknown.",
+    "Profile button and trigger-lock switches have no independent Gamepad fields. Physical travel is recorded, not transformed with invented ratios.",
+    "vibrationActuator is absent; null in profile data means omit the property. Firefox hapticActuators is not implemented by this Windows backend.",
+    "Firefox trigger touched mirrors pressed: byte values 1 through 29 have value greater than zero, pressed false and touched false.",
+    "Timestamp starts at performance.now and changes with input during ordinary foreground polling. Firefox also updates on window synchronization; background/foreground scheduling and clock precision reduction are not reproduced."
+  ]
+}

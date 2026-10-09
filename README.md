@@ -38,7 +38,10 @@ sees a real controller, so it works wherever a DualShock does:
   Move, resize or hide any button with the layout editor; each device keeps its own layout.
 - **The gamepads you already have.** Connect one to the phone or PC and give it a controller. One computer
   can run all four.
-- **A keyboard**, with keys you can change.
+- **A keyboard**, with keys you choose on the same picture.
+- **Your own gamepad mapping.** Map any gamepad on a picture of a DualShock 4: click a control, then press the
+  button you want. Works for gamepads the browser doesn't know, and for wheels, guitars and pedals too. See
+  [Gamepad mapping](docs/gamepad-mapping.md).
 - **Rumble and light bar.** When a game rumbles, your phone buzzes (Android), and so does your gamepad,
   though not every controller supports vibration in the browser. The page glows in the controller's
   light-bar colour, the one the PS4 or the game sets.
@@ -92,6 +95,9 @@ New to GoldHEN packages? The **[installation guide](docs/installation.md)** walk
 
 ## Limitations
 
+- **The PS4 always sees a DualShock 4.** A wheel plays as sticks and triggers, so games that need a real
+  wheel or guitar don't accept it, and there's no force feedback.
+- **Six pages at a time.** Up to six phones or computers can have the page open at once.
 - **No motion controls.** Browsers only give phone motion sensors to secure (`https`) pages, and the
   console's page is plain `http`.
 - **iPhones don't vibrate.** Safari doesn't let pages use the phone's vibration. A gamepad connected to the
