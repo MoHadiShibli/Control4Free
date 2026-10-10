@@ -11,6 +11,8 @@
 #include "screen.h"
 #ifdef C4F_DIAG
 #include "diag.h"
+/* Host preview fixture; the native application does not link it. */
+void c4fDiagPreviewPage(int page, const char *text);
 #endif
 
 static int c4fWrite(const char *path, const uint32_t *pixels, size_t count)
@@ -98,9 +100,13 @@ int main(int argc, char **argv)
     if (!strcmp(state, "remote-input-diag")) {
         snprintf(s.inputNote, sizeof(s.inputNote),
                  "DS4: disconnected (0x00000000); TV remote: ready (0x00000000), last key 0x0d / raw 0x00000000");
-        C4fDiagState diagnostic = { s.running, s.controllers, s.autorun, s.locked,
-            s.busy, s.confirmStop, s.runningVersion, "", s.message, s.address, "", s.inputNote };
-        c4fDiagRefresh(&diagnostic);
+        char summary[512];
+        snprintf(summary, sizeof(summary),
+                 ">> Example input data for layout review.\n\nConsole\n"
+                 "  system software: example\n\nThis app\n  version %s\n"
+                 "  input: %s\n\nService (port 4264)\n  not running\n\n"
+                 "Auto-start\n  state: on\n", C4F_LAUNCHER_VERSION, s.inputNote);
+        c4fDiagPreviewPage(0, summary);
     }
     c4fDrawDiag(pixels, &s);
 #else

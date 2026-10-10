@@ -46,7 +46,7 @@ def build_art_tool(diagnostic=False):
         # diagnostic drawing function. Existing host declarations provide types;
         # no console APIs or diagnostic file operations are called by this tool.
         flags += ['-DC4F_DIAG', '-ffunction-sections', '-fdata-sections', f'-I{ROOT}/tests/include']
-        extra_sources = [str(ROOT / 'launcher/diag.c')]
+        extra_sources = [str(ROOT / 'tests/diag_preview.c')]
         extra_flags = ['-Wl,--gc-sections', '-pthread']
         art = ART.with_name(ART.name + '-diag')
     stb = OUT / 'stb_truetype-host.o'
