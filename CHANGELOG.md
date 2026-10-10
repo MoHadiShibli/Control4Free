@@ -9,7 +9,9 @@ HDMI-CEC navigation for the PS4 app.
 
 - Added a TV-remote reader and an Actions menu to the PS4 app for HDMI-CEC navigation with
   arrows and OK. Includes input recovery, separate Stop confirmation and diagnostic navigation.
-  PS4 hardware reception remains unverified; this build is for testing before publication.
+  Handles separate Sony remote Enter/Back/Menu key codes alongside DS4 button bits and retains
+  the last received key in diagnostics. The first PS4 test connected the remote but could not
+  select actions; the follow-up decoding still needs hardware confirmation before publication.
   See the [HDMI-CEC test guide](docs/hdmi-cec.md).
 
 ## 1.2.0 — 2026-10-09

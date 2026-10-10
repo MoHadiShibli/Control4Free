@@ -89,6 +89,27 @@ static C4fInputFrame poll(C4fInput *input, uint64_t now)
     return frame;
 }
 
+static void remoteKeyNormalization(void)
+{
+    /* These are Sony remote packet key codes, not HDMI-CEC wire opcodes.
+     * The native wrapper's remote-port gate is reviewed separately in main;
+     * this host test checks only the helper and its downstream reader contract. */
+    const uint32_t raw = UINT32_C(0x25a500f0);
+    assert(c4fInputRemoteButtons(raw, 13) == (raw | C4F_INPUT_BUTTON_CROSS));
+    assert(c4fInputRemoteButtons(raw, 15) == (raw | C4F_INPUT_BUTTON_CIRCLE));
+    assert(c4fInputRemoteButtons(raw, 18) == (raw | C4F_INPUT_BUTTON_OPTIONS));
+    assert(c4fInputRemoteButtons(C4F_INPUT_BUTTON_CROSS, 13) == C4F_INPUT_BUTTON_CROSS);
+    for (unsigned code = 0; code <= UINT8_MAX; code++) {
+        if (code == 13 || code == 15 || code == 18) continue;
+        assert(c4fInputRemoteButtons(raw, (uint8_t)code) == raw);
+        assert(c4fInputRemoteButtons(0, (uint8_t)code) == 0);
+    }
+    assert(c4fInputRemoteButtons(C4F_INPUT_BUTTON_INTERCEPTED, 13) == C4F_INPUT_BUTTON_INTERCEPTED);
+    assert(c4fInputRemoteButtons(C4F_INPUT_BUTTON_INTERCEPTED, 15) == C4F_INPUT_BUTTON_INTERCEPTED);
+    assert(c4fInputRemoteButtons(C4F_INPUT_BUTTON_INTERCEPTED, 18) == C4F_INPUT_BUTTON_INTERCEPTED);
+    puts("PASS Sony remote key normalization preserves raw buttons, ignores unknown codes and respects interception");
+}
+
 static void remoteOnly(void)
 {
     FakeInput fake;
@@ -269,6 +290,71 @@ static int remoteFrame(FakeInput *fake, C4fInput *input, C4fLauncherScreen *scre
     fake->source[1].buttons = buttons;
     C4fInputFrame frame = poll(input, now);
     return navigate(screen, frame.standard.pressed, frame.remote.pressed, 0);
+}
+
+static int remoteKeyFrame(FakeInput *fake, C4fInput *input, C4fLauncherScreen *screen,
+                          uint64_t now, uint8_t keyCode, int diagnostic)
+{
+    /* The native reader supplies this normalized snapshot only for the remote
+     * port. Keep the fixture's standard controller snapshots unchanged. */
+    fake->source[C4F_INPUT_REMOTE].buttons = c4fInputRemoteButtons(0, keyCode);
+    C4fInputFrame frame = poll(input, now);
+    return navigate(screen, frame.standard.pressed, frame.remote.pressed, diagnostic);
+}
+
+static void extendedRemoteNavigation(int diagnostic)
+{
+    FakeInput fake;
+    C4fInput input;
+    reader(&fake, &input);
+    fake.source[C4F_INPUT_STANDARD].openError = 1;
+    C4fLauncherScreen screen = stopped();
+    assert(remoteKeyFrame(&fake, &input, &screen, 0, 13, diagnostic) == C4F_ACTION_NONE);
+    assert(!screen.actionMenu);
+    assert(remoteKeyFrame(&fake, &input, &screen, 10, 13, diagnostic) == C4F_ACTION_NONE);
+    assert(!screen.actionMenu);
+    remoteKeyFrame(&fake, &input, &screen, 20, 0, diagnostic);
+    assert(remoteKeyFrame(&fake, &input, &screen, 30, 13, diagnostic) == C4F_ACTION_NONE);
+    assert(screen.actionMenu && screen.actionFocus == C4F_ACTION_START);
+    assert(remoteKeyFrame(&fake, &input, &screen, 40, 13, diagnostic) == C4F_ACTION_NONE);
+    assert(screen.actionMenu);
+    remoteKeyFrame(&fake, &input, &screen, 50, 0, diagnostic);
+    assert(remoteKeyFrame(&fake, &input, &screen, 60, 13, diagnostic) == C4F_ACTION_START);
+    assert(!screen.actionMenu);
+    assert(remoteKeyFrame(&fake, &input, &screen, 70, 13, diagnostic) == C4F_ACTION_NONE);
+    remoteKeyFrame(&fake, &input, &screen, 80, 0, diagnostic);
+    remoteKeyFrame(&fake, &input, &screen, 90, 13, diagnostic);
+    remoteKeyFrame(&fake, &input, &screen, 100, 0, diagnostic);
+    assert(remoteKeyFrame(&fake, &input, &screen, 110, 15, diagnostic) == C4F_ACTION_RESUME);
+    assert(!screen.actionMenu);
+    assert(remoteKeyFrame(&fake, &input, &screen, 120, 15, diagnostic) == C4F_ACTION_NONE);
+    remoteKeyFrame(&fake, &input, &screen, 130, 0, diagnostic);
+    assert(remoteKeyFrame(&fake, &input, &screen, 140, 18, diagnostic) == C4F_ACTION_NONE);
+    assert(screen.actionMenu);
+    assert(remoteKeyFrame(&fake, &input, &screen, 150, 18, diagnostic) == C4F_ACTION_NONE);
+    assert(screen.actionMenu);
+    remoteKeyFrame(&fake, &input, &screen, 160, 0, diagnostic);
+    assert(remoteKeyFrame(&fake, &input, &screen, 170, 15, diagnostic) == C4F_ACTION_RESUME);
+
+    fake.source[C4F_INPUT_REMOTE].connected = 0;
+    assert(remoteKeyFrame(&fake, &input, &screen, 180, 13, diagnostic) == C4F_ACTION_NONE);
+    assert(!screen.actionMenu && fake.source[C4F_INPUT_REMOTE].closes == 1);
+    fake.source[C4F_INPUT_REMOTE].connected = 1;
+    assert(remoteKeyFrame(&fake, &input, &screen, 1179, 13, diagnostic) == C4F_ACTION_NONE);
+    assert(fake.source[C4F_INPUT_REMOTE].opens == 1);
+    assert(remoteKeyFrame(&fake, &input, &screen, 1180, 13, diagnostic) == C4F_ACTION_NONE);
+    assert(fake.source[C4F_INPUT_REMOTE].opens == 2 && !screen.actionMenu);
+    assert(remoteKeyFrame(&fake, &input, &screen, 1181, 13, diagnostic) == C4F_ACTION_NONE);
+    remoteKeyFrame(&fake, &input, &screen, 1190, 0, diagnostic);
+    assert(remoteKeyFrame(&fake, &input, &screen, 1200, 13, diagnostic) == C4F_ACTION_NONE);
+    assert(screen.actionMenu);
+    remoteKeyFrame(&fake, &input, &screen, 1210, 0, diagnostic);
+    assert(remoteKeyFrame(&fake, &input, &screen, 1220, 15, diagnostic) == C4F_ACTION_RESUME);
+    assert(!screen.actionMenu);
+    c4fInputClose(&input);
+    assert(fake.source[C4F_INPUT_REMOTE].closes == 2);
+    puts(diagnostic ? "PASS extended remote OK/Back/Options, held-key safety and reconnect in diagnostics"
+                    : "PASS extended remote OK/Back/Options, held-key safety and reconnect in the launcher");
 }
 
 static void heldRemoteConfirmation(void)
@@ -460,12 +546,15 @@ static void diagnosticNavigation(void)
 
 int main(void)
 {
+    remoteKeyNormalization();
     remoteOnly();
     sourceEdges();
     remoteOpenRetry();
     readerRecovery();
     unavailableUserAndBorrowedHandle();
     menuActions();
+    extendedRemoteNavigation(0);
+    extendedRemoteNavigation(1);
     heldRemoteConfirmation();
     stopConfirmation();
     unavailableActions();

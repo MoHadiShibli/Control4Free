@@ -1,6 +1,21 @@
 #include "input.h"
 #include <string.h>
 
+uint32_t c4fInputRemoteButtons(uint32_t rawButtons, uint8_t keyCode)
+{
+    /* PS5 SDL reads this Sony key table alongside ordinary pad buttons:
+     * https://github.com/ps5-payload-dev/SDL/blob/ee4c47dc0d617b3bc8f35108f9956baf228a1322/src/video/ps5/SDL_ps5remote.c
+     * Applying these navigation codes to PS4 is a hardware-test candidate;
+     * they are not the HDMI-CEC wire command numbers. */
+    if (rawButtons & C4F_INPUT_BUTTON_INTERCEPTED) return rawButtons;
+    switch (keyCode) {
+    case 13: return rawButtons | C4F_INPUT_BUTTON_CROSS;
+    case 15: return rawButtons | C4F_INPUT_BUTTON_CIRCLE;
+    case 18: return rawButtons | C4F_INPUT_BUTTON_OPTIONS;
+    default: return rawButtons;
+    }
+}
+
 static void c4fInputRelease(C4fInput *input, C4fInputSource *source, uint64_t retryAt)
 {
     if (source->handle >= 0 && source->owned && input->ops.close)

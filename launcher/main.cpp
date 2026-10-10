@@ -1,6 +1,7 @@
 /* Native PS4 launcher. The controller service runs outside this application. */
 #include <errno.h>
 #include <signal.h>
+#include <stddef.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -180,6 +181,7 @@ static_assert(C4F_INPUT_BUTTON_LEFT == ORBIS_PAD_BUTTON_LEFT, "Left button");
 static_assert(C4F_INPUT_BUTTON_CROSS == ORBIS_PAD_BUTTON_CROSS, "OK button");
 static_assert(C4F_INPUT_BUTTON_CIRCLE == ORBIS_PAD_BUTTON_CIRCLE, "Back button");
 static_assert(C4F_INPUT_BUTTON_OPTIONS == ORBIS_PAD_BUTTON_OPTIONS, "Menu button");
+static_assert(offsetof(OrbisPadData, unknown) + 3 == 108, "remote-control key byte");
 
 enum { C4F_INPUT_WAITING, C4F_INPUT_READY, C4F_INPUT_DISCONNECTED,
        C4F_INPUT_OPEN_FAILED, C4F_INPUT_READ_FAILED, C4F_INPUT_USER_FAILED };
@@ -187,6 +189,8 @@ enum { C4F_INPUT_WAITING, C4F_INPUT_READY, C4F_INPUT_DISCONNECTED,
 typedef struct {
     int initialized, handles[2], state[2];
     uint32_t error[2], buttons[2];
+    uint32_t remoteLastRawButtons;
+    uint8_t remoteLastKey;
 } C4fNativeInput;
 
 static const char *const c4fInputNames[] = { "DS4", "TV remote" };
@@ -241,7 +245,20 @@ static int c4fNativeRead(void *context, int handle, uint32_t *buttons, int *conn
     OrbisPadData sample;
     memset(&sample, 0, sizeof(sample));
     int result = scePadReadState(handle, &sample);
-    *buttons = result == 0 && sample.connected ? sample.buttons : 0;
+    uint32_t mappedButtons = sample.buttons;
+    if (source == C4F_INPUT_REMOTE && result == 0) {
+        /* The SDK's byte108 is deviceUniqueData[0] in the reverse PS4 layout.
+         * PS5 implementations use it for remote Enter/Back/Menu even when the
+         * device-data length is zero. PS4 key decoding still needs hardware
+         * confirmation. */
+        uint8_t keyCode = sample.unknown[3];
+        if (keyCode || sample.buttons) {
+            input->remoteLastKey = keyCode;
+            input->remoteLastRawButtons = sample.buttons;
+        }
+        mappedButtons = c4fInputRemoteButtons(sample.buttons, keyCode);
+    }
+    *buttons = result == 0 && sample.connected ? mappedButtons : 0;
     *connected = result == 0 && sample.connected;
     c4fNativeInputState(input, source, result ? C4F_INPUT_READ_FAILED :
                        sample.connected ? C4F_INPUT_READY : C4F_INPUT_DISCONNECTED, result);
@@ -253,11 +270,12 @@ static void c4fNativeClose(void *, int handle) { scePadClose(handle); }
 
 static void c4fNativeInputNote(const C4fNativeInput *input, char *note, size_t size)
 {
-    char source[2][72];
-    for (int i = 0; i < 2; i++)
-        snprintf(source[i], sizeof(source[i]), "%s: %s (0x%08x)", c4fInputNames[i],
-                 c4fInputStates[input->state[i]], input->error[i] ? input->error[i] : input->buttons[i]);
-    snprintf(note, size, "%s; %s", source[0], source[1]);
+    snprintf(note, size, "%s: %s (0x%08x); %s: %s (0x%08x), last key 0x%02x / raw 0x%08x",
+             c4fInputNames[0], c4fInputStates[input->state[0]],
+             input->error[0] ? input->error[0] : input->buttons[0],
+             c4fInputNames[1], c4fInputStates[input->state[1]],
+             input->error[1] ? input->error[1] : input->buttons[1],
+             (unsigned)input->remoteLastKey, input->remoteLastRawButtons);
 }
 
 int main(void)

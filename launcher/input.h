@@ -21,6 +21,9 @@ enum { C4F_INPUT_PORT_STANDARD = 0, C4F_INPUT_PORT_REMOTE = 16 };
 #define C4F_INPUT_BUTTON_CIRCLE   UINT32_C(0x002000)
 #define C4F_INPUT_BUTTON_CROSS    UINT32_C(0x004000)
 #define C4F_INPUT_BUTTON_SQUARE   UINT32_C(0x008000)
+/* PS4 reverse definitions identify bit31 as system-intercepted input. This is
+ * a read-side flag, not an additional virtual-controller button. */
+#define C4F_INPUT_BUTTON_INTERCEPTED UINT32_C(0x80000000)
 
 typedef struct {
     void *context;
@@ -57,6 +60,9 @@ typedef struct {
 extern "C" {
 #endif
 void c4fInputInit(C4fInput *input, const C4fInputOps *ops);
+/* Adds navigation keys reported separately by the system remote-control
+ * stream, preserving the ordinary button mask and unknown key codes. */
+uint32_t c4fInputRemoteButtons(uint32_t rawButtons, uint8_t keyCode);
 /* Each recovered source requires a neutral sample before generating edges.
  * Failure or disconnect produces neutral input and a bounded retry. */
 void c4fInputPoll(C4fInput *input, uint64_t now, C4fInputFrame *frame);

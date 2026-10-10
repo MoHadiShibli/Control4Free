@@ -152,7 +152,8 @@ C4fLauncherAction c4fNavigate(C4fLauncherScreen *screen, uint32_t standardPresse
     }
     /* A TV remote needs an action menu because it has no Triangle or Square.
      * In diagnostic mode its arrows keep the existing paging and scrolling. */
-    if ((remotePressed & C4F_NAV_OK) || (!diagnostic && (pressed & C4F_NAV_DIRECTIONS))) {
+    if ((remotePressed & (C4F_NAV_OK | C4F_INPUT_BUTTON_OPTIONS)) ||
+        (!diagnostic && (pressed & C4F_NAV_DIRECTIONS))) {
         c4fConsume(standardUnhandled, remoteUnhandled);
         screen->actionMenu = 1;
         screen->actionFocus = c4fDefaultAction(screen, diagnostic);

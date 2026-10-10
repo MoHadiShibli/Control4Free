@@ -192,7 +192,7 @@ def main():
         package.render(['screen', state], png, 1920, 1080)
         assert png.stat().st_size > 50000, png
     package.build_art_tool(diagnostic=True)
-    for state in ('remote-actions-diag', 'remote-confirm-diag'):
+    for state in ('remote-actions-diag', 'remote-confirm-diag', 'remote-input-diag'):
         png = ROOT / f'build/launcher-preview-{state}.png'
         package.render(['screen', state], png, 1920, 1080, diagnostic=True)
         assert png.stat().st_size > 50000, png

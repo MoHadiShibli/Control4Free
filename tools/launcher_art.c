@@ -67,7 +67,8 @@ int main(int argc, char **argv)
         message = "Ready. Open the address on your phone or PC.";
     } else if (!strcmp(state, "setup")) {
         s.autorun = C4F_AUTORUN_OFF; message = "Not running.";
-    } else if (!strcmp(state, "stopped") || !strcmp(state, "remote-actions-stopped") || !strcmp(state, "remote-actions-diag")) {
+    } else if (!strcmp(state, "stopped") || !strcmp(state, "remote-actions-stopped") ||
+               !strcmp(state, "remote-actions-diag") || !strcmp(state, "remote-input-diag")) {
         message = "Stopped. Choose Start in Actions or press Cross to start it again.";
     } else if (!strcmp(state, "busy") || !strcmp(state, "remote-actions-busy")) {
         s.running = -1; s.busy = 1; s.autorun = C4F_AUTORUN_UNKNOWN; message = "Setting up Control4Free. Please wait...";
@@ -94,6 +95,13 @@ int main(int argc, char **argv)
     uint32_t *pixels = calloc((size_t)C4F_SCREEN_WIDTH * C4F_SCREEN_HEIGHT, sizeof(uint32_t));
     if (!pixels) return 2;
 #ifdef C4F_DIAG
+    if (!strcmp(state, "remote-input-diag")) {
+        snprintf(s.inputNote, sizeof(s.inputNote),
+                 "DS4: disconnected (0x00000000); TV remote: ready (0x00000000), last key 0x0d / raw 0x00000000");
+        C4fDiagState diagnostic = { s.running, s.controllers, s.autorun, s.locked,
+            s.busy, s.confirmStop, s.runningVersion, "", s.message, s.address, "", s.inputNote };
+        c4fDiagRefresh(&diagnostic);
+    }
     c4fDrawDiag(pixels, &s);
 #else
     c4fDrawLauncher(pixels, &s);
