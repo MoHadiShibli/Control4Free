@@ -371,8 +371,8 @@ static char *c4fSummary(const C4fDiagState *s)
                    ">> here and take screenshots of pages 1 and 2: page 2 lists every connection it saw.\n",
                s->version, s->address[0] ? s->address : "the PS4's address with :4264");
     else if (c4fStarted && c4fContains(c4fStartMessage, "PayLoader did not answer"))
-        c4fAdd(&t, ">> GoldHEN's PayLoader (port 9090) did not take the payload. Turn PayLoader on in GoldHEN's\n"
-                   ">> settings, then press Cross again.\n");
+        c4fAdd(&t, ">> GoldHEN's PayLoader Server (port 9090) did not take the payload. Open GoldHEN > Server Settings,\n"
+                   ">> check Enable PayLoader Server, then retry Start.\n");
     else if (c4fStarted && c4fStartResult == -2 && !c4fLogChanged)
         c4fAdd(&t, ">> The payload was handed to PayLoader, but Control4Free's own code never ran (it wrote no log).\n"
                    ">> PayLoader did not run it, or it stopped while starting up on this firmware. The kernel log\n"

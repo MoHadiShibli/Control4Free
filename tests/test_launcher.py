@@ -185,14 +185,14 @@ def main():
     sys.path.insert(0, str(ROOT / 'tools'))
     import package_launcher as package
     package.build_art_tool()
-    for state in ('setup', 'running', 'stopped', 'outdated', 'mismatch', 'confirm', 'busy', 'locked', 'unknown',
+    for state in ('setup', 'running', 'stopped', 'payloader-unavailable', 'outdated', 'mismatch', 'confirm', 'busy', 'locked', 'unknown',
                   'remote-actions-stopped', 'remote-actions-running', 'remote-confirm-cancel',
                   'remote-confirm-stop', 'remote-actions-busy', 'remote-actions-unavailable'):
         png = ROOT / f'build/launcher-preview-{state}.png'
         package.render(['screen', state], png, 1920, 1080)
         assert png.stat().st_size > 50000, png
     package.build_art_tool(diagnostic=True)
-    for state in ('remote-actions-diag', 'remote-confirm-diag', 'remote-input-diag'):
+    for state in ('remote-actions-diag', 'remote-confirm-diag', 'remote-input-diag', 'payloader-unavailable-diag'):
         png = ROOT / f'build/launcher-preview-{state}.png'
         package.render(['screen', state], png, 1920, 1080, diagnostic=True)
         assert png.stat().st_size > 50000, png

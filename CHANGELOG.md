@@ -3,16 +3,20 @@
 Versions follow [Semantic Versioning](https://semver.org): PATCH for fixes, MINOR for features that break
 nothing, MAJOR for anything people rely on that changes.
 
-## 1.2.1 — 2026-10-10
+## 1.2.1 — 2026-10-11
 
 HDMI-CEC navigation for the PS4 app.
 
-- Added a TV-remote reader and an Actions menu to the PS4 app for HDMI-CEC navigation with
-  arrows and OK. Includes input recovery, separate Stop confirmation and diagnostic navigation.
-  Handles separate Sony remote Enter/Back/Menu key codes alongside DS4 button bits and retains
-  the last received key in diagnostics. The first PS4 test connected the remote but could not
-  select actions; the follow-up decoding still needs hardware confirmation before publication.
-  See the [HDMI-CEC test guide](docs/hdmi-cec.md).
+- Use your TV remote to control the PS4 app through HDMI-CEC. Press **OK** to open **Actions**,
+  use the arrows to choose, and press **OK** again. **Back** returns; Stop has a separate confirmation.
+  The diagnostic app also supports remote navigation and retains the last received remote key.
+  See [HDMI-CEC navigation](docs/hdmi-cec.md).
+- If the app cannot reach PayLoader, it tells you to enable **GoldHEN → Server Settings → Enable
+  PayLoader Server** and retry Start. The setup message now fits on screen, and the installation
+  guide explains when the server is needed.
+
+Thanks to [NotDev-Kike](https://github.com/MoHadiShibli/Control4Free/issues/3#issuecomment-6103983733)
+for testing and confirming OK, arrows, Back and service startup with a Samsung TV remote on firmware 11.02.
 
 ## 1.2.0 — 2026-10-09
 

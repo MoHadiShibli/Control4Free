@@ -444,13 +444,13 @@ static C4fLook c4fLookFor(const C4fLauncherScreen *s, char *meta, size_t metaSiz
                           meta, C4F_OK, C4F_ACCENT, 1 };
     } else if (s->running == 0 && s->autorun == C4F_AUTORUN_ON) {
         look = (C4fLook){ "Stopped", "Start Control4Free",
-                          "It starts with GoldHEN after each restart. Turn on GoldHEN's PayLoader, then choose "
-                          "Start Control4Free in Actions or press Cross.",
+                          "It starts with GoldHEN after each restart. To start now, enable GoldHEN's PayLoader "
+                          "Server and press Cross.",
                           "Not running", C4F_FAINT, C4F_FAINT, 0 };
     } else if (s->running == 0) {
         look = (C4fLook){ "Stopped", "Set up Control4Free",
-                          "Choose Set up and start in Actions, or press Cross. GoldHEN will start Control4Free "
-                          "each time it loads; it starts now if GoldHEN's PayLoader is on.",
+                          "Press Cross to set up auto-start. To start Control4Free now, enable GoldHEN's "
+                          "PayLoader Server.",
                           "Not running", C4F_FAINT, C4F_FAINT, 0 };
     }
     return look;
@@ -602,7 +602,7 @@ void c4fDrawLauncher(uint32_t *pixels, const C4fLauncherScreen *s)
     if (mismatch) {
         snprintf(versions, sizeof(versions), "Installed %s; running %s", C4F_LAUNCHER_VERSION, s->runningVersion);
         panelTitle = versions;
-        panelText = "Choose Stop in Actions, confirm, then Start to apply this app's version. Square, Cross, then Cross also works. All players disconnect.";
+        panelText = "Press Square, then Cross to stop, and Cross again to start this app's version. All players disconnect.";
         panelDot = C4F_WARN;
     } else if (s->autorun == C4F_AUTORUN_ON) {
         panelTitle = "Starts by itself with GoldHEN";
@@ -611,11 +611,11 @@ void c4fDrawLauncher(uint32_t *pixels, const C4fLauncherScreen *s)
         panelDot = C4F_OK;
     } else if (s->autorun == C4F_AUTORUN_OUTDATED) {
         panelTitle = "Auto-start uses an older Control4Free";
-        panelText = "Choose Update auto-start in Actions or press Triangle. GoldHEN uses this version after the next restart.";
+        panelText = "Press Triangle to update auto-start. GoldHEN uses this version after the next restart.";
         panelDot = C4F_WARN;
     } else if (s->autorun == C4F_AUTORUN_OFF) {
         panelTitle = "Auto-start is off";
-        panelText = "Choose Turn auto-start on in Actions or press Triangle. GoldHEN then starts Control4Free each time it loads.";
+        panelText = "Press Triangle to turn auto-start on. GoldHEN then starts Control4Free each time it loads.";
     } else {
         panelTitle = "Auto-start status unknown";
         panelText = s->autorunNote[0] ? s->autorunNote : "Checking with GoldHEN...";

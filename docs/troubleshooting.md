@@ -129,8 +129,9 @@ has loaded, and check it has a controller under **Gamepads on this device**.
 
 ## In the app on the PS4
 
-**"PayLoader did not answer."** Turn on GoldHEN's PayLoader and press **Cross** again, or restart the PS4 and
-run the jailbreak: with auto-start on, Control4Free starts by itself.
+**"PayLoader did not answer."** Open **GoldHEN → Server Settings → Enable PayLoader Server**, check the
+option and retry **Start** in the app, or restart the PS4 and run the jailbreak: with auto-start on,
+Control4Free starts by itself.
 
 **"Control4Free is not responding."** Wait a few seconds after the PS4 wakes from rest mode, then press
 **Cross** again. If it stays stuck, restart the PS4 and run the jailbreak.

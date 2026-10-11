@@ -6,7 +6,7 @@
   <a href="https://github.com/MoHadiShibli/Control4Free/releases/latest"><img src="https://img.shields.io/github/v/release/MoHadiShibli/Control4Free?label=release" alt="Latest release"></a>
   <a href="https://github.com/MoHadiShibli/Control4Free/actions/workflows/build.yml"><img src="https://github.com/MoHadiShibli/Control4Free/actions/workflows/build.yml/badge.svg" alt="Build"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-GPL--3.0-blue" alt="License: GPL v3"></a>
-  <a href="https://ko-fi.com/mohadishibli"><img src="https://img.shields.io/badge/Ko--fi-support%20this%20project-FF5E5B?logo=ko-fi&logoColor=white" alt="Support on Ko-fi"></a>
+  <a href="https://liberapay.com/MoHadiShibli/"><img src="https://img.shields.io/badge/Liberapay-support%20this%20project-F6C915?logo=liberapay&logoColor=black" alt="Support on Liberapay"></a>
 </p>
 
 **Use your phone or PC as a PS4 controller: on the home screen, at sign-in, and in games.**
@@ -48,7 +48,7 @@ sees a virtual DualShock 4, which provides:
   light-bar colour, the one the PS4 or the game sets.
 - **Fast.** Input reaches the console the moment it arrives, at a DualShock 4's own rate while you play.
 - **An app on the PS4** that shows the address and a QR code, how many controllers are connected, and starts
-  or stops Control4Free.
+  or stops Control4Free. Use a controller or your TV remote through [HDMI-CEC](docs/hdmi-cec.md).
 - **Starts by itself.** One button in the app sets up GoldHEN's AutoRun, so Control4Free is ready after
   every restart.
 - **On your phone's home screen**, like an app.
@@ -60,8 +60,8 @@ sees a virtual DualShock 4, which provides:
 1. Download `Control4Free-<version>.pkg` from the [latest release](https://github.com/MoHadiShibli/Control4Free/releases/latest).
 2. Install it with GoldHEN's Package Installer: **Settings → Debug Settings → Game → Package Installer**, from a
    USB drive or `/data/pkg/`.
-3. Open **Control4Free** from **Library → Applications** and press **Cross**. It sets up auto-start and
-   starts Control4Free.
+3. Enable **GoldHEN → Server Settings → Enable PayLoader Server**, then open **Control4Free** from
+   **Library → Applications** and press **Cross**. It sets up auto-start and starts Control4Free.
 4. On your phone or PC, scan the QR code or open the address shown, for example `http://192.168.1.20:4264`.
    Pick a controller, then choose your user on the PS4.
 
@@ -78,6 +78,7 @@ New to GoldHEN packages? The **[installation guide](docs/installation.md)** walk
 - **[Installation](docs/installation.md)**: requirements, installing, auto-start, updating, uninstalling.
 - **[Playing](docs/playing.md)**: signing in, touch, keyboard and gamepads, the layout editor, settings.
 - **[Gamepad mapping](docs/gamepad-mapping.md)**: profiles, calibration and using several input devices together.
+- **[HDMI-CEC navigation](docs/hdmi-cec.md)**: using your TV remote in the PS4 app.
 - **[Troubleshooting](docs/troubleshooting.md)**: the messages you might see and what to do about each.
 - **[How it works](docs/how-it-works.md)**: the virtual-device API, sign-in, and what runs where.
 - **[Protocol](docs/protocol.md)**: the WebSocket protocol between the page and the console.
@@ -87,10 +88,12 @@ New to GoldHEN packages? The **[installation guide](docs/installation.md)** walk
 
 ## Requirements and compatibility
 
-- A PS4 with GoldHEN v2.4b18.10 or later. Tested on firmware 10.01, 13.02, 13.04 and 13.52; the
+- A PS4 with GoldHEN v2.4b18.10 or later. Tested on firmware 10.01, 11.02, 13.02, 13.04 and 13.52; the
   [compatibility table](docs/installation.md#compatibility) lists every firmware and the GoldHEN version it
   needs.
 - A phone, tablet or computer with a browser, on the same network as the PS4.
+- To start the service directly from the app, enable **GoldHEN → Server Settings → Enable PayLoader
+  Server**. AutoRun can start it without this server.
 - Turn off other GoldHEN controller plugins in games you play with Control4Free. A plugin that takes over a
   signed-in user's controller can stop games from reading the virtual ones.
 - A Remote Play session (chiaki-ng, for example) works alongside Control4Free.
@@ -121,7 +124,7 @@ Found a bug? Install the diagnostic package from the latest release first, then
 [open an issue](https://github.com/MoHadiShibli/Control4Free/issues/new/choose) with its screenshots (see
 [Reporting a problem](docs/troubleshooting.md#reporting-a-problem)). I maintain this project and read every
 report. If Control4Free is useful to you, you can help keep it going on
-[Ko-fi](https://ko-fi.com/mohadishibli).
+[Liberapay](https://liberapay.com/MoHadiShibli/).
 
 ## Credits
 

@@ -14,6 +14,9 @@ Control4Free comes in two pieces:
   run ELF payloads like Control4Free reliably, and have no auto-start. See [Compatibility](#compatibility) for
   each firmware.
 - **Debug Settings** turned on in GoldHEN, for the Package Installer.
+- **PayLoader Server** enabled for starting the service directly from the app:
+  **GoldHEN → Server Settings → Enable PayLoader Server**. AutoRun and Payloader LaunchPad can start the
+  service without this server.
 - A phone, tablet or computer with a modern browser, on the same network as the PS4.
 
 ## Compatibility
@@ -25,12 +28,13 @@ Control4Free's start-up code, but nobody has tried them yet.
 | Firmware | GoldHEN | Status |
 |---|---|---|
 | 10.01 | v2.4b18.10 or later | **Tested** (v2.4b18.10) |
+| 11.02 | v2.4b18.10 or later | **Tested** (v2.4b18.12) |
 | 13.02, 13.04 | v2.4b18.12 or later | **Tested** (v2.4b18.12) |
 | 13.52 | v2.4b18.11 or later | **Tested** (v2.4b18.12), with Control4Free 1.1.1 or later |
 | 13.50 | v2.4b18.12 or later | Not tested |
 | 13.00 | v2.4b18.10 or later | Not tested |
 | 12.00, 12.02, 12.50, 12.52 | v2.4b18.10 or later | Not tested |
-| 5.05, 6.71, 6.72, 7.0x, 7.5x, 8.0x, 8.5x, 9.0x, 9.5x, 9.60, 10.00, 10.50, 10.70, 10.71, 11.0x, 11.5x | v2.4b18.10 or later | Not tested |
+| 5.05, 6.71, 6.72, 7.0x, 7.5x, 8.0x, 8.5x, 9.0x, 9.5x, 9.60, 10.00, 10.50, 10.70, 10.71, other 11.0x, 11.5x | v2.4b18.10 or later | Not tested |
 
 The older a firmware, the less certain it is that the PS4's virtual-controller API behaves as on the tested
 ones. If you try an untested firmware, an issue saying whether it worked helps others, with a
@@ -50,13 +54,15 @@ The app appears in **Library → Applications**.
 
 ## First start
 
-Open **Control4Free** and press **Cross**. The app:
+In GoldHEN, open **Server Settings** and check **Enable PayLoader Server**. Then open **Control4Free** and
+press **Cross**. The app:
 
 1. copies the service to `/data/payloads/control4free.elf`;
 2. adds it to GoldHEN's AutoRun list, `/data/GoldHEN/payloads.ini`, so GoldHEN starts it every time it
    loads;
-3. starts it straight away if GoldHEN's **PayLoader** is on. If it isn't, turn PayLoader on in GoldHEN's
-   settings and press **Cross** again. AutoRun also starts Control4Free each time GoldHEN loads.
+3. starts it straight away through GoldHEN's PayLoader Server. If the server is unavailable, auto-start
+   stays enabled; enable PayLoader Server and retry, or let AutoRun start Control4Free the next time
+   GoldHEN loads.
 
 Once it's running, the app shows the address to open, for example `http://192.168.1.20:4264`, and a QR code
 for your phone's camera. The PS4 also shows the address in a notification when the service starts.
@@ -78,8 +84,9 @@ screen, that's fine too: the app doesn't get in the way of Control4Free.
 | **Square**, then **Cross** | Stops Control4Free and disconnects every controller. |
 | **Circle** | Closes the app. Control4Free keeps running without it. |
 
-TV-remote navigation is being tested in the development app. See the
-[HDMI-CEC test guide](hdmi-cec.md); the published package does not yet include it.
+With a TV remote over HDMI-CEC, press **OK** to open **Actions**, use the arrows to choose,
+and press **OK** again. **Back** returns. See [HDMI-CEC navigation](hdmi-cec.md) for setup
+and compatibility.
 
 ## Updating
 

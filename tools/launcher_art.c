@@ -71,7 +71,9 @@ int main(int argc, char **argv)
         s.autorun = C4F_AUTORUN_OFF; message = "Not running.";
     } else if (!strcmp(state, "stopped") || !strcmp(state, "remote-actions-stopped") ||
                !strcmp(state, "remote-actions-diag") || !strcmp(state, "remote-input-diag")) {
-        message = "Stopped. Choose Start in Actions or press Cross to start it again.";
+        message = "Stopped. Ready to start again.";
+    } else if (!strcmp(state, "payloader-unavailable") || !strcmp(state, "payloader-unavailable-diag")) {
+        message = "Auto-start is on. PayLoader did not answer (errno 61). Enable PayLoader Server in GoldHEN > Server Settings, then retry Start.";
     } else if (!strcmp(state, "busy") || !strcmp(state, "remote-actions-busy")) {
         s.running = -1; s.busy = 1; s.autorun = C4F_AUTORUN_UNKNOWN; message = "Setting up Control4Free. Please wait...";
     } else if (!strcmp(state, "locked") || !strcmp(state, "remote-actions-unavailable")) {
@@ -97,15 +99,16 @@ int main(int argc, char **argv)
     uint32_t *pixels = calloc((size_t)C4F_SCREEN_WIDTH * C4F_SCREEN_HEIGHT, sizeof(uint32_t));
     if (!pixels) return 2;
 #ifdef C4F_DIAG
-    if (!strcmp(state, "remote-input-diag")) {
+    if (!strcmp(state, "remote-input-diag") || !strcmp(state, "payloader-unavailable-diag")) {
         snprintf(s.inputNote, sizeof(s.inputNote),
                  "DS4: disconnected (0x00000000); TV remote: ready (0x00000000), last key 0x0d / raw 0x00000000");
-        char summary[512];
+        char summary[768];
         snprintf(summary, sizeof(summary),
                  ">> Example input data for layout review.\n\nConsole\n"
                  "  system software: example\n\nThis app\n  version %s\n"
                  "  input: %s\n\nService (port 4264)\n  not running\n\n"
-                 "Auto-start\n  state: on\n", C4F_LAUNCHER_VERSION, s.inputNote);
+                 "Auto-start\n  state: on\n\nLast start from this app\n  message: %s\n",
+                 C4F_LAUNCHER_VERSION, s.inputNote, s.message);
         c4fDiagPreviewPage(0, summary);
     }
     c4fDrawDiag(pixels, &s);

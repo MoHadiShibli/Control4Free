@@ -43,7 +43,7 @@ static int c4fSetUp(char *message, size_t size)
     result = c4fLauncherStart(payload, payloadSize, started, sizeof(started));
     if (result == 0) snprintf(message, size, "Set up and running. GoldHEN will also start it after each restart.");
     else if (result == -2) snprintf(message, size, "%s", started);
-    else snprintf(message, size, "Auto-start is on: Control4Free starts the next time GoldHEN loads. %s", started);
+    else snprintf(message, size, "Auto-start is on. %s", started);
     return result == -2 ? -2 : 0;
 }
 

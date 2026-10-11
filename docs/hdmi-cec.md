@@ -1,18 +1,21 @@
-# HDMI-CEC navigation — development build
+# HDMI-CEC navigation
 
-The development app includes a TV-remote input reader and an **Actions** menu.
-PS4 testing is in progress; this is not part of the already-published release.
-It addresses [issue #3](https://github.com/MoHadiShibli/Control4Free/issues/3), where a Samsung
-TV remote navigates the PS4 home screen but stops responding inside Control4Free.
+Use your TV remote to start and stop Control4Free, manage auto-start, and navigate the PS4 app.
+The normal and diagnostic packages include an **Actions** menu for remotes.
 
-## Using the remote
+## Set up
 
 Enable **Settings → System → Enable HDMI Device Link** on the PS4 and HDMI-CEC on the TV.
 The setting's name depends on the TV model. First check that the
-remote's arrows and OK can navigate the PS4 home screen. TV model and connection-chain
-compatibility varies; see [Sony's HDMI Device Link guide](https://manuals.playstation.net/document/en/ps4/settings/devicelink.html).
+remote's arrows and OK can navigate the PS4 home screen. TV and receiver/switch compatibility
+varies; see [Sony's HDMI Device Link guide](https://manuals.playstation.net/document/en/ps4/settings/devicelink.html).
 
-In the development app:
+To start the service directly from the app, enable **GoldHEN → Server Settings → Enable
+PayLoader Server**. If the app says PayLoader did not answer, enable it and retry Start.
+The app cannot enable this GoldHEN setting automatically. AutoRun can start the service
+after a restart without the server; see [Installation](installation.md).
+
+## Using the remote
 
 1. Press **OK** to open **Actions**. A Menu key can also open it if exposed by the PS4.
 2. Use the arrows to choose an action, then press **OK** again. The menu includes setup/start,
@@ -26,7 +29,9 @@ Existing DualShock 4 shortcuts work outside the menu. Its D-pad can also open an
 Actions in the normal app. Service operations finish before another operation or Close is
 available. Release held buttons after opening the app, reconnecting or returning to it.
 
-In the diagnostic app, **Left/Right** change pages and **Up/Down** scroll while the menu is
+## Diagnostic app
+
+**Left/Right** change pages and **Up/Down** scroll while the menu is
 closed. **OK** opens Actions, which also includes **Capture kernel log**. Menu arrows move
 the selection without changing the page underneath it. The Summary page reports DS4 and
 TV-remote input status; a ready source shows its navigation button mask, and a failed source
@@ -34,26 +39,23 @@ shows the native error code. It also retains the last active remote sample's key
 button mask, so a short press remains visible after you release it. These values describe
 the PS4's input data; they are not HDMI-CEC wire command numbers.
 
-The first test on firmware 11.02 with a Samsung UN55NU7090P and AA59-00818A remote showed
-a connected remote reader and an open Actions menu, but OK did not select an action. The
-follow-up build handles a separate Sony remote Enter/Back/Menu key field alongside ordinary
-DS4 button bits. These codes are used by [PS5 SDL's remote input implementation](https://github.com/ps5-payload-dev/SDL/blob/ee4c47dc0d617b3bc8f35108f9956baf228a1322/src/video/ps5/SDL_ps5remote.c); their behavior on this
-PS4 setup still needs confirmation. If OK fails again, press and release OK, then photograph
-the Summary page or send its saved diagnostic report with the retained key and raw mask.
+If a remote fails inside the app, press and release the affected button, then photograph
+Summary or save its report. See [Reporting a problem](troubleshooting.md#reporting-a-problem).
 
-## Test before release
+## Confirmed setup and limits
 
-Use the locally built normal and diagnostic packages. Record the PS4 firmware, GoldHEN
-version, TV model and any receiver/switch between the TV and console. Verify:
+| TV | Remote | PS4 firmware | GoldHEN | Confirmed behavior |
+|---|---|---|---|---|
+| Samsung UN55NU7090P | AA59-00818A (TM1240) | 11.02 | v2.4b18.12 | OK, arrows, RETURN/Back and service startup with PayLoader Server enabled |
 
-- App launch and arrows/OK with physical DS4s disconnected, then with a DS4 connected.
-- Setup/start, auto-start on/off, updating an older auto-start copy, Stop confirmation,
-  Resume and Close. Holding OK must not activate an action twice.
-- Diagnostic page navigation, scrolling and action selection.
-- Switching the TV's HDMI input away and back, returning from the PS4 home screen, and rest/wake.
-- Recovery after the remote becomes unavailable; a held button must be released before it acts again.
+This setup was [confirmed by NotDev-Kike](https://github.com/MoHadiShibli/Control4Free/issues/3#issuecomment-6103983733)
+with no physical DS4 connected. Other TV/remote models, simultaneous DS4 use, HDMI input
+switching and rest/wake behavior still need hardware reports. Held-button handling, recovery
+and Stop confirmation have automated tests; their hardware behavior was not separately reported.
 
-Complete TV-remote navigation remains unverified until these checks pass on a PS4. The app reads the system's
-remote-control stream independently of DS4 input; it does not change the console's HDMI
-settings, create virtual controllers, or forward TV keys to games or browser controllers.
-Media/color keys and TV power/volume control are outside this implementation.
+The app reads the PS4's remote-control stream independently of DS4 input. TV keys control
+the app only. Media/color keys and TV power/volume control are outside this implementation.
+
+For another setup, report the TV and remote models, PS4 firmware, GoldHEN version, any
+receiver/switch between TV and console, and which buttons work. Diagnostic screenshots help
+identify inputs the PS4 exposes.
