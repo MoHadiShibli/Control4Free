@@ -78,6 +78,9 @@ appears under **Gamepads on this device**:
 
 Keep the page's window in front: browsers only read gamepads for the active window.
 
+A DualShock 4's or DualSense's touchpad clicks, but browsers don't pass on where the fingers are. Link it
+under [Experimental features](#experimental-features) and its touches work too.
+
 With several Xbox controllers on Chrome or Edge for Windows, check that each Xbox button appears on its
 own gamepad in **Gamepad Controls**. Some browser backends combine those presses; see the
 [GameInput workaround](troubleshooting.md#gamepads). This is not a general Control4Free requirement.
@@ -90,7 +93,8 @@ way.
 ## Settings
 
 **☰ → All settings** has this device's settings. They stay in this browser.
-**Gamepads** in the settings changes each gamepad's mapping, and **Keyboard** the keys.
+**Gamepads** in the settings changes each gamepad's mapping, and **Keyboard** the keys. **Experimental** has
+extras that stay off until you turn them on: see [Experimental features](#experimental-features).
 
 | Setting | What it does |
 |---|---|
@@ -127,11 +131,41 @@ When a game rumbles the controller, the device driving it feels it:
 - **a gamepad** playing as that controller rumbles too, though not every controller supports vibration in
   the browser. When the browser knows it can't, the gamepad's row says *no rumble in this browser*.
 
-A gamepad's own light bar stays as it is: browsers don't let pages change it.
+A gamepad's own light bar stays as it is, unless you link a DualShock 4 or DualSense under
+[Experimental features](#experimental-features).
 
 The page also glows in the controller's **light-bar colour**: the player colour the PS4 gives each user, or
 whatever colour the game sets. Until one is set, a controller shows its own colour (1 blue, 2 red, 3 green,
 4 pink).
+
+## Experimental features
+
+**☰ → All settings → Experimental** has three switches. Each stays off until you turn it on, and is saved in
+this browser only. With all three off, the page works exactly as it does without them.
+
+| Switch | What it does | Where it works |
+|---|---|---|
+| **Lights and rumble on Sony controllers** | A DualShock 4 or DualSense connected to a computer lights up in its PS4 controller's colour and rumbles directly, a DualSense included. Its touchpad passes on fingers, not only clicks: browsers' gamepads leave touches out. Press **Link** next to the controller and choose it in the browser's list. | Chrome or Edge on a computer |
+| **Trigger rumble** | Xbox controllers rumble in their triggers as well, and a linked DualSense vibrates its triggers, both following the game's rumble. PS4 games don't ask for this: Control4Free makes it up from the rumble. | Xbox controllers in Chrome or Edge on Windows; a linked DualSense |
+| **Motion controls** | Tilting the phone, or a linked DualShock 4 or DualSense, moves the PS4 controller's motion sensors. Hold the phone sideways with the screen towards you, like a controller. **Recenter** makes the way you hold it now the resting position. | Chrome on Android; a linked controller on a computer |
+
+Linking and motion use features browsers only give secure pages, and the console's page is plain `http`.
+[Experimental features](troubleshooting.md#experimental-features) in the troubleshooting guide explains how to
+let Chrome or Edge treat it as secure.
+
+## Testing controllers on the PS4
+
+The app on the PS4 shows what each signed-in user's controller sends, read the way a game reads it. Press
+**Options** in the app, or choose **Actions → Test controllers** with the TV remote.
+
+- The picture lights up each button as it's pressed, moves the sticks, fills L2 and R2 as far as they're
+  pulled, and shows each finger on the touchpad. The panel beside it has the numbers, motion included.
+- **PS** and **Share** go to the PS4 itself, so the test doesn't show them.
+- Hold **L3 + R3** for two seconds for its menu: choose another signed-in user, rumble the large or the small
+  motor, set the light bar red, green or blue, reset it, reset the orientation, or go back. The light bar
+  goes back to normal when you leave.
+- A controller from the page shows up under the user signed in on it, so the test also checks the page, a
+  gamepad or a keyboard from the PS4's side.
 
 ## Leaving
 

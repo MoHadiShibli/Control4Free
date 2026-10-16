@@ -43,6 +43,50 @@ static int c4fPrintSvg(void)
     return 0;
 }
 
+/* Controller test states, with example readings: 1 when state is one, 0 when it
+ * is not a test state, -1 for an unknown one. */
+static int c4fTesterPreview(const char *state, C4fLauncherScreen *s)
+{
+    C4fTesterView *v = &s->tester;
+    if (strncmp(state, "tester", 6)) return 0;
+    v->active = 1;
+    v->selected = 0;
+    snprintf(v->user[0].name, sizeof(v->user[0].name), "Alex");
+    snprintf(v->user[1].name, sizeof(v->user[1].name), "Sam");
+    v->user[0].used = v->user[1].used = 1;
+    v->user[0].state = v->user[1].state = C4F_TESTER_READY;
+    v->lx = v->ly = v->rx = v->ry = 128;
+    v->quat[3] = 1000;
+    if (!strcmp(state, "tester")) {
+        v->buttons = 0x4000 | 0x0400 | 0x0010 | 0x0200; /* Cross, L1, Up, R2 */
+        v->lx = 40; v->ly = 90; v->rx = 210; v->r2 = 180;
+        v->touches = 1; v->touchX[0] = 1300; v->touchY[0] = 420;
+        v->accel[1] = 100;
+    } else if (!strcmp(state, "tester-motion")) {
+        v->buttons = 0x0002 | 0x100000; /* L3, touchpad click */
+        v->l2 = 60;
+        v->touches = 2; v->touchX[0] = 420; v->touchY[0] = 300; v->touchX[1] = 1500; v->touchY[1] = 700;
+        v->accel[0] = -12; v->accel[1] = 98; v->accel[2] = 21;
+        v->gyro[0] = 150; v->gyro[1] = -32; v->gyro[2] = 4;
+        v->quat[0] = 120; v->quat[1] = -40; v->quat[2] = 10; v->quat[3] = 991;
+        v->lightSet = 1; v->light[0] = 255;
+        v->rumble = 1;
+        snprintf(v->note, sizeof(v->note), "Large motor: rumbling for a second.");
+    } else if (!strcmp(state, "tester-menu") || !strcmp(state, "tester-remote")) {
+        v->menu = 1;
+        v->focus = !strcmp(state, "tester-menu") ? C4F_TESTER_RUMBLE_LARGE : C4F_TESTER_USER;
+    } else if (!strcmp(state, "tester-disconnected")) {
+        v->user[0].state = C4F_TESTER_NO_CONTROLLER;
+    } else if (!strcmp(state, "tester-error")) {
+        v->selected = 1;
+        v->user[1].state = C4F_TESTER_FAILED;
+        v->user[1].error = 0x80920001u;
+    } else {
+        return -1;
+    }
+    return 1;
+}
+
 int main(int argc, char **argv)
 {
     if (argc == 2 && !strcmp(argv[1], "svg")) return c4fPrintSvg();
@@ -60,7 +104,11 @@ int main(int argc, char **argv)
     snprintf(s.address, sizeof(s.address), "http://192.168.1.20:4264");
     const char *state = argv[2], *message = "";
     s.autorun = C4F_AUTORUN_ON;
-    if (!strcmp(state, "running") || !strcmp(state, "confirm") || !strcmp(state, "outdated") || !strcmp(state, "mismatch") ||
+    int tester = c4fTesterPreview(state, &s);
+    if (tester < 0) return 2;
+    if (tester) {
+        s.running = 1; s.controllers = 2;
+    } else if (!strcmp(state, "running") || !strcmp(state, "confirm") || !strcmp(state, "outdated") || !strcmp(state, "mismatch") ||
         !strcmp(state, "remote-actions-running") || !strcmp(state, "remote-confirm-cancel") ||
         !strcmp(state, "remote-confirm-stop") || !strcmp(state, "remote-confirm-diag")) {
         s.running = 1; s.controllers = 2; s.confirmStop = !strcmp(state, "confirm");
@@ -98,6 +146,10 @@ int main(int argc, char **argv)
     snprintf(s.message, sizeof(s.message), "%s", message);
     uint32_t *pixels = calloc((size_t)C4F_SCREEN_WIDTH * C4F_SCREEN_HEIGHT, sizeof(uint32_t));
     if (!pixels) return 2;
+    if (s.tester.active) {
+        c4fDrawTester(pixels, &s);
+        return c4fWrite(argv[3], pixels, (size_t)C4F_SCREEN_WIDTH * C4F_SCREEN_HEIGHT);
+    }
 #ifdef C4F_DIAG
     if (!strcmp(state, "remote-input-diag") || !strcmp(state, "payloader-unavailable-diag")) {
         snprintf(s.inputNote, sizeof(s.inputNote),

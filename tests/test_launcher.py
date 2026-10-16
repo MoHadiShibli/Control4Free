@@ -55,6 +55,12 @@ def main():
                         *(['-DC4F_DIAG'] if diagnostic else []), '-Ilauncher', 'launcher/input.c',
                         'launcher/navigation.c', 'tests/launcher_input_test.c', '-o', binary], check=True)
         subprocess.run([binary], check=True)
+        # The controller test's logic, against simulated users and pads.
+        binary = 'build/launcher-tester-diag-host-test' if diagnostic else 'build/launcher-tester-host-test'
+        subprocess.run(['clang-18', '-std=gnu11', '-D_DEFAULT_SOURCE', '-Wall', '-Wextra', '-Werror',
+                        *(['-DC4F_DIAG'] if diagnostic else []), '-Ilauncher', 'launcher/tester.c',
+                        'launcher/navigation.c', 'tests/launcher_tester_test.c', '-lm', '-o', binary], check=True)
+        subprocess.run([binary], check=True)
     subprocess.run(['clang-18', '-std=gnu11', '-D_DEFAULT_SOURCE', '-Wall', '-Wextra', '-Werror',
                     '-ffunction-sections', '-fdata-sections', '-Ilauncher', '-Itests/include',
                     'tests/diag_test.c', '-Wl,--gc-sections,--wrap=write,--wrap=fsync', '-pthread',
@@ -187,7 +193,8 @@ def main():
     package.build_art_tool()
     for state in ('setup', 'running', 'stopped', 'payloader-unavailable', 'outdated', 'mismatch', 'confirm', 'busy', 'locked', 'unknown',
                   'remote-actions-stopped', 'remote-actions-running', 'remote-confirm-cancel',
-                  'remote-confirm-stop', 'remote-actions-busy', 'remote-actions-unavailable'):
+                  'remote-confirm-stop', 'remote-actions-busy', 'remote-actions-unavailable',
+                  'tester', 'tester-motion', 'tester-menu', 'tester-remote', 'tester-disconnected', 'tester-error'):
         png = ROOT / f'build/launcher-preview-{state}.png'
         package.render(['screen', state], png, 1920, 1080)
         assert png.stat().st_size > 50000, png
@@ -198,6 +205,7 @@ def main():
         assert png.stat().st_size > 50000, png
     package.render(['icon', '512'], ROOT / 'build/launcher-icon.png', 512, 512)
     assert subprocess.run([str(package.ART), 'screen', 'nonsense', '/dev/null']).returncode != 0
+    assert subprocess.run([str(package.ART), 'screen', 'tester-nonsense', '/dev/null']).returncode != 0
     # The icon the payload serves is committed, so the payload build needs no
     # renderer. Catch it drifting away from the app's own icon.
     fresh = ROOT / 'build/icon-192.png'

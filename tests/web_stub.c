@@ -264,8 +264,11 @@ void c4fPadDataNeutral(ScePadData *p)
 }
 int32_t c4fVirtualPadInsert(const C4fVirtualPad *p, const ScePadData *d)
 {
-    printf("FRAME %llu %x %u %u %u %u %u %u %u %u\n", (unsigned long long)c4fTimeMs(),
-           p->handle, d->buttons, d->lx, d->ly, d->rx, d->ry, d->l2, d->r2, d->touchData.fingers);
+    /* Motion last, so the earlier columns keep their places. */
+    printf("FRAME %llu %x %u %u %u %u %u %u %u %u %.4f %.4f %.4f %.4f %.3f %.3f %.3f %.3f %.3f %.3f\n",
+           (unsigned long long)c4fTimeMs(), p->handle, d->buttons, d->lx, d->ly, d->rx, d->ry, d->l2, d->r2,
+           d->touchData.fingers, d->quat[0], d->quat[1], d->quat[2], d->quat[3],
+           d->accel[0], d->accel[1], d->accel[2], d->gyro[0], d->gyro[1], d->gyro[2]);
     return getenv("C4F_FAIL_INPUT") && d->buttons ? -5 : 0;
 }
 

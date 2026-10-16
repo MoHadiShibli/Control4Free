@@ -152,6 +152,33 @@ the app and open it again; if that doesn't help, restart the PS4 and run the jai
 **Control4Free is listed under Games instead of Applications.** That's a package from before 1.0.0. Delete the
 app and install the current package.
 
+## Experimental features
+
+**A switch is greyed out: "This browser treats the page as insecure".** Browsers give motion sensors and
+direct controller access only to secure pages, and the PS4 serves the page as plain `http`. Chrome and Edge
+can treat your PS4's address as secure:
+
+1. Open `chrome://flags/#unsafely-treat-insecure-origin-as-secure`, or in Edge
+   `edge://flags/#unsafely-treat-insecure-origin-as-secure`. On Android, open the same address in Chrome.
+2. Type the page's address exactly as the app on the PS4 shows it, for example `http://192.168.1.20:4264`,
+   and set the option to **Enabled**.
+3. Press **Relaunch**.
+
+The setting belongs to that browser on that device. If the PS4's address changes, change it here too:
+reserving the address for the PS4 in your router avoids that. Chrome warns about the setting on its pages;
+it applies only to the address you typed. That address then gets the browser features an `https` site gets,
+over a connection that isn't encrypted, so add only your PS4's address. Safari on an iPhone has no such
+setting.
+
+**"This browser can't talk to controllers directly."** Linking a DualShock 4 or DualSense needs Chrome or
+Edge on a computer. Android, Firefox and Safari don't offer it.
+
+**The controller isn't in the browser's list, or linking fails.** Close other programs that use it, such as
+Steam or DS4Windows, reconnect it, press a button on it, then press **Link** again.
+
+**Motion feels off.** Hold the phone sideways with the screen towards you, keep it still, and press
+**Recenter** in **Settings → Experimental**.
+
 ## Reporting a problem
 
 Every release comes with a diagnostic package, `Control4Free-<version>-diag.pkg`. It's the same Control4Free,

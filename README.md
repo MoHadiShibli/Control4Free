@@ -46,9 +46,18 @@ sees a virtual DualShock 4, which provides:
 - **Rumble and light bar.** When a game rumbles, your phone buzzes (Android), and so does your gamepad,
   though not every controller supports vibration in the browser. The page glows in the controller's
   light-bar colour, the one the PS4 or the game sets.
+- **Experimental extras**, off until you turn them on in **Settings → Experimental**: a DualShock 4 or
+  DualSense connected to a computer lights up in the game's colour, rumbles directly (DualSense included) and
+  passes on its touchpad's fingers;
+  trigger rumble on Xbox controllers and a linked DualSense; and motion controls from a phone or a linked
+  DualShock 4 or DualSense. They need browser features that secure pages get, and the page is plain `http`:
+  see [Experimental features](docs/troubleshooting.md#experimental-features).
 - **Fast.** Input reaches the console the moment it arrives, at a DualShock 4's own rate while you play.
 - **An app on the PS4** that shows the address and a QR code, how many controllers are connected, and starts
   or stops Control4Free. Use a controller or your TV remote through [HDMI-CEC](docs/hdmi-cec.md).
+- **Test controllers on the PS4.** Press **Options** in the app to see what each signed-in user's controller
+  sends, read the way a game reads it: buttons, sticks, triggers, touchpad and motion. Its menu rumbles each
+  motor and sets the light bar. See [Testing controllers](docs/playing.md#testing-controllers-on-the-ps4).
 - **Starts by itself.** One button in the app sets up GoldHEN's AutoRun, so Control4Free is ready after
   every restart.
 - **On your phone's home screen**, like an app.
@@ -107,8 +116,10 @@ New to GoldHEN packages? The **[installation guide](docs/installation.md)** walk
   With several Xbox controllers, some Chrome/Edge Windows backends combine their Xbox buttons; see the
   [GameInput workaround](docs/troubleshooting.md#gamepads).
 - **Six pages at a time.** Up to six phones or computers can have the page open at once.
-- **No motion controls.** Browsers only give phone motion sensors to secure (`https`) pages, and the
-  console's page is plain `http`.
+- **Motion and direct controller lights are experimental.** Browsers only give motion sensors and direct
+  controller access to secure pages, and the console's page is plain `http`. Chrome and Edge can treat it
+  as secure with one setting; Safari on an iPhone can't. Direct controller access works in Chrome and Edge
+  on a computer only. See [Experimental features](docs/troubleshooting.md#experimental-features).
 - **iPhones don't vibrate.** Safari doesn't let pages use the phone's vibration. A gamepad connected to the
   iPhone can still rumble, if the browser supports it.
 - **One controller is added at a time.** If two people pick at once, the second is asked to try again a

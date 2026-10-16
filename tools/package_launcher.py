@@ -53,6 +53,7 @@ def build_art_tool(diagnostic=False):
     subprocess.run([*flags, '-w', '-c', str(ROOT / 'launcher/stb_truetype.c'), '-o', str(stb)], check=True)
     subprocess.run([*flags, '-Wall', '-Wextra', '-Werror', str(ROOT / 'tools/launcher_art.c'),
                     str(ROOT / 'launcher/screen.c'), str(ROOT / 'launcher/navigation.c'),
+                    str(ROOT / 'launcher/tester.c'), str(ROOT / 'launcher/tester_draw.c'),
                     str(ROOT / 'launcher/draw.c'), str(ROOT / 'launcher/logo.c'), *extra_sources,
                     str(ROOT / 'vendor/qrcodegen/qrcodegen.c'), str(FONTS), str(stb), '-lm', *extra_flags, '-o', str(art)],
                    check=True)

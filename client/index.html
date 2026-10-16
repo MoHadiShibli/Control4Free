@@ -882,6 +882,12 @@
     .check:disabled, .field:disabled { opacity: .5; cursor: not-allowed; }
     .check:focus-visible { box-shadow: inset 0 0 0 2px #fff, var(--glow); }
 
+    /* Settings → Experimental */
+    .exp-block { margin-top: 26px; }
+    .exp-title { margin: 0; font-size: 18px; font-weight: 400; }
+    .row-desc.blocked { color: var(--warn); }
+    .row-desc a { color: inherit; text-underline-offset: 3px; }
+
     .pad-card { margin-top: 16px; border-radius: 6px; background: var(--panel); box-shadow: inset 0 0 0 1px var(--line-soft); overflow: hidden; }
     .pad-card-head { --pc: #3a8cff; display: flex; align-items: center; gap: 14px; padding: 14px 18px; border-bottom: 1px solid var(--line-soft); }
     .pad-card-head .ring { width: 40px; height: 40px; font-size: 18px; }
@@ -1384,6 +1390,7 @@
         <button class="nav-item" role="tab" data-page="device" aria-selected="false"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="7" y="2.5" width="10" height="19" rx="2"/><path d="M11 18.5h2"/></svg>This device</button>
         <button class="nav-item" role="tab" data-page="keyboard" aria-selected="false"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="2.5" y="6" width="19" height="12" rx="2"/><path d="M6 10h1M9.5 10h1M13 10h1M16.5 10h1M7 14h10"/></svg>Keyboard</button>
         <button class="nav-item" role="tab" data-page="gamepads" aria-selected="false"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><path d="M7 7h10a5 5 0 0 1 4.8 6.4l-1 3.4a2.6 2.6 0 0 1-4.4 1.2L14.4 16H9.6l-2 2a2.6 2.6 0 0 1-4.4-1.2l-1-3.4A5 5 0 0 1 7 7z"/><path d="M7.5 10v3M6 11.5h3"/></svg>Gamepads</button>
+        <button class="nav-item" role="tab" data-page="experimental" aria-selected="false"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 3h6M10 3v6.5l-5.4 8.7A1.9 1.9 0 0 0 6.2 21h11.6a1.9 1.9 0 0 0 1.6-2.8L14 9.5V3"/><path d="M7.4 15h9.2"/></svg>Experimental</button>
       </nav>
 
       <div class="settings-pages">
@@ -1397,6 +1404,23 @@
           <h2 class="page-title">This device</h2>
           <p class="hint">Saved on this phone or computer only.</p>
           <div class="rows" id="deviceRows"></div>
+        </section>
+
+        <section data-page="experimental" hidden>
+          <h2 class="page-title">Experimental</h2>
+          <p class="hint">Extras that use browser features most pages don't get, or that PS4 games never ask for. Each one stays off until you turn it on here, and it's saved on this phone or computer only.</p>
+          <div class="rows" id="expRows"></div>
+          <div class="exp-block" id="expSony" hidden>
+            <h3 class="exp-title">Sony controllers</h3>
+            <p class="hint">Link a DualShock 4 or DualSense connected to this computer. The browser asks which controller to allow. A linked controller lights up in its PS4 controller's colour, rumbles directly, and its touchpad works with fingers, not only clicks.</p>
+            <ul class="gp-list" id="expPads"></ul>
+            <p class="hint" id="expPadsEmpty">Connect a DualShock 4 or DualSense to this computer and press a button on it.</p>
+          </div>
+          <div class="exp-block" id="expMotion" hidden>
+            <h3 class="exp-title">Motion</h3>
+            <p class="hint" id="expMotionHint"></p>
+            <div class="map-actions" style="margin-top:12px"><button class="btn" type="button" id="expRecenter">Recenter</button></div>
+          </div>
         </section>
 
         <section data-page="keyboard" hidden>
@@ -1561,6 +1585,7 @@
     const conn = {
       ws: null, state: 'connecting', address: '', version: '', nextId: 1,
       pending: new Map(), retry: 0, retryTimer: 0, everOpened: false,
+      motion: false, // the service takes 'm' (its info says so)
     };
 
     const status = Array.from({ length: PADS }, (_, i) => ({
@@ -1629,6 +1654,7 @@
         $('#addressHint').classList.remove('error');
         call('info', []).then(info => {
           conn.version = info.version || '';
+          conn.motion = info.motion === true;
           showVersion();
           sendClaim(true);
         }).catch(() => {});
@@ -1638,6 +1664,8 @@
       ws.onclose = () => {
         if (conn.ws !== ws) return;
         conn.ws = null;
+        conn.motion = false;
+        motionLive.fill(false);
         // Reconnecting the page must not silently recreate a controller or
         // replay held buttons. The user selects a controller again.
         resetClaims();
@@ -3951,7 +3979,8 @@
     }
 
     function stopRumble(pad) {
-      for (const src of gamepadSources.values()) {
+      for (const [index, src] of gamepadSources) {
+        if (hidLinks.has(index)) continue; /* a linked controller is told directly */
         if (src.pad === pad && src.gp && src.gp.vibrationActuator && src.gp.vibrationActuator.reset) {
           try { src.gp.vibrationActuator.reset(); } catch (e) { /* ignore */ }
         }
@@ -3972,11 +4001,14 @@
         if (!r.large && !r.small) continue;
         if (t - r.lastKick < 110) continue;
         r.lastKick = t;
-        for (const src of gamepadSources.values()) {
+        for (const [index, src] of gamepadSources) {
           const act = src.gp && src.gp.vibrationActuator;
-          if (src.pad === pad && act && act.playEffect) {
-            act.playEffect('dual-rumble', { startDelay: 0, duration: 150, strongMagnitude: r.large / 255, weakMagnitude: r.small / 255 }).catch(() => {});
-          }
+          if (src.pad !== pad || !act || !act.playEffect || hidLinks.has(index)) continue;
+          // Experimental: Xbox controllers that have them rumble in their triggers too.
+          const triggers = experiments.triggers && Array.isArray(act.effects) && act.effects.includes('trigger-rumble');
+          const effect = { startDelay: 0, duration: 150, strongMagnitude: r.large / 255, weakMagnitude: r.small / 255 };
+          if (triggers) Object.assign(effect, { leftTrigger: r.large / 255 * .6, rightTrigger: r.small / 255 * .6 });
+          act.playEffect(triggers ? 'trigger-rumble' : 'dual-rumble', effect).catch(() => {});
         }
         if (pad === primaryPad && settings.haptics) {
           const strength = Math.max(r.large, r.small) / 255;
@@ -4080,7 +4112,8 @@
         const text = $('.gp-details', device);
         const mapped = src.gp && src.gp.mapping === 'standard';
         if (!mapped) text.appendChild(el('div', 'gp-note warning', 'Buttons may be mixed up. Check Mapping.'));
-        if (!canRumble(src.gp)) text.appendChild(el('div', 'gp-note', 'No rumble in this browser'));
+        if (hidLinks.has(index)) text.appendChild(el('div', 'gp-note', 'Linked: light bar and rumble'));
+        else if (!canRumble(src.gp)) text.appendChild(el('div', 'gp-note', 'No rumble in this browser'));
         if (src.waitNeutral) text.appendChild(el('div', 'gp-note warning', 'Let go of the held buttons'));
         row.appendChild(device);
         const actions = el('div', 'gp-actions');
@@ -4142,6 +4175,7 @@
         row.appendChild(map);
         list.appendChild(row);
       }
+      if (experimentOn('hid')) renderSonyPads();
     }
 
     const activityTimers = [];
@@ -4428,6 +4462,510 @@
 
     rebuildKeymap();
 
+    // ---------------------------------------------------------------- experimental
+
+    // Extras that need what browsers give secure pages only (WebHID, motion
+    // sensors), or that PS4 games never ask for (trigger rumble). Each is off
+    // until turned on in Settings → Experimental; while one is off, none of its
+    // code runs: no device prompts, no sensor listeners, no motion messages.
+    const EXPERIMENTS = [
+      ['hid', 'Lights and rumble on Sony controllers', 'A DualShock 4 or DualSense connected to this computer lights up in its PS4 controller\'s colour, rumbles directly (a DualSense included), and passes on its touchpad\'s fingers. Chrome or Edge on a computer.'],
+      ['triggers', 'Trigger rumble', 'Xbox controllers rumble in their triggers too, and a linked DualSense vibrates its triggers, following the game\'s rumble. PS4 games don\'t ask for this: Control4Free makes it up.'],
+      ['motion', 'Motion controls', 'Tilting this phone, or a linked DualShock 4 or DualSense, moves the PS4 controller\'s motion sensors.'],
+    ];
+    const EXPERIMENTS_HELP = 'https://github.com/MoHadiShibli/Control4Free/blob/main/docs/troubleshooting.md#experimental-features';
+    const experiments = {};
+    for (const [key] of EXPERIMENTS) experiments[key] = store.get('exp.' + key, false) === true;
+
+    // Why an experiment can't run in this browser, or '' when it can.
+    function experimentBlocked(key) {
+      if (key === 'triggers') return '';
+      if (!window.isSecureContext) return 'This browser treats the page as insecure, so it holds this back.';
+      if (key === 'hid' && !('hid' in navigator)) return 'This browser can\'t talk to controllers directly. Use Chrome or Edge on a computer.';
+      if (key === 'motion' && !('hid' in navigator) && !('DeviceMotionEvent' in window)) return 'This browser has no motion sensors to offer.';
+      return '';
+    }
+    const experimentOn = key => experiments[key] && !experimentBlocked(key);
+
+    function setExperiment(key, on) {
+      experiments[key] = on;
+      store.set('exp.' + key, on);
+      if (key === 'hid') { if (on) hidStart(); else hidStop(); }
+      if (key === 'motion') { if (on) motionStart(); else motionStop(); }
+      if (key === 'triggers') for (const link of hidLinks.values()) hidUpdate(link);
+      renderExperiments();
+      renderGamepads();
+    }
+
+    function renderExperiments() {
+      const rows = $('#expRows');
+      rows.textContent = '';
+      for (const [key, label, desc] of EXPERIMENTS) {
+        const blocked = experimentBlocked(key);
+        const row = el('label', 'row');
+        row.appendChild(el('span', 'row-label', label));
+        const input = el('input', 'check');
+        input.type = 'checkbox';
+        input.checked = experimentOn(key);
+        input.disabled = !!blocked;
+        input.dataset.experiment = key;
+        input.addEventListener('change', () => setExperiment(key, input.checked));
+        row.appendChild(input);
+        row.appendChild(el('span', 'row-desc', desc));
+        if (blocked) {
+          const why = el('span', 'row-desc blocked', blocked + ' ');
+          const help = el('a', '', 'How to turn it on');
+          help.href = EXPERIMENTS_HELP;
+          help.target = '_blank';
+          help.rel = 'noopener';
+          why.appendChild(help);
+          row.appendChild(why);
+        }
+        rows.appendChild(row);
+      }
+      $('#expSony').hidden = !experimentOn('hid');
+      if (experimentOn('hid')) renderSonyPads();
+      $('#expMotion').hidden = !experimentOn('motion');
+      $('#expMotionHint').textContent = ('DeviceMotionEvent' in window ? 'Hold the phone sideways, screen towards you, like a controller. ' : '') +
+        ('hid' in navigator ? 'A linked DualShock 4 or DualSense sends its own motion. ' : '') +
+        'Recenter makes the way you hold it now the controller\'s resting position.';
+    }
+
+    // ---- Sony controllers over WebHID
+
+    const SONY = 0x054c;
+    const SONY_MODELS = { 0x05c4: 'ds4', 0x09cc: 'ds4', 0x0ba0: 'ds4', 0x0ce6: 'dualsense', 0x0df2: 'dualsense' };
+    const hidLinks = new Map();   // gamepad index -> its direct connection
+
+    // Vendor and product from a gamepad's id: Chrome "… Vendor: 054c Product: 09cc)", Firefox "054c-09cc-…".
+    function gamepadIds(gp) {
+      const id = String((gp && gp.id) || '');
+      const m = /Vendor:\s*([0-9a-f]{4})\b[^]*?Product:\s*([0-9a-f]{4})\b/i.exec(id) || /^([0-9a-f]{1,4})-([0-9a-f]{1,4})-/i.exec(id);
+      return m ? { vendor: parseInt(m[1], 16), product: parseInt(m[2], 16) } : null;
+    }
+
+    function sonyModel(gp) {
+      const ids = gamepadIds(gp);
+      return ids && ids.vendor === SONY ? SONY_MODELS[ids.product] || null : null;
+    }
+
+    function renderSonyPads() {
+      const list = $('#expPads');
+      list.textContent = '';
+      let any = false;
+      for (const [index, src] of gamepadSources) {
+        if (!sonyModel(src.gp)) continue;
+        any = true;
+        const row = el('li', 'gp-row gp-row--settings');
+        const device = gamepadDevice(src, index);
+        const link = hidLinks.get(index);
+        $('.gp-details', device).appendChild(el('div', 'gp-note', link
+          ? 'Linked' + (link.bt ? ' over Bluetooth' : ' by USB') : 'Not linked'));
+        row.appendChild(device);
+        const button = el('button', 'btn gp-mapping', link ? 'Unlink' : 'Link');
+        button.type = 'button';
+        button.dataset.link = String(index);
+        button.addEventListener('click', () => link ? hidDetach(index) : hidLink(index));
+        row.appendChild(button);
+        list.appendChild(row);
+      }
+      $('#expPadsEmpty').hidden = any;
+    }
+
+    const crcTable = (() => {
+      const table = new Uint32Array(256);
+      for (let n = 0; n < 256; n++) {
+        let c = n;
+        for (let k = 0; k < 8; k++) c = c & 1 ? 0xedb88320 ^ (c >>> 1) : c >>> 1;
+        table[n] = c >>> 0;
+      }
+      return table;
+    })();
+
+    // Bluetooth output reports end in a CRC-32 of 0xa2, the report ID and the
+    // rest of the report, stored little-endian in the last four bytes.
+    function psCrc(reportId, data) {
+      let c = 0xffffffff;
+      const add = byte => { c = crcTable[(c ^ byte) & 0xff] ^ (c >>> 8); };
+      add(0xa2);
+      add(reportId);
+      for (let i = 0; i < data.length - 4; i++) add(data[i]);
+      c = (c ^ 0xffffffff) >>> 0;
+      for (let i = 0; i < 4; i++) data[data.length - 4 + i] = (c >>> (8 * i)) & 0xff;
+    }
+
+    // DualSense trigger effect, 11 bytes: Vibration (mode 0x26) over the whole
+    // travel at a strength from 1 to 8, or Off (0x05). After Nielk1's
+    // DualSense trigger effect generator (MIT).
+    function triggerEffect(out, at, strength, frequency) {
+      out.fill(0, at, at + 11);
+      if (strength <= 0) { out[at] = 0x05; return; }
+      let zones = 0, amplitude = 0;
+      for (let i = 0; i < 10; i++) { zones |= 1 << i; amplitude += (strength - 1) * 2 ** (3 * i); }
+      out[at] = 0x26;
+      out[at + 1] = zones & 0xff;
+      out[at + 2] = zones >> 8;
+      for (let i = 0; i < 4; i++) out[at + 3 + i] = Math.floor(amplitude / 2 ** (8 * i)) & 0xff;
+      out[at + 9] = frequency;
+    }
+
+    // One output report for a linked controller's current state, as Linux's
+    // hid-playstation driver lays them out. Returns { id, data } (data without the ID).
+    function hidReport(link, setupOnly) {
+      const [large, small] = link.motors, [r, g, b] = link.color;
+      if (link.model === 'ds4') {
+        const data = new Uint8Array(link.bt ? 77 : 31), at = link.bt ? 2 : 0;
+        if (link.bt) data[0] = 0xc4;             // HID + CRC, 4 ms input reports
+        data[at] = 0x03;                         // motors and light bar
+        data[at + 3] = small;
+        data[at + 4] = large;
+        data[at + 5] = r; data[at + 6] = g; data[at + 7] = b;
+        if (link.bt) psCrc(0x11, data);
+        return { id: link.bt ? 0x11 : 0x05, data };
+      }
+      const common = new Uint8Array(47);
+      if (setupOnly) {
+        common[38] = 0x02;                       // light bar setup: fade out the start-up light
+        common[41] = 0x02;
+      } else {
+        common[0] = 0x02 | (link.v2 ? 0 : 0x01); // rumble, the DualShock 4 way
+        if (link.v2) common[38] = 0x04;
+        common[1] = 0x04;                        // light bar
+        common[2] = small;
+        common[3] = large;
+        common[44] = r; common[45] = g; common[46] = b;
+        if (link.triggerSend) {
+          common[0] |= 0x0c;                     // both trigger effects
+          triggerEffect(common, 10, link.trigger[1], 60);
+          triggerEffect(common, 21, link.trigger[0], 30);
+        }
+      }
+      if (!link.bt) {
+        const data = new Uint8Array(62);
+        data.set(common);
+        return { id: 0x02, data };
+      }
+      const data = new Uint8Array(77);
+      data[0] = (link.seq & 15) << 4;
+      data[1] = 0x10;
+      data.set(common, 2);
+      link.seq = (link.seq + 1) & 15;
+      psCrc(0x31, data);
+      return { id: 0x31, data };
+    }
+
+    function hidHasOutput(device, reportId) {
+      return (device.collections || []).some(c => (c.outputReports || []).some(r => r.reportId === reportId));
+    }
+
+    // What the linked controller should be doing: its PS4 controller's rumble and colour.
+    function hidUpdate(link) {
+      const src = gamepadSources.get(link.index);
+      const pad = src ? src.pad : -1;
+      const r = pad >= 0 && rumble[pad] ? rumble[pad] : { large: 0, small: 0 };
+      link.motors = [r.large, r.small];
+      link.color = pad >= 0 && status[pad] && Array.isArray(status[pad].color) ? status[pad].color.slice(0, 3) : [0, 0, 64];
+      const level = v => experiments.triggers ? Math.round(v / 255 * 8) : 0;
+      const trigger = link.model === 'dualsense' ? [level(r.large), level(r.small)] : [0, 0];
+      // Trigger effects go out only when they change; re-sending them makes the motors whine.
+      link.triggerSend = link.triggerSend || trigger[0] !== link.trigger[0] || trigger[1] !== link.trigger[1];
+      link.trigger = trigger;
+      hidSend(link);
+    }
+
+    async function hidSend(link, force) {
+      if (link.busy) { link.again = true; return; }
+      const key = link.motors.join() + '|' + link.color.join() + '|' + link.trigger.join();
+      const at = now();
+      // Unchanged: only a slow refresh while it rumbles, in case a report went missing.
+      if (!force && !link.triggerSend && key === link.sent && !(link.motors.some(v => v) && at - link.sentAt > 500)) return;
+      link.busy = true;
+      try {
+        if (link.setup) { const s = hidReport(link, true); await link.device.sendReport(s.id, s.data); link.setup = false; }
+        const report = hidReport(link, false);
+        await link.device.sendReport(report.id, report.data);
+        link.sent = key;
+        link.sentAt = at;
+        link.triggerSend = false;
+      } catch (e) {
+        link.sent = '';
+      }
+      link.busy = false;
+      if (link.again) { link.again = false; hidUpdate(link); }
+    }
+
+    async function hidLink(index) {
+      const src = gamepadSources.get(index), ids = src && gamepadIds(src.gp);
+      if (!ids || !experimentOn('hid')) return;
+      let devices = [];
+      try {
+        devices = await navigator.hid.requestDevice({ filters: [{ vendorId: SONY, productId: ids.product }] });
+      } catch (e) {
+        toast('The browser didn\'t allow the controller');
+        return;
+      }
+      if (devices.length) await hidAttach(index, devices[0]);
+    }
+
+    async function hidAttach(index, device) {
+      for (const [i, other] of [...hidLinks]) if (other.device === device || i === index) await hidDetach(i, true);
+      const model = SONY_MODELS[device.productId];
+      if (!model) return;
+      try {
+        if (!device.opened) await device.open();
+      } catch (e) {
+        toast('Couldn\'t open the controller. Close other apps that use it, then try again.');
+        return;
+      }
+      const link = {
+        device, model, index, bt: !hidHasOutput(device, model === 'ds4' ? 0x05 : 0x02) && hidHasOutput(device, model === 'ds4' ? 0x11 : 0x31),
+        seq: 0, sent: '', sentAt: 0, busy: false, again: false, setup: model === 'dualsense', v2: device.productId === 0x0df2,
+        motors: [0, 0], color: [0, 0, 0], trigger: [0, 0], triggerSend: false, calib: null, motion: null,
+      };
+      link.onInput = ev => hidInput(link, ev);
+      device.addEventListener('inputreport', link.onInput);
+      hidLinks.set(index, link);
+      await hidCalibrate(link);
+      if (hidLinks.get(index) === link) hidUpdate(link);
+      renderExperiments();
+      renderGamepads();
+    }
+
+    async function hidDetach(index, quiet) {
+      const link = hidLinks.get(index);
+      if (!link) return;
+      hidLinks.delete(index);
+      link.device.removeEventListener('inputreport', link.onInput);
+      const src = gamepadSources.get(index);
+      if (src) src.touches = [];
+      motionLeave(link.motion);
+      // Left still, in a dim blue, once any report on its way has gone.
+      for (let i = 0; link.busy && i < 20; i++) await new Promise(done => setTimeout(done, 10));
+      link.motors = [0, 0];
+      link.color = [0, 0, 64];
+      link.triggerSend = link.trigger.some(v => v);
+      link.trigger = [0, 0];
+      link.busy = link.again = false;
+      await hidSend(link, true);
+      try { await link.device.close(); } catch (e) { /* already gone */ }
+      if (!quiet) { renderExperiments(); renderGamepads(); }
+    }
+
+    // A controller the browser was allowed before links again by itself, when
+    // exactly one gamepad of that kind is waiting for it.
+    let hidListening = false;
+    async function hidStart() {
+      if (!experimentOn('hid')) return;
+      if (!hidListening) {
+        hidListening = true;
+        navigator.hid.addEventListener('disconnect', ev => {
+          for (const [index, link] of [...hidLinks]) if (link.device === ev.device) hidDetach(index);
+        });
+        navigator.hid.addEventListener('connect', () => { if (experimentOn('hid')) hidStart(); });
+      }
+      let granted = [];
+      try { granted = await navigator.hid.getDevices(); } catch (e) { return; }
+      for (const device of granted) {
+        if (device.vendorId !== SONY || !SONY_MODELS[device.productId]) continue;
+        if ([...hidLinks.values()].some(l => l.device === device)) continue;
+        const waiting = [...gamepadSources].filter(([i, src]) => !hidLinks.has(i) && (gamepadIds(src.gp) || {}).product === device.productId);
+        if (waiting.length === 1) await hidAttach(waiting[0][0], device);
+      }
+    }
+
+    async function hidStop() {
+      for (const index of [...hidLinks.keys()]) await hidDetach(index, true);
+    }
+
+    // Reading the calibration (and, on a DualSense, the firmware version) also
+    // switches a Bluetooth controller to its full reports, motion included.
+    async function hidCalibrate(link) {
+      // Offsets count the report ID as byte 0, as the report's full length does.
+      const lengths = { 0x02: 37, 0x05: 41, 0x20: 64 };
+      const feature = async id => {
+        const view = await link.device.receiveFeatureReport(id);
+        const shift = view.byteLength >= lengths[id] ? 0 : view.byteLength === lengths[id] - 1 ? -1
+          : view.getUint8(0) === id ? 0 : -1;
+        return { u16: at => view.getUint16(at + shift, true), i16: at => view.getInt16(at + shift, true) };
+      };
+      try {
+        const f = await feature(link.model === 'ds4' && !link.bt ? 0x02 : 0x05);
+        const bias = [f.i16(1), f.i16(3), f.i16(5)];
+        const plusMinus = link.model === 'ds4' && link.bt
+          ? [[f.i16(7), f.i16(13)], [f.i16(9), f.i16(15)], [f.i16(11), f.i16(17)]]
+          : [[f.i16(7), f.i16(9)], [f.i16(11), f.i16(13)], [f.i16(15), f.i16(17)]];
+        const speed = f.i16(19) + f.i16(21);
+        const gyro = plusMinus.map(([p, m], i) => {
+          const span = Math.abs(p - bias[i]) + Math.abs(m - bias[i]);
+          return span ? speed / span : 0;
+        });
+        const accel = [[f.i16(23), f.i16(25)], [f.i16(27), f.i16(29)], [f.i16(31), f.i16(33)]].map(([p, m]) => {
+          const range = p - m;
+          return range ? { bias: p - range / 2, scale: 2 / range } : null;
+        });
+        if (gyro.every(v => v > 0) && accel.every(Boolean)) link.calib = { gyro, accel };
+      } catch (e) { /* fall back to the sensors' usual ranges */ }
+      if (link.model === 'dualsense' && !link.v2) {
+        try { link.v2 = (await feature(0x20)).u16(44) >= 0x0215; } catch (e) { /* older firmware's rumble */ }
+      }
+    }
+
+    // Up to two fingers from a report: contact (bit 7 set once lifted, the rest
+    // the finger's id), then 12-bit x and y. A DualSense's touchpad is 1080
+    // high and the PS4's 942, so its y is scaled.
+    function hidTouches(data, at, height) {
+      const touches = [];
+      for (let i = 0; i < 2 && data.byteLength >= at + 4 * i + 4; i++) {
+        const p = at + 4 * i, contact = data.getUint8(p);
+        if (contact & 0x80) continue;
+        const x = data.getUint8(p + 1) | (data.getUint8(p + 2) & 0x0f) << 8;
+        const y = data.getUint8(p + 2) >> 4 | data.getUint8(p + 3) << 4;
+        touches.push({ id: contact & 0x7f, x: clamp(x, 0, TOUCH_W), y: clamp(Math.round(y * (TOUCH_H + 1) / height), 0, TOUCH_H) });
+      }
+      return touches;
+    }
+
+    // Input from a linked controller: the touchpad's fingers, which browsers'
+    // gamepads leave out, and the motion sensors while motion is on. Offsets
+    // are hid-playstation's, without the report ID: [gyro, touch, touch sets].
+    function hidInput(link, ev) {
+      const data = ev.data, id = ev.reportId, ds4 = link.model === 'ds4';
+      const layout = ds4 ? (id === 0x01 ? [12, 32, 3] : id === 0x11 ? [14, 34, 4] : null)
+                         : (id === 0x01 ? [15, 32, 0] : id === 0x31 ? [16, 33, 0] : null);
+      if (!layout || data.byteLength < layout[1] + 8) return;
+      const [gyroAt, touchAt, sets] = layout, accelAt = gyroAt + 6;
+      const src = gamepadSources.get(link.index);
+      if (src && !ds4) src.touches = hidTouches(data, touchAt, 1080);
+      if (src && ds4) {
+        // A DS4 report holds the touch reports since its last one, newest last.
+        const count = Math.min(data.getUint8(touchAt), sets);
+        if (count) src.touches = hidTouches(data, touchAt + 1 + 9 * (count - 1) + 1, 942);
+      }
+      if (!experimentOn('motion')) return;
+      const c = link.calib, D = Math.PI / 180;
+      const gyro = [0, 1, 2].map(i => data.getInt16(gyroAt + 2 * i, true) * (c ? c.gyro[i] : 1 / 16.4) * D);
+      const accel = [0, 1, 2].map(i => {
+        const raw = data.getInt16(accelAt + 2 * i, true);
+        return c ? (raw - c.accel[i].bias) * c.accel[i].scale : raw / 8192;
+      });
+      if (!link.motion) link.motion = newMotion();
+      motionSample(link.motion, gyro, accel, ev.timeStamp);
+    }
+
+    // ---- motion: the phone's sensors, or a linked controller's
+
+    // The PS4 reads a DualShock 4 with x to the right, y up out of its face and z
+    // towards the player, so lying flat it reads +1 G on y. A phone held sideways
+    // with the screen towards the player lines up with that directly.
+    function newMotion() { return { q: [1, 0, 0, 0], gyro: [0, 0, 0], accel: [0, 1, 0], at: 0, fresh: false, pad: -1 }; }
+    const phoneMotion = newMotion();
+    const motionSentAt = Array(PADS).fill(0);
+    const motionLive = Array(PADS).fill(false);
+
+    // Mahony's filter: the gyro turns the orientation, gravity keeps up up.
+    function motionSample(m, gyro, accel, t) {
+      const dt = m.at ? clamp((t - m.at) / 1000, 0, .1) : 0;
+      m.at = t;
+      m.gyro = gyro;
+      m.accel = accel;
+      m.fresh = true;
+      if (!dt) return;
+      let [w, x, y, z] = m.q, [gx, gy, gz] = gyro;
+      const n = Math.hypot(accel[0], accel[1], accel[2]);
+      if (n > .5 && n < 1.5) {
+        const ax = accel[0] / n, ay = accel[1] / n, az = accel[2] / n;
+        const vx = 2 * (x * y + w * z), vy = 1 - 2 * (x * x + z * z), vz = 2 * (y * z - w * x);
+        gx += 2 * (ay * vz - az * vy);
+        gy += 2 * (az * vx - ax * vz);
+        gz += 2 * (ax * vy - ay * vx);
+      }
+      const h = dt / 2;
+      const q = [w + h * (-x * gx - y * gy - z * gz), x + h * (w * gx + y * gz - z * gy),
+                 y + h * (w * gy - x * gz + z * gx), z + h * (w * gz + x * gy - y * gx)];
+      const len = Math.hypot(...q) || 1;
+      m.q = q.map(v => v / len);
+    }
+
+    function onDeviceMotion(ev) {
+      const a = ev.accelerationIncludingGravity, r = ev.rotationRate;
+      if (!a || a.x === null || a.x === undefined || !r) return;
+      // Device axes to the screen's, as the phone is turned.
+      const angle = ((screen.orientation && screen.orientation.angle) || 0) * Math.PI / 180;
+      const cos = Math.cos(angle), sin = Math.sin(angle);
+      const turn = (x, y) => [x * cos - y * sin, x * sin + y * cos];
+      const [ax, ay] = turn(a.x, a.y), [gx, gy] = turn(r.beta || 0, r.gamma || 0);
+      const G = 9.80665, D = Math.PI / 180;
+      motionSample(phoneMotion, [gx * D, gy * D, (r.alpha || 0) * D], [ax / G, ay / G, (a.z || 0) / G], ev.timeStamp);
+    }
+
+    function motionStart() {
+      if (!experimentOn('motion') || !('DeviceMotionEvent' in window)) return;
+      window.addEventListener('devicemotion', onDeviceMotion);
+      // Safari sends nothing until asked from a tap; Chrome sends the events either way.
+      if (typeof DeviceMotionEvent.requestPermission === 'function') DeviceMotionEvent.requestPermission().catch(() => {});
+    }
+
+    function motionStop() {
+      window.removeEventListener('devicemotion', onDeviceMotion);
+      motionLeave(phoneMotion);
+      for (const link of hidLinks.values()) motionLeave(link.motion);
+    }
+
+    // A source stopped driving its controller: tell the PS4 it is still again.
+    function motionLeave(m) {
+      if (!m || m.pad < 0) return;
+      const pad = m.pad;
+      m.pad = -1;
+      m.at = 0;
+      if (motionLive[pad]) {
+        motionLive[pad] = false;
+        if (conn.motion) send({ method: 'm', params: [pad, 0, 0, 0, 10000, 0, 0, 0, 0, 0, 0] });
+      }
+    }
+
+    function motionSend(pad, m, t) {
+      if (t - motionSentAt[pad] < 16 || !m.fresh) return;
+      m.fresh = false;
+      const q = [m.q[1], m.q[2], m.q[3], m.q[0]];
+      const params = [pad, ...q.map(v => Math.round(clamp(v, -1, 1) * 10000)),
+                      ...m.accel.map(v => Math.round(clamp(v, -16, 16) * 1000)),
+                      ...m.gyro.map(v => Math.round(clamp(v, -35, 35) * 1000))];
+      if (send({ method: 'm', params })) { motionSentAt[pad] = t; motionLive[pad] = true; }
+    }
+
+    // Each frame: linked controllers' rumble and colour, and motion for the controllers that have it.
+    function experimentsTick(t) {
+      for (const link of hidLinks.values()) hidUpdate(link);
+      if (!experimentOn('motion') || !conn.motion) return;
+      const claimed = claimedPads();
+      const sources = [];
+      for (const link of hidLinks.values()) {
+        const src = gamepadSources.get(link.index);
+        if (link.motion) sources.push([src ? src.pad : -1, link.motion]);
+      }
+      // The phone drives the controller open on it, unless a linked controller does.
+      const phonePad = !padView.hidden && !document.hidden && primaryPad >= 0 ? primaryPad : -1;
+      if (!sources.some(([pad]) => pad === phonePad)) sources.push([phonePad, phoneMotion]);
+      else sources.push([-1, phoneMotion]);
+      for (const [pad, m] of sources) {
+        const target = pad >= 0 && claimed.includes(pad) && m.at ? pad : -1;
+        if (m.pad !== target) motionLeave(m);
+        if (target < 0) continue;
+        m.pad = target;
+        motionSend(target, m, t);
+      }
+    }
+
+    $('#expRecenter').addEventListener('click', () => {
+      phoneMotion.q = [1, 0, 0, 0];
+      for (const link of hidLinks.values()) if (link.motion) link.motion.q = [1, 0, 0, 0];
+      toast('Motion recentered');
+    });
+
+    renderExperiments();
+    if (experimentOn('hid')) hidStart();
+    if (experimentOn('motion')) motionStart();
+
     // ---------------------------------------------------------------- local settings only
     function showPage(page) {
       for (const tab of $$('.nav-item')) tab.setAttribute('aria-selected', String(tab.dataset.page === page));
@@ -4489,16 +5027,21 @@
       flush(t);
       measurePing(t);
       driveRumble(t);
+      experimentsTick(t);
       renderPressed();
       mapper.tick(t);
       requestAnimationFrame(frame);
     }
 
-    window.addEventListener('gamepadconnected', () => { pollGamepads(now()); renderGamepads(); });
+    window.addEventListener('gamepadconnected', () => {
+      pollGamepads(now()); renderGamepads();
+      if (experimentOn('hid')) hidStart();
+    });
     window.addEventListener('gamepaddisconnected', event => {
       // An identical replacement may already occupy the reused index when this
       // event is delivered. Explicitly discard the old source's transient state.
       const index = event.gamepad.index, src = gamepadSources.get(index);
+      if (hidLinks.has(index)) hidDetach(index);
       if (mapper.index === index) mapper.close();
       if (src) { clearDevice(src); gamepadSources.delete(index); }
       pollGamepads(now()); renderGamepads(); sendClaim();

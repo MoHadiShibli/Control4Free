@@ -374,6 +374,9 @@ static void heldRemoteConfirmation(void)
     remoteFrame(&fake, &input, &screen, 40, C4F_INPUT_BUTTON_UP);
     remoteFrame(&fake, &input, &screen, 50, 0);
     remoteFrame(&fake, &input, &screen, 60, C4F_INPUT_BUTTON_UP);
+    assert(screen.actionFocus == C4F_ACTION_TESTER);
+    remoteFrame(&fake, &input, &screen, 62, 0);
+    remoteFrame(&fake, &input, &screen, 64, C4F_INPUT_BUTTON_UP);
     assert(screen.actionFocus == C4F_ACTION_STOP);
     remoteFrame(&fake, &input, &screen, 70, 0);
     assert(remoteFrame(&fake, &input, &screen, 80, C4F_INPUT_BUTTON_CROSS) == C4F_ACTION_NONE);
@@ -432,6 +435,8 @@ static void stopConfirmation(void)
     navigate(&screen, 0, C4F_INPUT_BUTTON_CROSS, 0);
     navigate(&screen, 0, C4F_INPUT_BUTTON_UP, 0);
     navigate(&screen, 0, C4F_INPUT_BUTTON_UP, 0);
+    assert(screen.actionFocus == C4F_ACTION_TESTER);
+    navigate(&screen, 0, C4F_INPUT_BUTTON_UP, 0);
     assert(screen.actionFocus == C4F_ACTION_STOP);
     assert(navigate(&screen, 0, C4F_INPUT_BUTTON_CROSS, 0) == C4F_ACTION_NONE);
     assert(screen.confirmStop && screen.confirmMenu && !screen.confirmChoice && !screen.actionMenu);
@@ -439,6 +444,7 @@ static void stopConfirmation(void)
     assert(navigate(&screen, 0, C4F_INPUT_BUTTON_CROSS, 0) == C4F_ACTION_RESUME);
     assert(!screen.confirmStop);
     navigate(&screen, 0, C4F_INPUT_BUTTON_CROSS, 0);
+    navigate(&screen, 0, C4F_INPUT_BUTTON_UP, 0);
     navigate(&screen, 0, C4F_INPUT_BUTTON_UP, 0);
     navigate(&screen, 0, C4F_INPUT_BUTTON_UP, 0);
     navigate(&screen, 0, C4F_INPUT_BUTTON_CROSS, 0);

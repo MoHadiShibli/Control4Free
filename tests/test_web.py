@@ -419,6 +419,76 @@ def main():
     finally:
         server.close()
 
+    # Motion: the owner's only, ranges checked, put into every later sample, and
+    # back to still whenever the controller is reset.
+    def motion_rows():
+        return [r.split() for r in server.rows() if r.startswith('FRAME') and r.split()[2] == '11030d']
+
+    def motion(c, params):
+        c.frame(json.dumps(dict(method='m', params=params)))
+
+    # A small message right after another can wait for the first one's ACK
+    # (Nagle's algorithm on this test client), so wait for the frame itself.
+    def motion_row(match, timeout=.3):
+        end = time.monotonic() + timeout
+        while True:
+            rows = motion_rows()
+            if rows and match(rows[-1]):
+                return rows[-1]
+            assert time.monotonic() < end, rows[-1] if rows else 'no frames'
+            time.sleep(.01)
+    server = Server()
+    try:
+        c = server.c
+        info = c.request('info')['result']
+        assert info['motion'] is True and info['protocol'] == 2, info
+        assert c.request('claim', [0])['result']['pads'][0]['mine']
+        c.input(0)
+        time.sleep(.05)
+        still = motion_rows()[-1][11:21]
+        assert still == ['0.0000', '0.0000', '0.0000', '1.0000'] + ['0.000'] * 6, still
+        for params in ([0, 0, 0, 0, 10000, 0, 1000, 0, 0, 0], [0, 0, 0, 0, 10001, 0, 0, 0, 0, 0, 0],
+                       [0, 0, 0, 0, 10000, 16001, 0, 0, 0, 0, 0], [0, 0, 0, 0, 10000, 0, 0, 0, 0, 0, -35001],
+                       [4, 0, 0, 0, 10000, 0, 0, 0, 0, 0, 0]):
+            assert c.request('m', params)['error']['code'] == 400, params
+        other = Client()
+        motion(other, [0, 0, 0, 0, 10000, 500, 0, 0, 0, 0, 0])
+        other.request('ping')   # answered only after the motion before it was handled
+        time.sleep(.05)
+        assert all(r[15] == '0.000' for r in motion_rows()), 'a non-owner moved the controller'
+        c.input(0, 0x4000)
+        motion(c, [0, 1000, -2000, 3000, 9000, -500, 1000, 250, 1500, -35000, 12])
+        motion_row(lambda r: r[3] == '16384' and r[11:21] == ['0.1000', '-0.2000', '0.3000', '0.9000', '-0.500',
+                                                               '1.000', '0.250', '1.500', '-35.000', '0.012'])
+        c.input(0, 0x2000, lx=10)
+        row = motion_row(lambda r: r[3] == '8192')
+        assert row[4] == '10' and row[16] == '1.000', 'motion dropped by new input'
+        # A burst of motion alone coalesces instead of queueing up behind itself.
+        start = len(motion_rows())
+        for i in range(200):
+            motion(c, [0, 0, 0, 0, 10000, i, 1000, 0, 0, 0, 0])
+        row = motion_row(lambda r: r[15] == '0.199')
+        assert row[3] == '8192', row
+        assert len(motion_rows()) - start < 100, f'{len(motion_rows()) - start} reports for 200 motion messages'
+        # Idle: neutral and still. Motion counts as input and wakes it.
+        time.sleep(.6)
+        assert c.request('status')['result']['pads'][0]['state'] == 'paused'
+        assert motion_rows()[-1][11:21] == still, motion_rows()[-1]
+        motion(c, [0, 0, 0, 0, 10000, 0, 1000, 0, 0, 0, 0])
+        time.sleep(.05)
+        assert c.request('status')['result']['pads'][0]['state'] != 'paused'
+        # A new owner starts still.
+        c.close()
+        server.c = c = Client()
+        assert c.request('claim', [0])['result']['pads'][0]['mine']
+        c.input(0)
+        time.sleep(.05)
+        assert motion_rows()[-1][11:21] == still, motion_rows()[-1]
+        other.close()
+        print('PASS motion: owner only, ranges checked, merged into samples, coalesced, reset to still', flush=True)
+    finally:
+        server.close()
+
     # Without the call, controllers work as before.
     server = Server(C4F_TEST_NO_FEEDBACK='1')
     try:

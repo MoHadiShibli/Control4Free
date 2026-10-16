@@ -44,6 +44,11 @@ jobs:
           docker run --rm -v "$PWD:/src" -w /src mcr.microsoft.com/playwright:v1.63.0-noble \
             bash -lc 'mkdir -p /tmp/c4f-browser; cd /tmp/c4f-browser; npm init -y >/dev/null; npm install playwright@1.63.0; cd /src; NODE_PATH=/tmp/c4f-browser/node_modules node tests/fake_gamepads_test.cjs'
 
+      - name: Experimental feature checks
+        run: |
+          docker run --rm -v "$PWD:/src" -w /src mcr.microsoft.com/playwright:v1.63.0-noble \
+            bash -lc 'mkdir -p /tmp/c4f-browser; cd /tmp/c4f-browser; npm init -y >/dev/null; npm install playwright@1.63.0; cd /src; NODE_PATH=/tmp/c4f-browser/node_modules node tests/experimental_test.cjs'
+
       - name: Collect what was built
         run: |
           version=$(cat VERSION)

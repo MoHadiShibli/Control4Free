@@ -36,7 +36,11 @@
   by Tokyoship, licensed under CC BY 3.0
   (https://creativecommons.org/licenses/by/3.0/). The PS button's mark uses the
   diagram's paths, resized and recolored; the surrounding buttons are adapted
-  to the interactive page.
+  to the interactive page. The PS4 app's controller test (`launcher/tester_draw.c`)
+  draws the same picture, PS mark included.
+- The DualSense trigger vibration in `client/index.html` follows the effect format
+  of John "Nielk1" Klein's DualSense trigger effect generator
+  (https://gist.github.com/Nielk1/6d54cc2c00d2201ccb8c2720ad7538db), MIT.
 
 These license notices are also included inside the package.
 

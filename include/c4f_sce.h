@@ -82,9 +82,9 @@ typedef struct {
     uint8_t         rx, ry;
     uint8_t         l2, r2;
     uint16_t        padding;
-    float           quat[4];
-    float           vel[3];
-    float           accel[3];
+    float           quat[4];    /* orientation, x y z w */
+    float           accel[3];   /* acceleration in G */
+    float           gyro[3];    /* angular velocity in rad/s */
     ScePadTouchData touchData;
     uint8_t         connected;
     uint8_t         align[3];

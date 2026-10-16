@@ -268,6 +268,119 @@ static int c4fNativeRead(void *context, int handle, uint32_t *buttons, int *conn
 
 static void c4fNativeClose(void *, int handle) { scePadClose(handle); }
 
+/* ---- the controller test's native side ---- */
+
+/* The pinned header names the two motion vectors vel and acell. Sony's order
+ * is orientation, acceleration (G), angular velocity (rad/s). */
+static_assert(offsetof(OrbisPadData, quat) == 12, "orientation");
+static_assert(offsetof(OrbisPadData, vel) == 28, "acceleration");
+static_assert(offsetof(OrbisPadData, acell) == 40, "angular velocity");
+static_assert(offsetof(OrbisPadData, touch) == 52, "touch data");
+static_assert(C4F_INPUT_BUTTON_L3 == ORBIS_PAD_BUTTON_L3, "L3 button");
+static_assert(C4F_INPUT_BUTTON_R3 == ORBIS_PAD_BUTTON_R3, "R3 button");
+static_assert(C4F_INPUT_BUTTON_L2 == ORBIS_PAD_BUTTON_L2, "L2 button");
+static_assert(C4F_INPUT_BUTTON_R2 == ORBIS_PAD_BUTTON_R2, "R2 button");
+static_assert(C4F_INPUT_BUTTON_L1 == ORBIS_PAD_BUTTON_L1, "L1 button");
+static_assert(C4F_INPUT_BUTTON_R1 == ORBIS_PAD_BUTTON_R1, "R1 button");
+static_assert(C4F_INPUT_BUTTON_TRIANGLE == ORBIS_PAD_BUTTON_TRIANGLE, "Triangle button");
+static_assert(C4F_INPUT_BUTTON_SQUARE == ORBIS_PAD_BUTTON_SQUARE, "Square button");
+static_assert(C4F_INPUT_BUTTON_TOUCHPAD == ORBIS_PAD_BUTTON_TOUCH_PAD, "touchpad button");
+
+static int c4fTesterLoginUsers(void *, int32_t *users)
+{
+    OrbisUserServiceLoginUserIdList list;
+    memset(&list, 0, sizeof(list));
+    int result = sceUserServiceGetLoginUserIdList(&list);
+    if (result) return result < 0 ? result : -1;
+    int count = 0;
+    for (int i = 0; i < ORBIS_USER_SERVICE_MAX_LOGIN_USERS && count < C4F_TESTER_USERS; i++)
+        if (list.userId[i] != ORBIS_USER_SERVICE_USER_ID_INVALID) users[count++] = list.userId[i];
+    return count;
+}
+
+static void c4fTesterUserName(void *, int32_t user, char *name, int size)
+{
+    if (sceUserServiceGetUserName(user, name, (size_t)size)) name[0] = 0;
+}
+
+static int c4fTesterOpenPad(void *context, int32_t user, int *owned)
+{
+    C4fNativeInput *input = (C4fNativeInput *)context;
+    *owned = 0;
+    if (!input->initialized) {
+        int result = scePadInit();
+        if (result) return result < 0 ? result : -1;
+        input->initialized = 1;
+    }
+    /* The launcher's own reader may hold this user's handle: borrow it. */
+    int handle = scePadOpen(user, ORBIS_PAD_PORT_TYPE_STANDARD, 0, NULL);
+    if ((uint32_t)handle == C4F_PAD_ERROR_ALREADY_OPENED)
+        handle = scePadGetHandle(user, ORBIS_PAD_PORT_TYPE_STANDARD, 0);
+    else if (handle >= 0)
+        *owned = 1;
+    return handle;
+}
+
+static int c4fTesterRead(void *, int handle, C4fTesterSample *out)
+{
+    OrbisPadData data;
+    memset(&data, 0, sizeof(data));
+    int result = scePadReadState(handle, &data);
+    if (result) return result;
+    out->buttons = data.buttons;
+    out->lx = data.leftStick.x; out->ly = data.leftStick.y;
+    out->rx = data.rightStick.x; out->ry = data.rightStick.y;
+    out->l2 = data.analogButtons.l2; out->r2 = data.analogButtons.r2;
+    out->touches = data.touch.fingers > 2 ? 2 : data.touch.fingers;
+    for (int i = 0; i < out->touches; i++) {
+        out->touch[i].x = data.touch.touch[i].x;
+        out->touch[i].y = data.touch.touch[i].y;
+        out->touch[i].id = data.touch.touch[i].finger;
+    }
+    out->quat[0] = data.quat.x; out->quat[1] = data.quat.y; out->quat[2] = data.quat.z; out->quat[3] = data.quat.w;
+    out->accel[0] = data.vel.x; out->accel[1] = data.vel.y; out->accel[2] = data.vel.z;
+    out->gyro[0] = data.acell.x; out->gyro[1] = data.acell.y; out->gyro[2] = data.acell.z;
+    out->connected = data.connected;
+    return 0;
+}
+
+static void c4fTesterClosePad(void *, int handle) { scePadClose(handle); }
+
+static int c4fTesterVibrate(void *, int handle, uint8_t large, uint8_t small)
+{
+    OrbisPadVibeParam param = { large, small };
+    int result = scePadSetVibration(handle, &param);
+    if (result) printf("[c4f-launcher] controller test: scePadSetVibration = 0x%08x\n", (unsigned)result);
+    return result;
+}
+
+static int c4fTesterLight(void *, int handle, uint8_t r, uint8_t g, uint8_t b)
+{
+    OrbisPadColor color = { r, g, b, 255 };
+    int result = scePadSetLightBar(handle, &color);
+    if (result) printf("[c4f-launcher] controller test: scePadSetLightBar = 0x%08x\n", (unsigned)result);
+    return result;
+}
+
+static int c4fTesterResetLight(void *, int handle) { return scePadResetLightBar(handle); }
+static int c4fTesterResetOrientation(void *, int handle) { return scePadResetOrientation(handle); }
+
+static int c4fTesterMotion(void *, int handle, int on)
+{
+    /* OpenOrbis declares this without parameters; Sony's call (as shadPS4
+     * documents it) takes the handle and an on/off flag. */
+    int result = reinterpret_cast<int32_t (*)(int32_t, bool)>(&scePadSetMotionSensorState)(handle, on != 0);
+    printf("[c4f-launcher] controller test: scePadSetMotionSensorState = 0x%08x\n", (unsigned)result);
+    return result;
+}
+
+static void c4fTesterLogState(void *, int slot, int state, uint32_t error)
+{
+    static const char *const names[] = { "opening", "ready", "no controller", "failed", "signed out" };
+    printf("[c4f-launcher] controller test reader %d: %s (0x%08x)\n", slot + 1,
+           state >= 0 && state <= C4F_TESTER_SIGNED_OUT ? names[state] : "?", (unsigned)error);
+}
+
 static void c4fNativeInputNote(const C4fNativeInput *input, char *note, size_t size)
 {
     snprintf(note, size, "%s: %s (0x%08x); %s: %s (0x%08x), last key 0x%02x / raw 0x%08x",
@@ -301,6 +414,13 @@ int main(void)
     C4fInputOps inputOps = { &nativeInput, c4fNativeInitialUser, c4fNativeOpen, c4fNativeRead, c4fNativeClose };
     C4fInput inputs;
     c4fInputInit(&inputs, &inputOps);
+    C4fTesterOps testerOps = { &nativeInput, c4fTesterLoginUsers, c4fTesterUserName, c4fTesterOpenPad, c4fTesterRead,
+                               c4fTesterClosePad, c4fTesterVibrate, c4fTesterLight, c4fTesterResetLight,
+                               c4fTesterResetOrientation, c4fTesterMotion, c4fTesterLogState };
+    static C4fTester tester;
+    c4fTesterInit(&tester, &testerOps);
+    C4fTesterHold launcherHold = {};
+    int waitRelease = 0;
     c4fScreen.running = -1; c4fScreen.busy = 1; c4fScreen.autorun = C4F_AUTORUN_UNKNOWN;
     snprintf(c4fScreen.message, sizeof(c4fScreen.message), "Checking Control4Free...");
     /* Read before leaving the sandbox: /app0 is only visible from inside it. */
@@ -327,6 +447,9 @@ int main(void)
     int64_t frame = 1;
     C4fLauncherScreen drawnState;
     memset(&drawnState, 0, sizeof(drawnState));
+#ifdef C4F_DIAG
+    uint64_t testDraws = 0, testDrawMax = 0, testDrawReportAt = 0;
+#endif
     while (!done) {
         uint64_t now = c4fLauncherTimeMs();
         /* A suspended app must not resume a pending confirmation or reuse a
@@ -336,6 +459,11 @@ int main(void)
         lastInputAt = now;
         C4fInputFrame input;
         c4fInputPoll(&inputs, now, &input);
+        if (resumed) c4fTesterSuspend(&tester, now);
+        /* L3+R3 on the launcher's controller opens the controller test. It is
+         * tracked while testing too, so a hold still down after leaving the
+         * test does not open it again. */
+        int held = c4fTesterHoldUpdate(&launcherHold, input.standard.buttons, now);
         pthread_mutex_lock(&c4fMutex);
         c4fNativeInputNote(&nativeInput, c4fScreen.inputNote, sizeof(c4fScreen.inputNote));
         if (resumed) {
@@ -348,8 +476,26 @@ int main(void)
 #else
         const int diagnostic = 0;
 #endif
-        C4fLauncherAction action = c4fNavigate(&c4fScreen, input.standard.pressed, input.remote.pressed,
-                                              diagnostic, &standardUnhandled, &remoteUnhandled);
+        C4fLauncherAction action = C4F_ACTION_NONE;
+        if (tester.active) {
+            /* Every button is under test, so the launcher's shortcuts are off. */
+            if (!c4fTesterFrame(&tester, now, input.remote.pressed)) waitRelease = 1;
+        } else {
+            uint32_t standardPressed = input.standard.pressed, remotePressed = input.remote.pressed;
+            if (waitRelease) {
+                /* The press that left the test must not act here as well. */
+                if (!input.standard.buttons && !input.remote.buttons) waitRelease = 0;
+                standardPressed = remotePressed = 0;
+            }
+            action = c4fNavigate(&c4fScreen, standardPressed, remotePressed,
+                                 diagnostic, &standardUnhandled, &remoteUnhandled);
+            if (action == C4F_ACTION_TESTER || (action == C4F_ACTION_NONE && held && !c4fScreen.actionMenu &&
+                                                 !c4fScreen.confirmStop && !c4fScreen.locked)) {
+                c4fTesterOpen(&tester, now);
+                action = C4F_ACTION_NONE;
+            }
+        }
+        c4fTesterView(&tester, &c4fScreen.tester);
         if (action == C4F_ACTION_CLOSE) done = 1;
         else if (action == C4F_ACTION_START) {
             /* Until auto-start is on, Start sets it up and starts it. */
@@ -367,8 +513,8 @@ int main(void)
                      off ? "Turning auto-start off..." : "Turning auto-start on...");
         }
 #ifdef C4F_DIAG
-        /* Pages and scrolling work while busy too. */
-        uint32_t pressed = standardUnhandled | remoteUnhandled;
+        /* Pages and scrolling work while busy too; not during the controller test. */
+        uint32_t pressed = tester.active ? 0 : standardUnhandled | remoteUnhandled;
         int page = c4fScreen.diagPage;
         if (pressed & (ORBIS_PAD_BUTTON_R1 | ORBIS_PAD_BUTTON_RIGHT)) c4fScreen.diagPage = (page + 1) % C4F_DIAG_PAGES;
         if (pressed & (ORBIS_PAD_BUTTON_L1 | ORBIS_PAD_BUTTON_LEFT)) c4fScreen.diagPage = (page + C4F_DIAG_PAGES - 1) % C4F_DIAG_PAGES;
@@ -384,13 +530,34 @@ int main(void)
         pthread_mutex_unlock(&c4fMutex);
         /* Redraw only when something changed, then copy it to each buffer once. */
         if (!drawn || memcmp(&snapshot, &drawnState, sizeof(snapshot))) {
+            if (snapshot.tester.active) {
 #ifdef C4F_DIAG
-            c4fDrawDiag(canvas, &snapshot);
+                uint64_t drawStart = c4fLauncherTimeMs();
+                c4fDrawTester(canvas, &snapshot);
+                uint64_t took = c4fLauncherTimeMs() - drawStart;
+                if (took > testDrawMax) testDrawMax = took;
+                testDraws++;
 #else
-            c4fDrawLauncher(canvas, &snapshot);
+                c4fDrawTester(canvas, &snapshot);
 #endif
+            } else {
+#ifdef C4F_DIAG
+                c4fDrawDiag(canvas, &snapshot);
+#else
+                c4fDrawLauncher(canvas, &snapshot);
+#endif
+            }
             drawnState = snapshot; drawn = 1; shown[0] = shown[1] = 0;
         }
+#ifdef C4F_DIAG
+        /* How long the controller test takes to draw, for the frame budget. */
+        if (testDraws && now >= testDrawReportAt) {
+            printf("[c4f-launcher] controller test: %llu redraws, slowest %llu ms\n",
+                   (unsigned long long)testDraws, (unsigned long long)testDrawMax);
+            testDraws = testDrawMax = 0;
+            testDrawReportAt = now + 5000;
+        }
+#endif
         if (!shown[buffer]) { memcpy(c4fBuffers[buffer], canvas, frameBytes); shown[buffer] = 1; }
         if (sceVideoOutSubmitFlip(c4fVideo, buffer, ORBIS_VIDEO_OUT_FLIP_VSYNC, frame) < 0) break;
         for (;;) {
@@ -410,6 +577,7 @@ int main(void)
 #ifdef C4F_DIAG
     c4fDiagStop();
 #endif
+    c4fTesterClose(&tester);
     c4fInputClose(&inputs);
     sceNetCtlTerm();
     c4fCloseVideo();

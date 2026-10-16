@@ -42,10 +42,11 @@ The control protocol remains version 2 and the launcher API remains version 1.
 
 | Method | Params | Reply |
 |---|---|---|
-| `info` | `[]` | `{"version": "<version>", "protocol": 2, "pads": 4}` |
+| `info` | `[]` | `{"version": "<version>", "protocol": 2, "pads": 4, "motion": true}` |
 | `status` | `[]` | A status object, below. |
 | `claim` | the controllers this connection wants, for example `[0]` or `[0, 2]` | A status object, once every controller in the claim exists. |
 | `u` | input, below | None. |
+| `m` | motion, below | None. |
 | `leave` | `[pad]` | A status object. |
 | `stop` | `[]` | None; the service stops and the connection closes. |
 | `ping` | `[]` | `{}` |
@@ -84,6 +85,25 @@ ignored: input never claims a controller.
 | D-pad down | `0x0040` | Cross | `0x4000` |
 | D-pad left | `0x0080` | Square | `0x8000` |
 | PS | `0x10000` | Touchpad click | `0x100000` |
+
+**`m`** sends the motion sensors of one controller this connection owns. Like `u`, it is ignored for any
+other controller.
+
+```
+[pad, qx, qy, qz, qw, ax, ay, az, gx, gy, gz]
+```
+
+| Field | Range |
+|---|---|
+| `qx`, `qy`, `qz`, `qw` | orientation as a quaternion, times 10000: −10000 to 10000 |
+| `ax`, `ay`, `az` | acceleration in thousandths of a G: −16000 to 16000 |
+| `gx`, `gy`, `gz` | angular velocity in thousandths of a radian per second: −35000 to 35000 |
+
+The axes are the ones the PS4 reads a DualShock 4 in: x to the right, y up out of its face, z towards the
+player. A controller lying flat and still reads `+1` G on y. The values go into every sample from then on,
+together with the buttons, sticks and touches of the last `u`. Before the first `m`, and whenever the controller goes neutral, it reports no motion: orientation
+`0, 0, 0, 1` and everything else 0. `m` counts as input, like `u`. A service that understands `m` says
+`"motion": true` in its `info` reply.
 
 Send the state whenever it changes, and at least once a second while the controller is in use. After 3
 seconds without input the controller goes neutral and shows as `paused`; after 15 it's removed. When a

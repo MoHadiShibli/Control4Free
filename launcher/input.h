@@ -9,18 +9,23 @@ enum { C4F_INPUT_PORT_STANDARD = 0, C4F_INPUT_PORT_REMOTE = 16 };
 #define C4F_INPUT_SYSTEM_USER 0xff
 #define C4F_INPUT_RETRY_MS 1000
 
-/* Native read-side buttons used by launcher navigation. */
+/* Native read-side buttons used by launcher navigation and the controller test. */
+#define C4F_INPUT_BUTTON_L3       UINT32_C(0x000002)
+#define C4F_INPUT_BUTTON_R3       UINT32_C(0x000004)
 #define C4F_INPUT_BUTTON_OPTIONS  UINT32_C(0x000008)
 #define C4F_INPUT_BUTTON_UP       UINT32_C(0x000010)
 #define C4F_INPUT_BUTTON_RIGHT    UINT32_C(0x000020)
 #define C4F_INPUT_BUTTON_DOWN     UINT32_C(0x000040)
 #define C4F_INPUT_BUTTON_LEFT     UINT32_C(0x000080)
+#define C4F_INPUT_BUTTON_L2       UINT32_C(0x000100)
+#define C4F_INPUT_BUTTON_R2       UINT32_C(0x000200)
 #define C4F_INPUT_BUTTON_L1       UINT32_C(0x000400)
 #define C4F_INPUT_BUTTON_R1       UINT32_C(0x000800)
 #define C4F_INPUT_BUTTON_TRIANGLE UINT32_C(0x001000)
 #define C4F_INPUT_BUTTON_CIRCLE   UINT32_C(0x002000)
 #define C4F_INPUT_BUTTON_CROSS    UINT32_C(0x004000)
 #define C4F_INPUT_BUTTON_SQUARE   UINT32_C(0x008000)
+#define C4F_INPUT_BUTTON_TOUCHPAD UINT32_C(0x100000)
 /* PS4 reverse definitions identify bit31 as system-intercepted input. This is
  * a read-side flag, not an additional virtual-controller button. */
 #define C4F_INPUT_BUTTON_INTERCEPTED UINT32_C(0x80000000)

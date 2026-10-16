@@ -3,6 +3,30 @@
 Versions follow [Semantic Versioning](https://semver.org): PATCH for fixes, MINOR for features that break
 nothing, MAJOR for anything people rely on that changes.
 
+## 1.3.0 — Unreleased
+
+A controller test on the PS4, and experimental extras on the page.
+
+- **Test controllers** in the PS4 app shows what each signed-in user's controller sends, read the way a game
+  reads it: buttons, sticks, triggers, touchpad and motion sensors, on the page's controller picture. Press
+  **Options** in the app, or choose it under **Actions**. Hold **L3 + R3** for two seconds for its menu:
+  change user, rumble each motor, set the light bar, reset orientation, or go back. PS and Share go to the
+  PS4 itself and aren't shown. See [Testing controllers](docs/playing.md#testing-controllers-on-the-ps4).
+- **Settings → Experimental** on the page. Every switch stays off until you turn it on:
+  - **Lights and rumble on Sony controllers**: a DualShock 4 or DualSense connected to a computer lights up
+    in its PS4 controller's colour, rumbles directly (a DualSense included), and passes on its touchpad's
+    fingers, which browsers' gamepads leave out. Chrome or Edge on a computer.
+  - **Trigger rumble**: Xbox controllers rumble in their triggers too, and a linked DualSense vibrates its
+    triggers, following the game's rumble.
+  - **Motion controls**: tilting a phone, or a linked DualShock 4 or DualSense, moves the controller's
+    motion sensors.
+
+  Linking and motion need the page treated as secure: see
+  [Experimental features](docs/troubleshooting.md#experimental-features).
+- The control protocol has a motion message, `m`. See [Protocol](docs/protocol.md).
+- Fixed: a game's rumble reached gamepads on the controller page with the large and small motors
+  swapped, so heavy rumble buzzed lightly and light rumble shook hard.
+
 ## 1.2.1 — 2026-10-11
 
 HDMI-CEC navigation for the PS4 app.

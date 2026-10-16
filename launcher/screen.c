@@ -11,9 +11,7 @@
 #include "logo.h"
 #include "navigation.h"
 #include "qrcodegen.h"
-
-/* Page CSS pixels to TV pixels. */
-#define C4F_S 1.5f
+#include "style.h"
 
 /* Layout, in TV pixels. */
 #define C4F_LEFT         150.0f
@@ -26,25 +24,6 @@
 #define C4F_QR_LEFT      (C4F_LEFT + C4F_MAIN_WIDTH + C4F_ROW_GAP)
 #define C4F_PANEL_TOP    (C4F_ROW_TOP + C4F_ROW_HEIGHT + 28)
 #define C4F_PANEL_HEIGHT 128.0f
-
-/* The page's palette (:root). */
-#define C4F_TEXT         C4F_RGBA(244, 247, 255, 1)
-#define C4F_MUTED        C4F_RGBA(226, 236, 255, .72f)
-#define C4F_FAINT        C4F_RGBA(226, 236, 255, .46f)
-#define C4F_LINE         C4F_RGBA(255, 255, 255, .16f)
-#define C4F_LINE_SOFT    C4F_RGBA(255, 255, 255, .09f)
-#define C4F_PANEL        C4F_RGBA(3, 16, 44, .55f)
-#define C4F_PANEL_STRONG C4F_RGBA(2, 11, 31, .86f)
-#define C4F_TILE         C4F_RGBA(12, 40, 98, .5f)
-#define C4F_ACCENT       C4F_RGBA(58, 140, 255, 1)
-#define C4F_OK           C4F_RGBA(69, 224, 138, 1)
-#define C4F_WARN         C4F_RGBA(255, 208, 77, 1)
-#define C4F_BAD          C4F_RGBA(255, 107, 125, 1)
-#define C4F_CIRCLE_KEY   C4F_RGBA(255, 102, 128, 1)
-#define C4F_CROSS_KEY    C4F_RGBA(134, 182, 255, 1)
-#define C4F_SQUARE_KEY   C4F_RGBA(255, 146, 220, 1)
-#define C4F_TRIANGLE_KEY C4F_RGBA(63, 224, 184, 1)
-#define C4F_WHITE        C4F_RGBA(255, 255, 255, 1)
 
 static uint32_t *c4fBackdrop;
 
@@ -172,7 +151,7 @@ static void c4fPaintWave(C4fCanvas *c, const float path[25], float offset, float
     }
 }
 
-static void c4fPaintBackdrop(C4fCanvas *c, float scale)
+void c4fPaintBackdrop(C4fCanvas *c, float scale)
 {
     const float w = (float)c->w, h = (float)c->h, sx = 2 * w / 3200;
     c4fPaintGradient(c);
@@ -226,7 +205,7 @@ static void c4fBoxPass(const uint8_t *src, uint8_t *dst, int w, int h, int radiu
 
 /* backdrop-filter: blur(sigma) under a tile. The backdrop never changes, so
  * this is done once, clipped to the tile's rounded shape. */
-static void c4fBlurUnder(C4fCanvas *c, float x, float y, float w, float h, float r, float sigma)
+void c4fBlurUnder(C4fCanvas *c, float x, float y, float w, float h, float r, float sigma)
 {
     /* Three box passes of this radius approximate a Gaussian of that sigma. */
     const int radius = (int)((sqrtf(4 * sigma * sigma + 1) - 1) / 2 + 0.5f), margin = 3 * radius;
@@ -270,7 +249,7 @@ static void c4fBlurUnder(C4fCanvas *c, float x, float y, float w, float h, float
 /* ---- pieces of the page ---- */
 
 /* The DualShock 4 mark, its cut-outs showing what is behind. */
-static void c4fMark(C4fCanvas *c, float x, float y, float width, C4fColor color)
+void c4fMark(C4fCanvas *c, float x, float y, float width, C4fColor color)
 {
     C4fPath path = { 0 };
     c4fLogoPath(&path, 1);
@@ -280,8 +259,8 @@ static void c4fMark(C4fCanvas *c, float x, float y, float width, C4fColor color)
 
 /* A DualShock 4 with its light bar lit: the bar glows over the top edge, and
  * the cut-outs read as dark recesses. */
-static void c4fLitController(C4fCanvas *c, float x, float y, float width, float angle,
-                             C4fColor body, C4fColor light, int shadow)
+void c4fLitController(C4fCanvas *c, float x, float y, float width, float angle,
+                      C4fColor body, C4fColor light, int shadow)
 {
     C4fPath outline = { 0 }, detail = { 0 }, bar = { 0 };
     C4fPlacement at = c4fLogoAt(x, y, width, angle);
@@ -310,13 +289,13 @@ static void c4fLitController(C4fCanvas *c, float x, float y, float width, float 
     c4fPathFree(&bar);
 }
 
-static void c4fTextCentered(C4fCanvas *c, int font, float size, float cx, float y, C4fColor color, const char *text)
+void c4fTextCentered(C4fCanvas *c, int font, float size, float cx, float y, C4fColor color, const char *text)
 {
     c4fText(c, font, size, cx - c4fTextWidth(font, size, text) / 2, y, color, text);
 }
 
 /* .tile: --tile with a light sheen, a 1px line, a drop shadow and the colour bar. */
-static void c4fTile(C4fCanvas *c, float x, float y, float w, float h, C4fColor bar)
+void c4fTile(C4fCanvas *c, float x, float y, float w, float h, C4fColor bar)
 {
     const float r = 6 * C4F_S;
     c4fShadowRoundRect(c, x, y, w, h, r, 0, 16 * C4F_S, 34 * C4F_S, -18 * C4F_S, C4F_RGBA(0, 0, 0, .9f));
@@ -328,7 +307,7 @@ static void c4fTile(C4fCanvas *c, float x, float y, float w, float h, C4fColor b
 }
 
 /* .panel */
-static void c4fPanel(C4fCanvas *c, float x, float y, float w, float h, C4fColor fill, C4fColor line)
+void c4fPanel(C4fCanvas *c, float x, float y, float w, float h, C4fColor fill, C4fColor line)
 {
     c4fFillRoundRect(c, x, y, w, h, 6 * C4F_S, fill);
     c4fInsetRoundRect(c, x, y, w, h, 6 * C4F_S, 1 * C4F_S, line);
@@ -352,21 +331,18 @@ static void c4fRingBadge(C4fCanvas *c, float cx, float cy, C4fColor color, const
 }
 
 /* .dot, with the glow the page gives a live connection. */
-static void c4fDot(C4fCanvas *c, float cx, float cy, C4fColor color, int glow)
+void c4fDot(C4fCanvas *c, float cx, float cy, C4fColor color, int glow)
 {
     if (glow) c4fGlowCircle(c, cx, cy, 4 * C4F_S, 10 * C4F_S, 0, color);
     c4fFillCircle(c, cx, cy, 4 * C4F_S, color);
 }
 
-/* Button guide in the PS4's manner, with the page's face-button colours. */
-enum { C4F_KEY_CROSS, C4F_KEY_CIRCLE, C4F_KEY_SQUARE, C4F_KEY_TRIANGLE };
-typedef struct { int key; const char *label; } C4fHint;
 #define C4F_HINT_RADIUS 22.0f
 #define C4F_HINT_GAP 14.0f
 #define C4F_HINT_SPACING 40.0f
 #define C4F_HINT_SIZE 26.0f
 
-static void c4fHints(C4fCanvas *c, float right, float cy, const C4fHint *hints, int count)
+void c4fHints(C4fCanvas *c, float right, float cy, const C4fHint *hints, int count)
 {
     float x = right;
     for (int i = 0; i < count; i++)
@@ -383,6 +359,10 @@ static void c4fHints(C4fCanvas *c, float right, float cy, const C4fHint *hints, 
             c4fRing(c, cx, cy, 10.5f, 3.6f, C4F_CIRCLE_KEY);
         } else if (hints[i].key == C4F_KEY_TRIANGLE) {
             c4fTriangleOutline(c, cx, cy + 1.5f, 11.5f, 3.4f, C4F_TRIANGLE_KEY);
+        } else if (hints[i].key == C4F_KEY_OPTIONS) {
+            /* The page's menu mark, three lines, for the Options button. */
+            for (int line = -1; line <= 1; line++)
+                c4fSegment(c, cx - 9, cy + line * 6.5f, cx + 9, cy + line * 6.5f, 3, C4F_TEXT);
         } else {
             c4fSquareOutline(c, cx, cy, 8.5f, 3.4f, C4F_SQUARE_KEY);
         }
@@ -468,8 +448,8 @@ void c4fDrawActionOverlay(uint32_t *pixels, const C4fLauncherScreen *s)
 #ifdef C4F_DIAG
     diagnostic = 1;
 #endif
-    C4fLauncherAction actions[7];
-    int count = s->confirmStop ? 0 : c4fActionList(s, diagnostic, actions, 7);
+    C4fLauncherAction actions[8];
+    int count = s->confirmStop ? 0 : c4fActionList(s, diagnostic, actions, 8);
     const float dh = s->confirmStop ? (s->confirmMenu ? 410 : 330) : 220 + count * 72;
     const float dy = (c.h - dh) / 2;
     c4fFillRect(&c, 0, 0, c.w, c.h, C4F_RGBA(2, 11, 31, .65f));
@@ -633,7 +613,7 @@ void c4fDrawLauncher(uint32_t *pixels, const C4fLauncherScreen *s)
         c4fText(&c, C4F_FONT_LIGHT, 23, left, 973, C4F_MUTED, "TV remote: OK opens actions / arrows select / Back returns");
     c4fText(&c, C4F_FONT_LIGHT, 20, left, 1030, C4F_FAINT, "Control4Free " C4F_LAUNCHER_VERSION);
     if (!s->confirmStop && !s->busy) {
-        C4fHint hints[4];
+        C4fHint hints[5];
         int n = 0;
         if (!s->locked && !live) {
             hints[n].key = C4F_KEY_CROSS;
@@ -647,6 +627,10 @@ void c4fDrawLauncher(uint32_t *pixels, const C4fLauncherScreen *s)
         if (live) {
             hints[n].key = C4F_KEY_SQUARE;
             hints[n++].label = "Stop";
+        }
+        if (!s->locked) {
+            hints[n].key = C4F_KEY_OPTIONS;
+            hints[n++].label = "Test controllers";
         }
         hints[n].key = C4F_KEY_CIRCLE;
         hints[n++].label = "Close";
@@ -668,14 +652,28 @@ void c4fDrawIcon(uint32_t *pixels, int size)
     c4fTextCentered(&c, C4F_FONT_LIGHT, s * 0.1f, s / 2.0f, s * 0.89f, C4F_TEXT, "Control4Free");
 }
 
+/* The backdrop before this screen's blurs, for the controller test to build its
+ * own layer on. Taken once; NULL if memory was short. */
+static uint32_t *c4fCleanBackdrop;
+
+uint32_t *c4fTakeCleanBackdrop(void)
+{
+    uint32_t *taken = c4fCleanBackdrop;
+    c4fCleanBackdrop = NULL;
+    return taken;
+}
+
 int c4fScreenInit(void)
 {
     if (c4fDrawInit()) return -1;
     if (!c4fBackdrop) {
-        c4fBackdrop = malloc((size_t)C4F_SCREEN_WIDTH * C4F_SCREEN_HEIGHT * sizeof(uint32_t));
+        const size_t bytes = (size_t)C4F_SCREEN_WIDTH * C4F_SCREEN_HEIGHT * sizeof(uint32_t);
+        c4fBackdrop = malloc(bytes);
         if (!c4fBackdrop) return -1;
         C4fCanvas c = { c4fBackdrop, C4F_SCREEN_WIDTH, C4F_SCREEN_HEIGHT };
         c4fPaintBackdrop(&c, C4F_S);
+        c4fCleanBackdrop = malloc(bytes);
+        if (c4fCleanBackdrop) memcpy(c4fCleanBackdrop, c4fBackdrop, bytes);
         /* .tile has backdrop-filter: blur(6px), .panel blur(10px). */
         c4fBlurUnder(&c, C4F_LEFT, C4F_ROW_TOP, C4F_MAIN_WIDTH, C4F_ROW_HEIGHT, 6 * C4F_S, 6 * C4F_S);
         c4fBlurUnder(&c, C4F_QR_LEFT, C4F_ROW_TOP, C4F_QR_WIDTH, C4F_ROW_HEIGHT, 6 * C4F_S, 6 * C4F_S);

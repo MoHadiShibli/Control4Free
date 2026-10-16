@@ -25,15 +25,16 @@ int main(void)
     f = parse(green, sizeof(green));
     assert(f.r == 0 && f.g == 0x40 && f.b == 0);
 
-    /* A game's hit: the small motor at full for ~300 ms. */
+    /* A game's hit: the large motor at full for ~300 ms. */
     static const uint8_t hit[] = { 0, 0, 0, 0xff, 0, 0, 0x40, 0 };
     f = parse(hit, sizeof(hit));
-    assert(f.small == 0xff && f.large == 0 && f.g == 0x40);
+    assert(f.large == 0xff && f.small == 0 && f.g == 0x40);
 
-    /* Both motors, by the DualShock 4 layout: [3] small, [4] large. */
-    static const uint8_t both[] = { 0x01, 0, 0, 0x30, 0xc0, 0x20, 0, 0x20 };
+    /* Each motor on its own from the PS4 app's controller test: the large motor
+     * in [3], the small one in [4], the reverse of the DS4 report's order. */
+    static const uint8_t both[] = { 0x01, 0, 0, 0xc0, 0x30, 0x20, 0, 0x20 };
     f = parse(both, sizeof(both));
-    assert(f.small == 0x30 && f.large == 0xc0 && f.r == 0x20 && f.b == 0x20);
+    assert(f.large == 0xc0 && f.small == 0x30 && f.r == 0x20 && f.b == 0x20);
 
     /* Too short to hold the fields: nothing, rather than a misread. */
     uint8_t shortBuf[4] = { 1, 2, 3, 4 };

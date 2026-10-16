@@ -1,5 +1,6 @@
 /* Browser-controlled VDA lifecycle. No automatic button presses or user binds.
- * The page talks JSON over a WebSocket: info, status, claim, u (input), leave, stop. */
+ * The page talks JSON over a WebSocket: info, status, claim, u (input), m (motion),
+ * leave, stop. */
 #include <errno.h>
 #include <fcntl.h>
 #include <stdio.h>
@@ -55,6 +56,10 @@ typedef struct {
     char userName[72];
     int nameTries;
     uint64_t nameAt;
+    /* Motion its owner sends ('m'), put into every sample. Until then, and after
+     * any neutral reset, samples carry the still values c4fPadDataNeutral sets. */
+    int motion;
+    float quat[4], accel[3], gyro[3];
 } C4fWebPad;
 
 /* Creating a controller means issuing AddDevice and then finding its DeviceId in
@@ -236,7 +241,16 @@ static uint64_t c4fSince(uint64_t now, uint64_t then)
 static void c4fNeutralize(C4fWebPad *p)
 {
     p->head = p->count = 0;
+    p->motion = 0;
     c4fPadDataNeutral(&p->current);
+}
+
+static void c4fApplyMotion(const C4fWebPad *p, ScePadData *data)
+{
+    if (!p->motion) return;
+    memcpy(data->quat, p->quat, sizeof(data->quat));
+    memcpy(data->accel, p->accel, sizeof(data->accel));
+    memcpy(data->gyro, p->gyro, sizeof(data->gyro));
 }
 
 static void c4fRemove(C4fWeb *app, C4fWebPad *p)
@@ -811,11 +825,42 @@ static void c4fUpdate(C4fWeb *app, C4fNetClient *c, C4fRequest *r)
         if (t[0] < 0 || t[0] > 127 || t[1] < 0 || t[1] > 1919 || t[2] < 0 || t[2] > 941) { c4fError(c, r, 400, "A touch landed outside the touchpad"); return; }
         data.touchData.touch[i].finger = t[0]; data.touchData.touch[i].x = t[1]; data.touchData.touch[i].y = t[2];
     }
+    c4fApplyMotion(p, &data);
     if (p->stale) { p->stale = 0; app->changed = 1; }
     uint64_t now = c4fTimeMs();
     p->lastInput = now; c4fEnqueue(p, &data);
     /* Out at once, unless a report has only just gone. Holding a new sample back
      * for the next tick would add lag for nothing. */
+    if (c4fSince(now, p->lastReport) >= C4F_REPORT_FAST_MS) c4fReportPad(app, p, (int)r->args[0], now);
+}
+
+/* m: [pad, qx, qy, qz, qw, ax, ay, az, gx, gy, gz] in whole numbers: the
+ * orientation x 10000, acceleration in thousandths of a G, angular velocity in
+ * thousandths of a radian per second. The buttons, sticks and touches stay as
+ * the last u left them. */
+static void c4fMotion(C4fWeb *app, C4fNetClient *c, C4fRequest *r)
+{
+    static const int64_t limits[3] = { 10000, 16000, 35000 };
+    if (r->argc != 11 || r->args[0] < 0 || r->args[0] >= C4F_MAX_PADS) { c4fError(c, r, 400, "That motion was not in a form Control4Free understands"); return; }
+    C4fWebPad *p = &app->pads[r->args[0]];
+    if (p->owner != c || !p->active) return;
+    for (unsigned i = 1; i < 11; i++) {
+        int64_t limit = limits[i < 5 ? 0 : i < 8 ? 1 : 2];
+        if (r->args[i] < -limit || r->args[i] > limit) { c4fError(c, r, 400, "Motion was outside its range"); return; }
+    }
+    for (int i = 0; i < 4; i++) p->quat[i] = (float)r->args[1+i] / 10000.0f;
+    for (int i = 0; i < 3; i++) {
+        p->accel[i] = (float)r->args[5+i] / 1000.0f;
+        p->gyro[i] = (float)r->args[8+i] / 1000.0f;
+    }
+    p->motion = 1;
+    if (p->stale) { p->stale = 0; app->changed = 1; }
+    uint64_t now = c4fTimeMs();
+    p->lastInput = now;
+    /* The newest state, moved: coalesces with a queued sample of the same buttons. */
+    ScePadData data = p->count ? p->queue[(p->head+p->count-1)%C4F_QUEUE_SIZE] : p->current;
+    c4fApplyMotion(p, &data);
+    c4fEnqueue(p, &data);
     if (c4fSince(now, p->lastReport) >= C4F_REPORT_FAST_MS) c4fReportPad(app, p, (int)r->args[0], now);
 }
 
@@ -851,7 +896,7 @@ static void c4fWebEvent(C4fNetClient *c, int event, const char *text, size_t len
     if (app->stopAt) { c4fError(c, &r, 503, "Control4Free is shutting down"); return; }
     if (!strcmp(r.method, "info")) {
         char reply[160];
-        if (r.hasId) { snprintf(reply, sizeof(reply), "{\"id\":%lld,\"result\":{\"version\":\"%s\",\"protocol\":2,\"pads\":%d}}", (long long)r.id, C4F_VERSION, C4F_MAX_PADS); c4fNetText(c, reply); }
+        if (r.hasId) { snprintf(reply, sizeof(reply), "{\"id\":%lld,\"result\":{\"version\":\"%s\",\"protocol\":2,\"pads\":%d,\"motion\":true}}", (long long)r.id, C4F_VERSION, C4F_MAX_PADS); c4fNetText(c, reply); }
     } else if (!strcmp(r.method, "ping")) {
         char reply[64];
         if (r.hasId) { snprintf(reply, sizeof(reply), "{\"id\":%lld,\"result\":{}}", (long long)r.id); c4fNetText(c, reply); }
@@ -860,6 +905,7 @@ static void c4fWebEvent(C4fNetClient *c, int event, const char *text, size_t len
     } else if (!strcmp(r.method, "status")) c4fStatus(app, c, &r);
     else if (!strcmp(r.method, "claim")) c4fClaim(app, c, &r);
     else if (!strcmp(r.method, "u")) c4fUpdate(app, c, &r);
+    else if (!strcmp(r.method, "m")) c4fMotion(app, c, &r);
     else if (!strcmp(r.method, "leave")) {
         if (app->add.client == c) { c4fError(c, &r, 409, "Wait for the pending controller claim"); return; }
         if (r.argc != 1 || r.args[0] < 0 || r.args[0] >= C4F_MAX_PADS || app->pads[r.args[0]].owner != c) { c4fError(c, &r, 409, "That controller is not yours to disconnect"); return; }

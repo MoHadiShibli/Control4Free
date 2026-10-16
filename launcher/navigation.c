@@ -17,6 +17,7 @@ int c4fActionAvailable(const C4fLauncherScreen *screen, C4fLauncherAction action
         return !screen->busy && !screen->locked && screen->autorun != C4F_AUTORUN_UNKNOWN;
     case C4F_ACTION_STOP: return !screen->busy && !screen->locked && screen->running == 1;
     case C4F_ACTION_CAPTURE: return !!diagnostic;
+    case C4F_ACTION_TESTER: return !screen->locked;
     case C4F_ACTION_CLOSE: return !screen->busy;
     default: return 0;
     }
@@ -26,7 +27,7 @@ int c4fActionList(const C4fLauncherScreen *screen, int diagnostic,
                  C4fLauncherAction *actions, int capacity)
 {
     const C4fLauncherAction order[] = { C4F_ACTION_RESUME, C4F_ACTION_START,
-        C4F_ACTION_AUTORUN, C4F_ACTION_STOP, C4F_ACTION_CAPTURE, C4F_ACTION_CLOSE };
+        C4F_ACTION_AUTORUN, C4F_ACTION_STOP, C4F_ACTION_TESTER, C4F_ACTION_CAPTURE, C4F_ACTION_CLOSE };
     int count = 0;
     for (unsigned i = 0; i < sizeof(order) / sizeof(order[0]); i++) {
         if (!c4fActionAvailable(screen, order[i], diagnostic)) continue;
@@ -48,6 +49,7 @@ const char *c4fActionLabel(const C4fLauncherScreen *screen, C4fLauncherAction ac
     case C4F_ACTION_STOP: return "Stop Control4Free";
     case C4F_ACTION_CLOSE: return "Close app";
     case C4F_ACTION_CAPTURE: return "Capture kernel log";
+    case C4F_ACTION_TESTER: return "Test controllers";
     default: return "";
     }
 }
@@ -130,8 +132,8 @@ C4fLauncherAction c4fNavigate(C4fLauncherScreen *screen, uint32_t standardPresse
         if (pressed & C4F_NAV_DIRECTIONS) {
             int direction = c4fDirection(pressed);
             if (direction) {
-                C4fLauncherAction actions[6];
-                int count = c4fActionList(screen, diagnostic, actions, 6), at = 0;
+                C4fLauncherAction actions[8];
+                int count = c4fActionList(screen, diagnostic, actions, 8), at = 0;
                 while (at < count && (int)actions[at] != screen->actionFocus) at++;
                 screen->actionFocus = actions[(at + count + direction) % count];
             }
@@ -158,6 +160,13 @@ C4fLauncherAction c4fNavigate(C4fLauncherScreen *screen, uint32_t standardPresse
         screen->actionMenu = 1;
         screen->actionFocus = c4fDefaultAction(screen, diagnostic);
         return C4F_ACTION_NONE;
+    }
+    /* A DS4's Options opens the controller test. The diagnostic build keeps
+     * Options for capturing the kernel log. */
+    if (!diagnostic && (standardPressed & C4F_INPUT_BUTTON_OPTIONS) &&
+        c4fActionAvailable(screen, C4F_ACTION_TESTER, diagnostic)) {
+        c4fConsume(standardUnhandled, remoteUnhandled);
+        return C4F_ACTION_TESTER;
     }
     if (screen->busy) return C4F_ACTION_NONE;
     if (pressed & C4F_NAV_BACK) {
