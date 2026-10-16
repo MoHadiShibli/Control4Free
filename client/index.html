@@ -3928,11 +3928,16 @@
         src.snapshot = ControllerMapping.read(gp);
         const profile = profileFor(src);
         const before = src.buttons + ',' + src.lx + ',' + src.ly + ',' + src.rx + ',' + src.ry + ',' + src.l2 + ',' + src.r2;
+        // Experimental: a linked Sony controller's own reports stand in for the
+        // browser's view of it, which goes quiet over Bluetooth once it's linked.
+        const viaHid = hidLinks.has(gp.index) && src.hidState && t - src.hidAt < 250;
+        if (viaHid) src.hold = {};
         if (!src.hold) src.hold = ControllerMapping.holdBack(profile);
         ControllerMapping.letGo(src.snapshot, profile, src.hold);
         const waiting = Object.keys(src.hold).length > 0;
         if (waiting !== src.waitNeutral) { src.waitNeutral = waiting; renderGamepads(); }
         if (mapper.index === gp.index || ControllerMapping.unresolved(profile, signature)) src.mapped = ControllerMapping.empty();
+        else if (viaHid) src.mapped = ControllerMapping.fromSource(Object.assign(src, src.hidState));
         else src.mapped = ControllerMapping.evaluate(src.snapshot, profile, src.transient, src.hold);
         Object.assign(src, ControllerMapping.toSource(src.mapped));
         const after = src.buttons + ',' + src.lx + ',' + src.ly + ',' + src.rx + ',' + src.ry + ',' + src.l2 + ',' + src.r2;
@@ -4514,11 +4519,14 @@
         row.appendChild(el('span', 'row-desc', desc));
         if (blocked) {
           const why = el('span', 'row-desc blocked', blocked + ' ');
-          const help = el('a', '', 'How to turn it on');
-          help.href = EXPERIMENTS_HELP;
-          help.target = '_blank';
-          help.rel = 'noopener';
-          why.appendChild(help);
+          // Only an insecure page has a fix in this browser's settings.
+          if (!window.isSecureContext) {
+            const help = el('a', '', 'How to turn it on');
+            help.href = EXPERIMENTS_HELP;
+            help.target = '_blank';
+            help.rel = 'noopener';
+            why.appendChild(help);
+          }
           row.appendChild(why);
         }
         rows.appendChild(row);
@@ -4737,7 +4745,7 @@
       hidLinks.delete(index);
       link.device.removeEventListener('inputreport', link.onInput);
       const src = gamepadSources.get(index);
-      if (src) src.touches = [];
+      if (src) { src.touches = []; src.hidState = null; }
       motionLeave(link.motion);
       // Left still, in a dim blue, once any report on its way has gone.
       for (let i = 0; link.busy && i < 20; i++) await new Promise(done => setTimeout(done, 10));
@@ -4825,16 +4833,48 @@
       return touches;
     }
 
-    // Input from a linked controller: the touchpad's fingers, which browsers'
-    // gamepads leave out, and the motion sensors while motion is on. Offsets
-    // are hid-playstation's, without the report ID: [gyro, touch, touch sets].
+    // A report's buttons, sticks and triggers. Over Bluetooth a linked controller
+    // switches to its full reports, which the browser's own gamepad doesn't read,
+    // so a linked controller's input comes from here. DS4: sticks, then buttons,
+    // then triggers; DualSense: sticks, triggers, a counter, buttons. Its short
+    // Bluetooth report, before the switch, is laid out like a DS4's.
+    const HAT = [B.UP, B.UP | B.RIGHT, B.RIGHT, B.RIGHT | B.DOWN, B.DOWN, B.DOWN | B.LEFT, B.LEFT, B.LEFT | B.UP];
+    const HID_BUTTONS = [[0x10, B.SQUARE], [0x20, B.CROSS], [0x40, B.CIRCLE], [0x80, B.TRIANGLE]];
+    const HID_BUTTONS1 = [[0x01, B.L1], [0x02, B.R1], [0x04, B.L2], [0x08, B.R2], [0x10, B.SHARE], [0x20, B.OPTIONS], [0x40, B.L3], [0x80, B.R3]];
+    function hidState(link, data, id) {
+      const n = data.byteLength;
+      let at, triggersAt, buttonsAt;
+      if (link.model === 'ds4' || (id === 0x01 && n < 63)) {
+        if (id === 0x01 && n >= 9) at = 0; else if (id === 0x11 && n >= 11) at = 2; else return null;
+        buttonsAt = at + 4; triggersAt = at + 7;
+      } else if (id === 0x01) {
+        at = 0; triggersAt = 4; buttonsAt = 7;
+      } else if (id === 0x31 && n >= 11) {
+        at = 1; triggersAt = 5; buttonsAt = 8;
+      } else return null;
+      const b0 = data.getUint8(buttonsAt), b1 = data.getUint8(buttonsAt + 1), b2 = data.getUint8(buttonsAt + 2);
+      let buttons = (b0 & 0x0f) < 8 ? HAT[b0 & 0x0f] : 0;
+      for (const [bit, out] of HID_BUTTONS) if (b0 & bit) buttons |= out;
+      for (const [bit, out] of HID_BUTTONS1) if (b1 & bit) buttons |= out;
+      if (b2 & 0x01) buttons |= B.PS;
+      if (b2 & 0x02) buttons |= B.TOUCH;
+      return { buttons, lx: data.getUint8(at), ly: data.getUint8(at + 1), rx: data.getUint8(at + 2), ry: data.getUint8(at + 3),
+               l2: data.getUint8(triggersAt), r2: data.getUint8(triggersAt + 1) };
+    }
+
+    // Input from a linked controller: its buttons and sticks (see hidState), the
+    // touchpad's fingers, which browsers' gamepads leave out, and the motion
+    // sensors while motion is on. Offsets are hid-playstation's, without the
+    // report ID: [gyro, touch, touch sets].
     function hidInput(link, ev) {
       const data = ev.data, id = ev.reportId, ds4 = link.model === 'ds4';
+      const src = gamepadSources.get(link.index);
+      const state = hidState(link, data, id);
+      if (src && state) { src.hidState = state; src.hidAt = ev.timeStamp; }
       const layout = ds4 ? (id === 0x01 ? [12, 32, 3] : id === 0x11 ? [14, 34, 4] : null)
                          : (id === 0x01 ? [15, 32, 0] : id === 0x31 ? [16, 33, 0] : null);
       if (!layout || data.byteLength < layout[1] + 8) return;
       const [gyroAt, touchAt, sets] = layout, accelAt = gyroAt + 6;
-      const src = gamepadSources.get(link.index);
       if (src && !ds4) src.touches = hidTouches(data, touchAt, 1080);
       if (src && ds4) {
         // A DS4 report holds the touch reports since its last one, newest last.
@@ -5027,7 +5067,8 @@
       flush(t);
       measurePing(t);
       driveRumble(t);
-      experimentsTick(t);
+      // Experimental code must never stop the frame loop, and with it the input.
+      try { experimentsTick(t); } catch (e) { console.error(e); }
       renderPressed();
       mapper.tick(t);
       requestAnimationFrame(frame);

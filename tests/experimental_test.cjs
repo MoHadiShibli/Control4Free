@@ -91,6 +91,7 @@ function fakes({ insecure = false } = {}) {
     ds4: new FakeDevice(0x09cc, [0x05], { 0x02: Array.from(calibration) }),
     ds4bt: new FakeDevice(0x09cc, [0x11], {}),
     dualsense: new FakeDevice(0x0ce6, [0x02], { 0x20: Array.from(firmware) }),
+    dualsensebt: new FakeDevice(0x0ce6, [0x31], { 0x20: Array.from(firmware) }),
     granted: [], next: null, calls: [],
   };
   Object.defineProperty(navigator, 'hid', { configurable: true, value: {
@@ -236,6 +237,7 @@ const lastReport = (page, device) => page.evaluate(d => fakeHid[d].sent.at(-1), 
     // Its touchpad's fingers reach the PS4, its 1080-high pad scaled to the PS4's 942.
     await page.evaluate(() => {
       const bytes = new Array(63).fill(0);
+      bytes.fill(128, 0, 4); bytes[7] = 0x08; // sticks centred, D-pad released
       bytes[32] = 7; bytes[33] = 960 & 0xff; bytes[34] = (960 >> 8) | (1079 & 0x0f) << 4; bytes[35] = 1079 >> 4;
       bytes[36] = 0x80;
       fakeHid.dualsense.input(0x01, bytes);
@@ -243,7 +245,11 @@ const lastReport = (page, device) => page.evaluate(d => fakeHid[d].sent.at(-1), 
     await page.waitForFunction(() => sentMessages.findLast(m => m.method === 'u' && m.params[0] === 1)?.params[8] === 1);
     assert.deepEqual((await page.evaluate(() => sentMessages.findLast(m => m.method === 'u' && m.params[0] === 1).params)).slice(8),
                      [1, 7, 960, 941]);
-    await page.evaluate(() => { const bytes = new Array(63).fill(0); bytes[32] = 0x87; bytes[36] = 0x80; fakeHid.dualsense.input(0x01, bytes); });
+    await page.evaluate(() => {
+      const bytes = new Array(63).fill(0);
+      bytes.fill(128, 0, 4); bytes[7] = 0x08; bytes[32] = 0x87; bytes[36] = 0x80;
+      fakeHid.dualsense.input(0x01, bytes);
+    });
     await page.waitForFunction(() => sentMessages.findLast(m => m.method === 'u' && m.params[0] === 1)?.params[8] === 0);
     feedback('12030d', 255, 128);
     await page.waitForFunction(() => fakeHid.dualsense.sent.at(-1).data[3] === 255);
@@ -268,6 +274,46 @@ const lastReport = (page, device) => page.evaluate(d => fakeHid[d].sent.at(-1), 
     assert.ok(Math.abs(params.leftTrigger - 200 / 255 * .6) < 1e-6 && Math.abs(params.rightTrigger - 100 / 255 * .6) < 1e-6, JSON.stringify(params));
     feedback('11030d', 0, 0);
     console.log('PASS experimental: DualSense setup, newer rumble, colour, trigger effects on change; Xbox trigger rumble');
+
+    // DualSense over Bluetooth: report 0x31 with its sequence, tag and CRC. Once
+    // linked the browser's gamepad goes quiet (here: frozen at rest), so the
+    // controller's own reports carry its buttons, sticks and triggers.
+    await page.click('#expPads [data-link="2"]');
+    await page.waitForFunction(() => !c4fTest.hidLinks.has(2) && fakeHid.dualsense.closes === 1);
+    await page.evaluate(() => { fakeHid.next = fakeHid.dualsensebt; });
+    await page.click('#expPads [data-link="2"]');
+    await page.waitForFunction(() => fakeHid.dualsensebt.sent.length >= 2);
+    sent = await page.evaluate(() => fakeHid.dualsensebt.sent);
+    for (const [i, r] of sent.slice(0, 2).entries()) {
+      assert.equal(r.id, 0x31);
+      assert.equal(r.data.length, 77);
+      assert.deepEqual([r.data[0], r.data[1]], [i << 4, 0x10], 'sequence in the high nibble, then the tag');
+      assert.equal(le32(r.data, 73), crc32([0xa2, 0x31, ...r.data.slice(0, 73)]), 'Bluetooth CRC');
+    }
+    assert.deepEqual([sent[0].data[2 + 38], sent[0].data[2 + 41]], [0x02, 0x02], 'light bar setup first');
+    assert.deepEqual(sent[1].data.slice(2 + 44, 2 + 47), [0, 255, 0], 'the green the game set earlier');
+    const btInput = (b0, b1, b2, x, r2) => {
+      const bytes = new Array(77).fill(0);
+      bytes.fill(128, 1, 5);
+      bytes[1] = x; bytes[6] = r2; bytes[8] = b0; bytes[9] = b1; bytes[10] = b2;
+      return bytes;
+    };
+    const pad1 = () => page.evaluate(() => sentMessages.findLast(m => m.method === 'u' && m.params[0] === 1)?.params);
+    // Cross, D-pad up (hat 0), L1, PS; left stick fully left; R2 at 200.
+    await page.evaluate(bytes => fakeHid.dualsensebt.input(0x31, bytes), btInput(0x20, 0x01, 0x01, 0, 200));
+    await page.waitForFunction(() => (sentMessages.findLast(m => m.method === 'u' && m.params[0] === 1)?.params[1] & 0x4000) !== 0);
+    let u = await pad1();
+    assert.equal(u[1], 0x4000 | 0x0010 | 0x0400 | 0x10000 | 0x0200, 'Cross, up, L1, PS and R2 pulled: ' + u[1].toString(16));
+    assert.deepEqual([u[2], u[3], u[4], u[5], u[6], u[7]], [0, 128, 128, 128, 0, 200]);
+    await page.evaluate(bytes => fakeHid.dualsensebt.input(0x31, bytes), btInput(0x08, 0, 0, 128, 0));
+    await page.waitForFunction(() => sentMessages.findLast(m => m.method === 'u' && m.params[0] === 1)?.params[1] === 0);
+    // Unlinked, the browser's gamepad drives it again.
+    await page.click('#expPads [data-link="2"]');
+    await page.waitForFunction(() => !c4fTest.hidLinks.has(2));
+    await page.evaluate(() => { testPads[2].buttons[0].value = 1; testPads[2].buttons[0].pressed = true; });
+    await page.waitForFunction(() => (sentMessages.findLast(m => m.method === 'u' && m.params[0] === 1)?.params[1] & 0x4000) !== 0);
+    await page.evaluate(() => { testPads[2].buttons[0].value = 0; testPads[2].buttons[0].pressed = false; });
+    console.log('PASS experimental: DualSense by Bluetooth: reports and CRC; buttons, sticks and triggers from its own reports');
 
     // Motion: a phone held sideways, then a linked DualShock 4's own sensors.
     await page.check('#expRows [data-experiment="motion"]');
@@ -307,6 +353,7 @@ const lastReport = (page, device) => page.evaluate(d => fakeHid[d].sent.at(-1), 
     await page.waitForFunction(() => c4fTest.hidLinks.get(0)?.calib);
     const report1 = (gyro, accel) => {
       const bytes = new Array(63).fill(0);
+      bytes.fill(128, 0, 4); bytes[4] = 0x08; // sticks centred, D-pad released
       [...gyro, ...accel].forEach((v, i) => { bytes[12 + 2 * i] = v & 0xff; bytes[13 + 2 * i] = (v >> 8) & 0xff; });
       return bytes;
     };
@@ -318,6 +365,7 @@ const lastReport = (page, device) => page.evaluate(d => fakeHid[d].sent.at(-1), 
     // report's touch reports, after its timestamp byte.
     const touchReport = (contact, x, y) => {
       const bytes = new Array(63).fill(0);
+      bytes.fill(128, 0, 4); bytes[4] = 0x08;
       bytes[32] = 1;
       bytes[34] = contact; bytes[35] = x & 0xff; bytes[36] = (x >> 8) | (y & 0x0f) << 4; bytes[37] = y >> 4;
       bytes[38] = 0x80;
