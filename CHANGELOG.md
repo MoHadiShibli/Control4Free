@@ -16,8 +16,8 @@ A controller test on the PS4, and experimental extras on the page.
   - **Lights and rumble on Sony controllers**: a DualShock 4 or DualSense connected to a computer lights up
     in its PS4 controller's colour, rumbles directly (a DualSense included), and passes on its touchpad's
     fingers, which browsers' gamepads leave out. Chrome or Edge on a computer.
-  - **Trigger rumble**: Xbox controllers rumble in their triggers too, and a linked DualSense vibrates its
-    triggers, following the game's rumble.
+  - **Trigger rumble**: Xbox controllers and a linked DualSense vibrate the trigger you're pulling (the last
+    one pulled, when both are), following the game's rumble.
   - **Motion controls**: tilting a phone, or a linked DualShock 4 or DualSense, moves the controller's
     motion sensors.
 

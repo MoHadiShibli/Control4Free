@@ -3940,6 +3940,7 @@
         else if (viaHid) src.mapped = ControllerMapping.fromSource(Object.assign(src, src.hidState));
         else src.mapped = ControllerMapping.evaluate(src.snapshot, profile, src.transient, src.hold);
         Object.assign(src, ControllerMapping.toSource(src.mapped));
+        if (experiments.triggers) pulledTrigger(src, viaHid);
         const after = src.buttons + ',' + src.lx + ',' + src.ly + ',' + src.rx + ',' + src.ry + ',' + src.l2 + ',' + src.r2;
         if (before !== after) src.activeAt = t;
       }
@@ -3956,6 +3957,20 @@
         const row = $(`.gp-row[data-index="${index}"]`);
         if (row) row.classList.toggle('active', t - src.activeAt < 250);
       }
+    }
+
+    // Experimental trigger rumble goes to the trigger being pulled: the last one
+    // pulled while both are, none while neither is (-1). It reads the gamepad's
+    // own triggers, before any mapping, because the motors sit in them.
+    function pulledTrigger(src, viaHid) {
+      const b = src.gp.mapping === 'standard' && src.gp.buttons;
+      const pull = viaHid ? [src.hidState.l2 / 255, src.hidState.r2 / 255]
+        : b && b[7] ? [b[6].value, b[7].value] : [src.l2 / 255, src.r2 / 255];
+      const was = src.triggersHeld || [false, false];
+      const held = pull.map((v, i) => v >= (was[i] ? .08 : .15));
+      for (let i = 0; i < 2; i++) if (held[i] && !was[i]) src.lastTrigger = i;
+      src.triggersHeld = held;
+      src.pulled = held[0] && held[1] ? src.lastTrigger : held[0] ? 0 : held[1] ? 1 : -1;
     }
 
     function setGamepadPad(index, pad) {
@@ -4009,10 +4024,13 @@
         for (const [index, src] of gamepadSources) {
           const act = src.gp && src.gp.vibrationActuator;
           if (src.pad !== pad || !act || !act.playEffect || hidLinks.has(index)) continue;
-          // Experimental: Xbox controllers that have them rumble in their triggers too.
+          // Experimental: Xbox controllers that have them rumble in the trigger being pulled too.
           const triggers = experiments.triggers && Array.isArray(act.effects) && act.effects.includes('trigger-rumble');
           const effect = { startDelay: 0, duration: 150, strongMagnitude: r.large / 255, weakMagnitude: r.small / 255 };
-          if (triggers) Object.assign(effect, { leftTrigger: r.large / 255 * .6, rightTrigger: r.small / 255 * .6 });
+          if (triggers) {
+            const level = Math.max(r.large, r.small) / 255 * .6;
+            Object.assign(effect, { leftTrigger: src.pulled === 0 ? level : 0, rightTrigger: src.pulled === 1 ? level : 0 });
+          }
           act.playEffect(triggers ? 'trigger-rumble' : 'dual-rumble', effect).catch(() => {});
         }
         if (pad === primaryPad && settings.haptics) {
@@ -4475,7 +4493,7 @@
     // code runs: no device prompts, no sensor listeners, no motion messages.
     const EXPERIMENTS = [
       ['hid', 'Lights and rumble on Sony controllers', 'A DualShock 4 or DualSense connected to this computer lights up in its PS4 controller\'s colour, rumbles directly (a DualSense included), and passes on its touchpad\'s fingers. Chrome or Edge on a computer.'],
-      ['triggers', 'Trigger rumble', 'Xbox controllers rumble in their triggers too, and a linked DualSense vibrates its triggers, following the game\'s rumble. PS4 games don\'t ask for this: Control4Free makes it up.'],
+      ['triggers', 'Trigger rumble', 'Xbox controllers and a linked DualSense vibrate the trigger you\'re pulling, following the game\'s rumble. PS4 games don\'t ask for this: Control4Free makes it up.'],
       ['motion', 'Motion controls', 'Tilting this phone, or a linked DualShock 4 or DualSense, moves the PS4 controller\'s motion sensors.'],
     ];
     const EXPERIMENTS_HELP = 'https://github.com/MoHadiShibli/Control4Free/blob/main/docs/troubleshooting.md#experimental-features';
@@ -4644,8 +4662,8 @@
         common[44] = r; common[45] = g; common[46] = b;
         if (link.triggerSend) {
           common[0] |= 0x0c;                     // both trigger effects
-          triggerEffect(common, 10, link.trigger[1], 60);
-          triggerEffect(common, 21, link.trigger[0], 30);
+          triggerEffect(common, 10, link.trigger[1], link.trigger[2]);
+          triggerEffect(common, 21, link.trigger[0], link.trigger[2]);
         }
       }
       if (!link.bt) {
@@ -4673,10 +4691,13 @@
       const r = pad >= 0 && rumble[pad] ? rumble[pad] : { large: 0, small: 0 };
       link.motors = [r.large, r.small];
       link.color = pad >= 0 && status[pad] && Array.isArray(status[pad].color) ? status[pad].color.slice(0, 3) : [0, 0, 64];
-      const level = v => experiments.triggers ? Math.round(v / 255 * 8) : 0;
-      const trigger = link.model === 'dualsense' ? [level(r.large), level(r.small)] : [0, 0];
+      // A DualSense vibrates the trigger being pulled [left, right, hertz]: as
+      // strongly as the stronger motor, slow for the large one, quick for the small.
+      const side = experiments.triggers && link.model === 'dualsense' && src ? src.pulled : -1;
+      const level = side >= 0 ? Math.round(Math.max(r.large, r.small) / 255 * 8) : 0;
+      const trigger = [side === 0 ? level : 0, side === 1 ? level : 0, level ? (r.large >= r.small ? 30 : 60) : 0];
       // Trigger effects go out only when they change; re-sending them makes the motors whine.
-      link.triggerSend = link.triggerSend || trigger[0] !== link.trigger[0] || trigger[1] !== link.trigger[1];
+      link.triggerSend = link.triggerSend || trigger.some((v, i) => v !== link.trigger[i]);
       link.trigger = trigger;
       hidSend(link);
     }
@@ -4728,7 +4749,7 @@
       const link = {
         device, model, index, bt: !hidHasOutput(device, model === 'ds4' ? 0x05 : 0x02) && hidHasOutput(device, model === 'ds4' ? 0x11 : 0x31),
         seq: 0, sent: '', sentAt: 0, busy: false, again: false, setup: model === 'dualsense', v2: device.productId === 0x0df2,
-        motors: [0, 0], color: [0, 0, 0], trigger: [0, 0], triggerSend: false, calib: null, motion: null,
+        motors: [0, 0], color: [0, 0, 0], trigger: [0, 0, 0], triggerSend: false, calib: null, motion: null,
       };
       link.onInput = ev => hidInput(link, ev);
       device.addEventListener('inputreport', link.onInput);
@@ -4752,7 +4773,7 @@
       link.motors = [0, 0];
       link.color = [0, 0, 64];
       link.triggerSend = link.trigger.some(v => v);
-      link.trigger = [0, 0];
+      link.trigger = [0, 0, 0];
       link.busy = link.again = false;
       await hidSend(link, true);
       try { await link.device.close(); } catch (e) { /* already gone */ }

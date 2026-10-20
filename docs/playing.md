@@ -146,7 +146,7 @@ this browser only. With all three off, the page works exactly as it does without
 | Switch | What it does | Where it works |
 |---|---|---|
 | **Lights and rumble on Sony controllers** | A DualShock 4 or DualSense connected to a computer lights up in its PS4 controller's colour and rumbles directly, a DualSense included. Its touchpad passes on fingers, not only clicks: browsers' gamepads leave touches out. While linked, its buttons and sticks come straight from the controller, as on a PS4, so its **Mapping** doesn't apply. Press **Link** next to the controller and choose it in the browser's list. | Chrome or Edge on a computer |
-| **Trigger rumble** | Xbox controllers rumble in their triggers as well, and a linked DualSense vibrates its triggers, both following the game's rumble. PS4 games don't ask for this: Control4Free makes it up from the rumble. | Xbox controllers in Chrome or Edge on Windows; a linked DualSense |
+| **Trigger rumble** | Xbox controllers and a linked DualSense vibrate the trigger you're pulling, following the game's rumble. With both pulled, the one you pulled last vibrates: aim with L2, fire with R2, and R2 feels the shot. PS4 games don't ask for this: Control4Free makes it up from the rumble. | Xbox controllers in Chrome or Edge on Windows; a linked DualSense |
 | **Motion controls** | Tilting the phone, or a linked DualShock 4 or DualSense, moves the PS4 controller's motion sensors. Hold the phone sideways with the screen towards you, like a controller. **Recenter** makes the way you hold it now the resting position. | Chrome on Android; a linked controller on a computer |
 
 Linking and motion use features browsers only give secure pages, and the console's page is plain `http`.

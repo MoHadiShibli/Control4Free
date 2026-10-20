@@ -251,29 +251,66 @@ const lastReport = (page, device) => page.evaluate(d => fakeHid[d].sent.at(-1), 
       fakeHid.dualsense.input(0x01, bytes);
     });
     await page.waitForFunction(() => sentMessages.findLast(m => m.method === 'u' && m.params[0] === 1)?.params[8] === 0);
+    // From here it reports its triggers all the time, as a real one does.
+    await page.evaluate(() => {
+      window.dsTriggers = [0, 0];
+      window.dsTimer = setInterval(() => {
+        const bytes = new Array(63).fill(0);
+        bytes.fill(128, 0, 4); bytes[4] = dsTriggers[0]; bytes[5] = dsTriggers[1]; bytes[7] = 0x08; bytes[32] = 0x80; bytes[36] = 0x80;
+        fakeHid.dualsense.input(0x01, bytes);
+      }, 10);
+    });
     feedback('12030d', 255, 128);
     await page.waitForFunction(() => fakeHid.dualsense.sent.at(-1).data[3] === 255);
     report = await lastReport(page, 'dualsense');
     assert.deepEqual([report.data[2], report.data[3]], [128, 255], 'small motor, large motor');
-    assert.equal(report.data[0] & 0x0c, 0x0c, 'both trigger effects');
-    // Right trigger from the small motor (strength 4), left from the large one (strength 8).
-    assert.deepEqual(report.data.slice(10, 21), [0x26, 0xff, 0x03, 0xdb, 0xb6, 0x6d, 0x1b, 0, 0, 60, 0]);
-    assert.deepEqual(report.data.slice(21, 32), [0x26, 0xff, 0x03, 0xff, 0xff, 0xff, 0x3f, 0, 0, 30, 0]);
+    assert.equal(report.data[0] & 0x0c, 0, 'no trigger effect while neither trigger is pulled');
+    // The trigger being pulled vibrates, as strongly as the stronger motor (8),
+    // slowly for the large one (30 Hz); the other is off.
+    const lastEffects = () => page.evaluate(() => fakeHid.dualsense.sent.findLast(r => r.data[0] & 0x0c).data);
+    const VIBRATE = [0x26, 0xff, 0x03, 0xff, 0xff, 0xff, 0x3f, 0, 0, 30, 0], OFF = [0x05, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
+    await page.evaluate(() => { dsTriggers = [0, 200]; });
+    await page.waitForFunction(() => fakeHid.dualsense.sent.findLast(r => r.data[0] & 0x0c)?.data[10] === 0x26);
+    report = { data: await lastEffects() };
+    assert.deepEqual([report.data.slice(10, 21), report.data.slice(21, 32)], [VIBRATE, OFF], 'R2 pulled: right trigger');
+    // Aiming with L2 alone moves it there ...
+    await page.evaluate(() => { dsTriggers = [200, 0]; });
+    await page.waitForFunction(() => fakeHid.dualsense.sent.findLast(r => r.data[0] & 0x0c)?.data[21] === 0x26);
+    report = { data: await lastEffects() };
+    assert.deepEqual([report.data.slice(10, 21), report.data.slice(21, 32)], [OFF, VIBRATE], 'L2 only: left trigger');
+    // ... and firing with R2 while aiming moves it to R2, the last one pulled, where it stays.
+    await page.evaluate(() => { dsTriggers = [200, 200]; });
+    await page.waitForFunction(() => fakeHid.dualsense.sent.findLast(r => r.data[0] & 0x0c)?.data[10] === 0x26);
+    report = { data: await lastEffects() };
+    assert.deepEqual([report.data.slice(10, 21), report.data.slice(21, 32)], [VIBRATE, OFF], 'R2 pulled while aiming: right trigger');
+    const effectReports = await page.evaluate(() => fakeHid.dualsense.sent.filter(r => r.data[0] & 0x0c).length);
+    await page.waitForTimeout(150);
+    assert.equal(await page.evaluate(() => fakeHid.dualsense.sent.filter(r => r.data[0] & 0x0c).length), effectReports, 'unchanged effects re-sent');
+    // A stronger small motor makes it quick (60 Hz).
+    feedback('12030d', 64, 255);
+    await page.waitForFunction(() => fakeHid.dualsense.sent.findLast(r => r.data[0] & 0x0c)?.data[19] === 60);
     // The light bar alone changing does not repeat the trigger effects.
-    feedback('12030d', 255, 128, 0, 64, 0);
+    feedback('12030d', 64, 255, 0, 64, 0);
     await page.waitForFunction(() => fakeHid.dualsense.sent.at(-1).data[45] === 255);
     assert.equal((await lastReport(page, 'dualsense')).data[0] & 0x0c, 0, 'trigger effects re-sent without a change');
     feedback('12030d', 0, 0, 0, 64, 0);
     await page.waitForFunction(() => fakeHid.dualsense.sent.at(-1).data[3] === 0);
     report = await lastReport(page, 'dualsense');
     assert.deepEqual([report.data[0] & 0x0c, report.data[10], report.data[21]], [0x0c, 0x05, 0x05], 'trigger effects off when the rumble stops');
-    // The Xbox pad rumbles in its triggers too, while the switch is on.
+    await page.evaluate(() => { clearInterval(dsTimer); });
+    // The Xbox pad rumbles in the trigger being pulled too, while the switch is on.
+    const xboxTriggers = () => page.evaluate(() => effects.findLast(([type]) => type === 'trigger-rumble')?.[1]);
     feedback('11030d', 200, 100);
     await page.waitForFunction(() => effects.some(([type]) => type === 'trigger-rumble'));
-    const [, params] = await page.evaluate(() => effects.findLast(([type]) => type === 'trigger-rumble'));
-    assert.ok(Math.abs(params.leftTrigger - 200 / 255 * .6) < 1e-6 && Math.abs(params.rightTrigger - 100 / 255 * .6) < 1e-6, JSON.stringify(params));
+    let params = await xboxTriggers();
+    assert.deepEqual([params.leftTrigger, params.rightTrigger], [0, 0], 'neither trigger pulled: ' + JSON.stringify(params));
+    await page.evaluate(() => { testPads[1].buttons[7].value = .9; });
+    await page.waitForFunction(() => effects.findLast(([type]) => type === 'trigger-rumble')[1].rightTrigger > 0);
+    params = await xboxTriggers();
+    assert.ok(params.leftTrigger === 0 && Math.abs(params.rightTrigger - 200 / 255 * .6) < 1e-6, JSON.stringify(params));
+    await page.evaluate(() => { testPads[1].buttons[7].value = 0; });
     feedback('11030d', 0, 0);
-    console.log('PASS experimental: DualSense setup, newer rumble, colour, trigger effects on change; Xbox trigger rumble');
+    console.log('PASS experimental: DualSense setup, newer rumble, colour, effects in the pulled trigger on change; Xbox trigger rumble');
 
     // DualSense over Bluetooth: report 0x31 with its sequence, tag and CRC. Once
     // linked the browser's gamepad goes quiet (here: frozen at rest), so the
