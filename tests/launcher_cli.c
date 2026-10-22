@@ -30,6 +30,15 @@ int main(int argc, char **argv)
         printf("%d %d %d %s|%s\n", result, s.controllers, s.stopping, s.version, c4fLauncherProblem());
         return 0;
     }
+    if (!strcmp(argv[1], "latency")) {
+        C4fServiceStatus s;
+        int result = c4fLauncherProbe(&s);
+        printf("%d %d", result, s.latencyAvailable);
+        for (int i = 0; i < C4F_SERVICE_PADS; i++)
+            printf(" %d:%u:%d:%d", s.latency[i].userKnown, s.latency[i].userId, s.latency[i].rttMs, s.latency[i].ageMs);
+        printf("\n");
+        return 0;
+    }
     if (!strcmp(argv[1], "start") && argc == 3) {
         size_t size = 0;
         const unsigned char *payload = c4fAutorunLoadBundled(argv[2]) ? NULL : c4fAutorunBundled(&size);

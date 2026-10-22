@@ -5,10 +5,8 @@
 #include "input.h"
 
 #define C4F_TESTER_STICKS (C4F_INPUT_BUTTON_L3 | C4F_INPUT_BUTTON_R3)
-/* Held keys that keep a new menu from accepting anything yet. */
-#define C4F_TESTER_MENU_KEYS (C4F_TESTER_STICKS | C4F_INPUT_BUTTON_UP | C4F_INPUT_BUTTON_DOWN | \
-                              C4F_INPUT_BUTTON_LEFT | C4F_INPUT_BUTTON_RIGHT | C4F_INPUT_BUTTON_CROSS | \
-                              C4F_INPUT_BUTTON_CIRCLE)
+#define C4F_TESTER_DIRECTIONS (C4F_INPUT_BUTTON_UP | C4F_INPUT_BUTTON_DOWN | C4F_INPUT_BUTTON_LEFT | C4F_INPUT_BUTTON_RIGHT)
+#define C4F_TESTER_ACTIVATE (C4F_INPUT_BUTTON_CROSS | C4F_INPUT_BUTTON_CIRCLE)
 
 int c4fTesterHoldUpdate(C4fTesterHold *hold, uint32_t buttons, uint64_t now)
 {
@@ -53,6 +51,9 @@ static void c4fReaderRelease(C4fTester *t, int slot)
     r->handle = -1;
     r->owned = r->lightSet = r->seen = 0;
     r->previous = r->pressed = 0;
+    r->menuBlocked = r->repeatDirection = 0;
+    r->repeatAt = 0;
+    memset(&r->hold, 0, sizeof(r->hold));
     memset(&r->sample, 0, sizeof(r->sample));
 }
 
@@ -155,12 +156,14 @@ static void c4fReaderPoll(C4fTester *t, int slot, uint64_t now)
     memset(&sample, 0, sizeof(sample));
     int result = t->ops.read ? t->ops.read(t->ops.context, r->handle, &sample) : -1;
     if (result != 0) {
+        c4fReaderQuiet(t, slot);
         c4fReaderRelease(t, slot);
         c4fReaderState(t, slot, C4F_TESTER_FAILED, (uint32_t)result);
         r->retryAt = now + C4F_TESTER_RETRY_MS;
         return;
     }
     if (!sample.connected) {
+        c4fReaderQuiet(t, slot);
         memset(&r->sample, 0, sizeof(r->sample));
         r->previous = 0;
         r->seen = 0;
@@ -168,6 +171,12 @@ static void c4fReaderPoll(C4fTester *t, int slot, uint64_t now)
         return;
     }
     if (sample.touches > 2) sample.touches = 2;
+    if (!r->seen) {
+        /* A hold already in progress when a reader starts cannot open a menu. */
+        r->hold.holding = r->hold.fired = 1;
+        r->hold.since = now;
+    }
+    if (!r->seen && t->menu) r->menuBlocked |= sample.buttons & (C4F_TESTER_DIRECTIONS | C4F_TESTER_ACTIVATE);
     /* Buttons already held when reading starts are shown, but are not presses. */
     r->pressed = r->seen ? sample.buttons & ~r->previous : 0;
     r->previous = sample.buttons;
@@ -206,7 +215,13 @@ static void c4fTesterResult(C4fTester *t, int result, const char *done)
 
 static void c4fTesterAct(C4fTester *t, int item, uint64_t now)
 {
-    static const uint8_t colors[3][3] = { { 255, 0, 0 }, { 0, 255, 0 }, { 0, 0, 255 } };
+    C4fTesterView view;
+    c4fTesterView(t, &view);
+    if (!c4fTesterItemAvailable(&view, item)) {
+        snprintf(t->note, sizeof(t->note), "%s", item == C4F_TESTER_USER ?
+                 "No other user is signed in." : "This user has no controller to test.");
+        return;
+    }
     C4fTesterReader *r = t->selected >= 0 ? &t->readers[t->selected] : NULL;
     if (item == C4F_TESTER_RESUME) {
         t->menu = 0;
@@ -234,16 +249,18 @@ static void c4fTesterAct(C4fTester *t, int item, uint64_t now)
         c4fTesterResult(t, result, large ? "Large motor: rumbling for a second." : "Small motor: rumbling for a second.");
         break;
     }
-    case C4F_TESTER_LIGHT_RED:
-    case C4F_TESTER_LIGHT_GREEN:
-    case C4F_TESTER_LIGHT_BLUE: {
-        const uint8_t *rgb = colors[item - C4F_TESTER_LIGHT_RED];
+    case C4F_TESTER_LIGHT_COLOR: {
+        uint8_t rgb[3] = { 255, 255, 255 };
+        if (r->lightSet) memcpy(rgb, r->light, sizeof(rgb));
         int result = t->ops.lightBar ? t->ops.lightBar(t->ops.context, r->handle, rgb[0], rgb[1], rgb[2]) : -1;
         if (!result) {
             r->lightSet = 1;
             memcpy(r->light, rgb, 3);
+            t->colorMenu = 1;
+            t->note[0] = 0;
+        } else {
+            c4fTesterResult(t, result, "");
         }
-        c4fTesterResult(t, result, "Light bar set. It goes back to normal when you leave.");
         break;
     }
     case C4F_TESTER_LIGHT_RESET: {
@@ -279,9 +296,6 @@ void c4fTesterOpen(C4fTester *t, uint64_t now)
     C4fTesterOps ops = t->ops;
     c4fTesterInit(t, &ops);
     t->active = 1;
-    /* The L3+R3 hold that opened the test must end before another counts. */
-    t->hold.holding = t->hold.fired = 1;
-    t->hold.since = now;
     c4fTesterUsers(t, now);
 }
 
@@ -304,8 +318,9 @@ void c4fTesterSuspend(C4fTester *t, uint64_t now)
         }
     }
     t->menu = 0;
-    t->hold.holding = t->hold.fired = 1;
-    t->hold.since = now;
+    t->colorMenu = 0;
+    t->menuOpeners = 0;
+    t->armed = 0;
 }
 
 void c4fTesterClose(C4fTester *t)
@@ -317,26 +332,114 @@ void c4fTesterClose(C4fTester *t)
     c4fTesterInit(t, &ops);
 }
 
+static void c4fTesterMenuOpen(C4fTester *t, int opener)
+{
+    t->menu = 1;
+    t->colorMenu = 0;
+    t->focus = C4F_TESTER_RESUME;
+    t->menuOpeners = opener >= 0 ? 1u << opener : 0;
+    for (int s = 0; s < C4F_TESTER_USERS; s++) {
+        C4fTesterReader *r = &t->readers[s];
+        uint32_t buttons = r->state == C4F_TESTER_READY ? r->sample.buttons : 0;
+        r->menuBlocked = buttons & (C4F_TESTER_DIRECTIONS | C4F_TESTER_ACTIVATE);
+        r->repeatDirection = 0;
+        r->repeatAt = 0;
+    }
+    t->armed = !t->menuOpeners;
+}
+
+/* A held direction repeats, but activation always needs its own fresh edge.
+ * Track each controller separately so a key held on another pad cannot mask a
+ * new press, or create a repeat from input held before the menu opened. */
+static uint32_t c4fTesterMenuDirection(C4fTesterReader *r, uint64_t now)
+{
+    uint32_t held = r->sample.buttons & ~r->menuBlocked & C4F_TESTER_DIRECTIONS;
+    if ((held & (C4F_INPUT_BUTTON_UP | C4F_INPUT_BUTTON_DOWN)) == (C4F_INPUT_BUTTON_UP | C4F_INPUT_BUTTON_DOWN))
+        held &= ~(C4F_INPUT_BUTTON_UP | C4F_INPUT_BUTTON_DOWN);
+    if ((held & (C4F_INPUT_BUTTON_LEFT | C4F_INPUT_BUTTON_RIGHT)) == (C4F_INPUT_BUTTON_LEFT | C4F_INPUT_BUTTON_RIGHT))
+        held &= ~(C4F_INPUT_BUTTON_LEFT | C4F_INPUT_BUTTON_RIGHT);
+    uint32_t fresh = r->pressed & held;
+    uint32_t candidates = fresh ? fresh : held, direction = 0;
+    static const uint32_t directions[] = { C4F_INPUT_BUTTON_UP, C4F_INPUT_BUTTON_DOWN, C4F_INPUT_BUTTON_LEFT, C4F_INPUT_BUTTON_RIGHT };
+    for (unsigned i = 0; i < sizeof(directions) / sizeof(directions[0]); i++)
+        if (candidates & directions[i]) { direction = directions[i]; break; }
+    if (!direction || (!fresh && direction != r->repeatDirection)) {
+        r->repeatDirection = 0; r->repeatAt = 0;
+        return 0;
+    }
+    if (fresh) {
+        r->repeatDirection = direction;
+        r->repeatAt = now + C4F_TESTER_REPEAT_DELAY_MS;
+        return direction;
+    }
+    if (now < r->repeatAt) return 0;
+    r->repeatAt = now + C4F_TESTER_REPEAT_MS;
+    return direction;
+}
+
+static void c4fTesterMenuMove(C4fTester *t, uint32_t direction)
+{
+    int row = t->focus / C4F_TESTER_MENU_COLUMNS;
+    int column = t->focus % C4F_TESTER_MENU_COLUMNS;
+    if (direction & C4F_INPUT_BUTTON_UP) {
+        row = (row + C4F_TESTER_MENU_ROWS - 1) % C4F_TESTER_MENU_ROWS;
+    } else if (direction & C4F_INPUT_BUTTON_DOWN) {
+        row = (row + 1) % C4F_TESTER_MENU_ROWS;
+    } else if (direction & C4F_INPUT_BUTTON_LEFT) {
+        column = (column + C4F_TESTER_MENU_COLUMNS - 1) % C4F_TESTER_MENU_COLUMNS;
+    } else if (direction & C4F_INPUT_BUTTON_RIGHT) {
+        column = (column + 1) % C4F_TESTER_MENU_COLUMNS;
+    }
+    t->focus = row * C4F_TESTER_MENU_COLUMNS + column;
+}
+
+static void c4fTesterColorInput(C4fTester *t, uint32_t navigation, uint32_t pressed)
+{
+    if (pressed & C4F_INPUT_BUTTON_CIRCLE) {
+        t->colorMenu = 0;
+        snprintf(t->note, sizeof(t->note), "Light bar set. It goes back to normal when you leave.");
+        return;
+    }
+    if (navigation & C4F_INPUT_BUTTON_UP) t->colorChannel = (t->colorChannel + 2) % 3;
+    else if (navigation & C4F_INPUT_BUTTON_DOWN) t->colorChannel = (t->colorChannel + 1) % 3;
+    else if (navigation & (C4F_INPUT_BUTTON_LEFT | C4F_INPUT_BUTTON_RIGHT)) {
+        C4fTesterReader *r = &t->readers[t->selected];
+        uint8_t rgb[3];
+        memcpy(rgb, r->light, sizeof(rgb));
+        const int direction = navigation & C4F_INPUT_BUTTON_LEFT ? -1 : 1;
+        int value = rgb[t->colorChannel] + direction * (t->colorFine ? 1 : 16);
+        if (value < 0) value = 0;
+        if (value > 255) value = 255;
+        if (value == rgb[t->colorChannel]) return;
+        rgb[t->colorChannel] = (uint8_t)value;
+        int result = t->ops.lightBar ? t->ops.lightBar(t->ops.context, r->handle, rgb[0], rgb[1], rgb[2]) : -1;
+        if (!result) {
+            r->lightSet = 1;
+            memcpy(r->light, rgb, sizeof(rgb));
+            t->note[0] = 0;
+        } else c4fTesterResult(t, result, "");
+    } else if (pressed & C4F_INPUT_BUTTON_CROSS) t->colorFine = !t->colorFine;
+}
+
 int c4fTesterFrame(C4fTester *t, uint64_t now, uint32_t remotePressed)
 {
     if (!t->active) return 0;
     if (now >= t->usersAt) c4fTesterUsers(t, now);
-    uint32_t held = 0, pressed = 0;
-    int both = 0;
+    int menuOpener = -1;
     for (int s = 0; s < C4F_TESTER_USERS; s++) {
         c4fReaderPoll(t, s, now);
-        const C4fTesterReader *r = &t->readers[s];
-        if (r->state != C4F_TESTER_READY) continue;
-        held |= r->sample.buttons;
-        pressed |= r->pressed;
-        /* One controller holding both, not two holding one each. */
-        both |= (r->sample.buttons & C4F_TESTER_STICKS) == C4F_TESTER_STICKS;
+        C4fTesterReader *r = &t->readers[s];
+        if (c4fTesterHoldUpdate(&r->hold, r->state == C4F_TESTER_READY ? r->sample.buttons : 0, now) && menuOpener < 0)
+            menuOpener = s;
     }
     if (t->rumble && now >= t->rumbleUntil) c4fTesterStopRumble(t);
-    if (c4fTesterHoldUpdate(&t->hold, both ? C4F_TESTER_STICKS : 0, now) && !t->menu) {
-        t->menu = 1;
-        t->focus = C4F_TESTER_RESUME;
-        t->armed = 0;
+    if (t->colorMenu && (t->selected < 0 || t->readers[t->selected].state != C4F_TESTER_READY)) {
+        t->colorMenu = 0;
+        snprintf(t->note, sizeof(t->note), "This user's controller is unavailable.");
+    }
+    if (menuOpener >= 0 && !t->menu) {
+        c4fTesterMenuOpen(t, menuOpener);
+        return 1;
     }
     if (!t->menu) {
         /* The remote is not under test, so it may leave and open the menu. */
@@ -345,26 +448,31 @@ int c4fTesterFrame(C4fTester *t, uint64_t now, uint32_t remotePressed)
             return 0;
         }
         if (remotePressed & (C4F_INPUT_BUTTON_CROSS | C4F_INPUT_BUTTON_OPTIONS)) {
-            t->menu = 1;
-            t->focus = C4F_TESTER_RESUME;
-            t->armed = 0;
+            c4fTesterMenuOpen(t, -1);
         }
         return 1;
     }
-    if (!t->armed) {
-        /* Nothing counts until the keys that opened the menu are let go. */
-        if (!(held & C4F_TESTER_MENU_KEYS)) t->armed = 1;
-        return 1;
+    for (int s = 0; s < C4F_TESTER_USERS; s++) {
+        const C4fTesterReader *r = &t->readers[s];
+        if (r->state != C4F_TESTER_READY || !(r->sample.buttons & C4F_TESTER_STICKS)) t->menuOpeners &= ~(1u << s);
     }
-    pressed |= remotePressed;
-    if (pressed & C4F_INPUT_BUTTON_CIRCLE) {
+    t->armed = !t->menuOpeners;
+    uint32_t navigation = remotePressed & C4F_TESTER_DIRECTIONS;
+    uint32_t pressed = t->armed ? remotePressed & C4F_TESTER_ACTIVATE : 0;
+    for (int s = 0; s < C4F_TESTER_USERS; s++) {
+        C4fTesterReader *r = &t->readers[s];
+        if (r->state != C4F_TESTER_READY) continue;
+        r->menuBlocked &= r->sample.buttons;
+        if (!t->armed) r->menuBlocked |= r->sample.buttons & C4F_TESTER_ACTIVATE;
+        navigation |= c4fTesterMenuDirection(r, now);
+        if (t->armed) pressed |= r->pressed & ~r->menuBlocked & C4F_TESTER_ACTIVATE;
+    }
+    if (t->colorMenu) {
+        c4fTesterColorInput(t, navigation, pressed);
+    } else if (pressed & C4F_INPUT_BUTTON_CIRCLE) {
         t->menu = 0;
-    } else if (pressed & C4F_INPUT_BUTTON_UP) {
-        t->focus = (t->focus + C4F_TESTER_ITEMS - 1) % C4F_TESTER_ITEMS;
-    } else if (pressed & C4F_INPUT_BUTTON_DOWN) {
-        t->focus = (t->focus + 1) % C4F_TESTER_ITEMS;
-    } else if (t->focus == C4F_TESTER_USER && (pressed & (C4F_INPUT_BUTTON_LEFT | C4F_INPUT_BUTTON_RIGHT))) {
-        c4fTesterNextUser(t, (pressed & C4F_INPUT_BUTTON_RIGHT) ? 1 : -1);
+    } else if (navigation) {
+        c4fTesterMenuMove(t, navigation);
     } else if (pressed & C4F_INPUT_BUTTON_CROSS) {
         if (t->focus == C4F_TESTER_EXIT) {
             c4fTesterClose(t);
@@ -373,6 +481,18 @@ int c4fTesterFrame(C4fTester *t, uint64_t now, uint32_t remotePressed)
         c4fTesterAct(t, t->focus, now);
     }
     return 1;
+}
+
+int c4fTesterItemAvailable(const C4fTesterView *v, int item)
+{
+    if (item < 0 || item >= C4F_TESTER_ITEMS) return 0;
+    if (item == C4F_TESTER_RESUME || item == C4F_TESTER_EXIT) return 1;
+    if (item == C4F_TESTER_USER) {
+        for (int s = 0; s < C4F_TESTER_USERS; s++)
+            if (s != v->selected && v->user[s].used && v->user[s].state != C4F_TESTER_SIGNED_OUT) return 1;
+        return 0;
+    }
+    return v->selected >= 0 && v->selected < C4F_TESTER_USERS && v->user[v->selected].state == C4F_TESTER_READY;
 }
 
 static int16_t c4fScaled(float value, float scale)
@@ -385,15 +505,20 @@ static int16_t c4fScaled(float value, float scale)
 void c4fTesterView(const C4fTester *t, C4fTesterView *v)
 {
     memset(v, 0, sizeof(*v));
+    for (int s = 0; s < C4F_TESTER_USERS; s++) v->user[s].id = -1;
     if (!t->active) return;
     v->active = 1;
     v->menu = t->menu;
     v->focus = t->focus;
+    v->colorMenu = t->colorMenu;
+    v->colorChannel = t->colorChannel;
+    v->colorFine = t->colorFine;
     v->selected = t->selected;
     for (int s = 0; s < C4F_TESTER_USERS; s++) {
         const C4fTesterReader *r = &t->readers[s];
         v->user[s].used = r->user >= 0;
         if (!v->user[s].used) continue;
+        v->user[s].id = r->user;
         snprintf(v->user[s].name, sizeof(v->user[s].name), "%s", r->name);
         v->user[s].state = r->state;
         v->user[s].error = r->error;
@@ -424,12 +549,10 @@ const char *c4fTesterItemLabel(int item)
 {
     switch (item) {
     case C4F_TESTER_RESUME: return "Resume";
-    case C4F_TESTER_USER: return "User";
+    case C4F_TESTER_USER: return "Switch user";
     case C4F_TESTER_RUMBLE_LARGE: return "Rumble the large motor";
     case C4F_TESTER_RUMBLE_SMALL: return "Rumble the small motor";
-    case C4F_TESTER_LIGHT_RED: return "Light bar: red";
-    case C4F_TESTER_LIGHT_GREEN: return "Light bar: green";
-    case C4F_TESTER_LIGHT_BLUE: return "Light bar: blue";
+    case C4F_TESTER_LIGHT_COLOR: return "Choose the light-bar color";
     case C4F_TESTER_LIGHT_RESET: return "Reset the light bar";
     case C4F_TESTER_ORIENTATION: return "Reset orientation";
     case C4F_TESTER_EXIT: return "Back to the launcher";

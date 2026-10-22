@@ -45,16 +45,36 @@ the page and the app show the version the service reports.
 docker run --rm --network none -v "$PWD:/src" -w /src control4free-launcher-build python3 -B tests/run.py
 ```
 
-The suites build the real sources for the host with only the PS4 calls stubbed, so they need no console:
+The six suites build the real sources for the host with only the PS4 calls stubbed, so they need no console:
 - `test_web` and `test_recovery` run the actual service against a fake kernel log
-  (`tests/web_stub.c`) that writes the same lines firmware 10.01 does, over real HTTP and WebSocket
-  connections;
+  (`tests/web_stub.c`) that writes the same lines firmware 10.01 does, over real HTTP and a test-only
+  WebSocket adapter; production controller connections use WebRTC;
 - `test_frontend` runs the page's own functions under Node;
-- `test_launcher` drives the app's logic, renders every state of its screen to `build/launcher-preview-*.png`,
-  and checks the package's `param.sfo`;
-- `test_logging` covers the log, the kernel-log opener and DeviceId matching.
+- `test_launcher` drives the app's logic and input worker, compares warm tester renders with fresh
+  renders, produces `build/launcher-preview-*.png`, and checks the package's `param.sfo`;
+- `test_logging` covers the log, the kernel-log opener and DeviceId matching;
+- `test_rtc` checks STUN/SCTP, congestion and receive windows, UDP backpressure, and the production HTTP
+  signalling endpoint with the WebSocket adapter disabled.
 
-`tests/fake_gamepads_test.cjs` runs researched gamepad emulations against the controller page in the Playwright Docker image, without console access or hardware compatibility claims.
+The [build workflow](.github/workflows/build.yml) gives the Docker commands for the browser checks, using
+the pinned Playwright image and package. Run these after the host suites, which build their test server:
+
+- `tests/browser_test.cjs`: controller-page editor, mapping and connection lifecycle;
+- `tests/fake_gamepads_test.cjs`: researched gamepad emulations, without hardware compatibility claims;
+- `tests/experimental_test.cjs`: optional HID, motion, output and reconnect behavior;
+- `tests/rtc_e2e.cjs`: real Chromium and Firefox WebRTC connections and reliable fragmented replies;
+- `tests/rtc_input_e2e.cjs`: input freshness and recovery through dropped, delayed and reordered UDP packets.
+
+Run packaging and launcher preview tests sequentially because they share renderer scratch files.
+
+For controller-test drawing changes, `tests/test_tester_render.py` runs the cache-transition checks on
+their own. Its optional `--benchmark` reports host CPU drawing time, excluding input, framebuffer copy
+and display presentation; do not describe those results as PS4 frame timings.
+
+Changes to mapping belong in the page's mapping tests as well as its browser checks. Exercise independent
+analog trigger pressures and digital flags, multiple sources driving a slot, profile changes and
+reconnect gating. For connection RTT changes, check probe matching, expiry, ownership changes and the
+launcher's unavailable/measuring states. RTT is client-reported diagnostic data, separate from pad input.
 
 Add a test with your fix: one that fails without it. Then test on a real console if you can, and say in your
 pull request which firmware, GoldHEN version and games you tried.
@@ -80,8 +100,8 @@ Build without new warnings; the app is built with `-Werror`.
 
 1. Update `VERSION` and the changelog's release date and notes. Review mapping, compatibility and
    diagnostic documentation; distinguish hardware reports from emulated-input tests.
-2. Run all five Docker host suites and the browser/editor and emulated-gamepad checks. Build normal and
-   diagnostic packages without new warnings. Inspect launcher previews and browser layouts.
+2. Run all six Docker host suites and all five browser checks above, including WebRTC impairment checks.
+   Build normal and diagnostic packages without new warnings. Inspect launcher previews and browser layouts.
 3. Validate standard controllers on real hardware: simultaneous devices, source mixing, rumble,
    reconnect, logout and rest/wake. Recheck firmware 10.01 and a modern tested firmware, and record the
    results. Wheel/guitar model compatibility remains unverified until device reports establish it.

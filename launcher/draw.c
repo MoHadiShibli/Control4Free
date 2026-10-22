@@ -548,3 +548,44 @@ int c4fTextWrapped(C4fCanvas *c, int font, float size, float x, float y, float m
     }
     return lines;
 }
+
+void c4fDrawSolidarityBadge(C4fCanvas *c, int right, int top)
+{
+    enum { FLAG_W = 45, FLAG_H = 30, FLAG_GAP = 10, LABEL_GAP = 14 };
+    const int palestine = right - 2 * FLAG_W - FLAG_GAP, syria = right - FLAG_W;
+    const C4fColor black = C4F_RGBA(0, 0, 0, 1), white = C4F_RGBA(255, 255, 255, 1);
+    const float textWidth = c4fTextWidth(C4F_FONT_REGULAR, 24, "Free Palestine");
+    c4fText(c, C4F_FONT_REGULAR, 24, palestine - LABEL_GAP - textWidth, top + 23,
+            C4F_RGBA(236, 240, 248, .95f), "Free Palestine");
+
+    c4fFillRect(c, palestine, top, FLAG_W, FLAG_H / 3, black);
+    c4fFillRect(c, palestine, top + FLAG_H / 3, FLAG_W, FLAG_H / 3, white);
+    c4fFillRect(c, palestine, top + 2 * FLAG_H / 3, FLAG_W, FLAG_H / 3, C4F_RGBA(0, 151, 54, 1));
+    C4fPath triangle = { 0 };
+    c4fPathMove(&triangle, palestine, top);
+    c4fPathLine(&triangle, palestine + FLAG_W / 2, top + FLAG_H / 2);
+    c4fPathLine(&triangle, palestine, top + FLAG_H);
+    c4fPathLine(&triangle, palestine, top);
+    c4fFillPath(c, &triangle, (C4fPlacement){ 0, 0, 1, 0, 0, 0 }, C4F_RGBA(237, 46, 56, 1));
+    c4fPathFree(&triangle);
+
+    c4fFillRect(c, syria, top, FLAG_W, FLAG_H / 3, C4F_RGBA(0, 122, 61, 1));
+    c4fFillRect(c, syria, top + FLAG_H / 3, FLAG_W, FLAG_H / 3, white);
+    c4fFillRect(c, syria, top + 2 * FLAG_H / 3, FLAG_W, FLAG_H / 3, black);
+    for (int star = 1; star <= 3; star++) {
+        C4fPath path = { 0 };
+        const float cx = syria + star * FLAG_W / 4.0f, cy = top + FLAG_H / 2.0f;
+        for (int point = 0; point <= 10; point++) {
+            const float angle = (point % 10) * .628318531f - 1.570796327f;
+            const float radius = point % 2 ? 1.25f : 3.2f;
+            const float x = cx + cosf(angle) * radius, y = cy + sinf(angle) * radius;
+            if (!point) c4fPathMove(&path, x, y);
+            else c4fPathLine(&path, x, y);
+        }
+        c4fFillPath(c, &path, (C4fPlacement){ 0, 0, 1, 0, 0, 0 }, C4F_RGBA(206, 17, 38, 1));
+        c4fPathFree(&path);
+    }
+    const C4fColor edge = C4F_RGBA(255, 255, 255, .24f);
+    c4fInsetRoundRect(c, palestine, top, FLAG_W, FLAG_H, 0, 1, edge);
+    c4fInsetRoundRect(c, syria, top, FLAG_W, FLAG_H, 0, 1, edge);
+}

@@ -6,6 +6,7 @@ const path = require('node:path');
 const assert = require('node:assert/strict');
 const { spawn } = require('node:child_process');
 const { createLabServer } = require('./fake_gamepads_server.cjs');
+const { relayOffer, copyService } = require('./rtc_browser_helpers.cjs');
 
 const root = '/src', profileDir = path.join(root, 'tests/fake_gamepads');
 const profiles = fs.readdirSync(profileDir).filter(file => file.endsWith('.json') && file !== 'manifest.json')
@@ -27,7 +28,7 @@ const outputs = {
   rx: ['Right stick, left and right'], ry: ['Right stick, up and down']
 };
 const lab = createLabServer();
-fs.copyFileSync(path.join(root, 'build/web-host-test'), '/tmp/c4f-fake-gamepad-service');
+copyService('/tmp/c4f-fake-gamepad-service');
 const service = spawn('/tmp/c4f-fake-gamepad-service', [], { stdio: ['ignore', 'ignore', 'pipe'] });
 let serviceError;
 service.on('error', error => { serviceError = error; });
@@ -216,6 +217,7 @@ async function runProfile(browser, profile) {
   const page = await context.newPage(), errors = [];
   page.on('pageerror', error => errors.push(error.message));
   await page.route(/^http:\/\/127\.0\.0\.1:4264\/(?:\?.*)?$/, async route => route.fulfill({ response: await route.fetch(), body: html }));
+  await relayOffer(page);
   try {
     await page.goto('http://127.0.0.1:4264/');
     await sourceReady(page, profile);
@@ -407,10 +409,10 @@ async function runManualHarness(browser) {
     await frame.waitForFunction(() => window.c4fTest?.gamepadSources.size === 1);
     await frame.waitForFunction(() => document.querySelector('#conn').dataset.conn === 'open');
     assert.equal(await frame.evaluate(() => navigator.getGamepads()[0].id), chosen.gamepad.id.value);
-    const refused = await frame.evaluate(() => {
-      try { new WebSocket('wss://example.invalid/ws'); return ''; } catch (error) { return error.message; }
+    const refused = await frame.evaluate(async () => {
+      try { await fetch('https://example.invalid/rtc', { method: 'POST' }); return ''; } catch (error) { return error.message; }
     });
-    assert.match(refused, /only connects to the local test service/, 'the local manual harness rejects external WebSocket destinations');
+    assert.match(refused, /only connects to the local test service/, 'the local manual harness rejects external signaling destinations');
     await frame.click('.gp-row [data-focus="configure"]');
     await changeControl(frame, 'CROSS');
     await frame.waitForFunction(() => c4fTest.mapper.capture?.ready);

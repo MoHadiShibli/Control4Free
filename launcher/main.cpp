@@ -31,6 +31,11 @@ enum { C4F_DO_NOTHING, C4F_DO_START, C4F_DO_STOP, C4F_DO_SET_UP, C4F_DO_AUTORUN_
 static pthread_mutex_t c4fMutex = PTHREAD_MUTEX_INITIALIZER;
 static C4fLauncherScreen c4fScreen;
 static int c4fCommand, c4fQuit;
+static int c4fCloseRequested;
+static uint64_t c4fRenderAt, c4fInputAt;
+static C4fServiceStatus c4fConnectionStatus;
+static int c4fConnectionService = C4F_SERVICE_UNKNOWN;
+static uint64_t c4fConnectionCheckedAt;
 
 /* Set up: auto-start on, then start it now if PayLoader takes it. */
 static int c4fSetUp(char *message, size_t size)
@@ -89,6 +94,7 @@ static void *c4fWorker(void *)
             if (command == C4F_DO_AUTORUN_OFF) result = c4fAutorunDisable(message, sizeof(message));
             if (first || command >= C4F_DO_SET_UP) autorun = c4fAutorunCheck(autorunNote, sizeof(autorunNote));
             C4fServiceStatus status;
+            uint64_t probeAt = c4fLauncherTimeMs();
             int running = c4fLauncherProbe(&status);
             const char *problem = c4fLauncherProblem();
             pthread_mutex_lock(&c4fMutex);
@@ -103,6 +109,9 @@ static void *c4fWorker(void *)
                 snprintf(shownProblem, sizeof(shownProblem), "%s", problem);
             }
             c4fScreen.running = running;
+            c4fConnectionStatus = status;
+            c4fConnectionService = running;
+            c4fConnectionCheckedAt = probeAt;
             c4fScreen.controllers = status.controllers;
             snprintf(c4fScreen.runningVersion, sizeof(c4fScreen.runningVersion), "%s", running == 1 ? status.version : "");
             c4fScreen.autorun = autorun;
@@ -391,6 +400,202 @@ static void c4fNativeInputNote(const C4fNativeInput *input, char *note, size_t s
              (unsigned)input->remoteLastKey, input->remoteLastRawButtons);
 }
 
+/* Own every native input/tester handle on this thread. Rendering and flip waits
+ * must not postpone button edges or the one-second rumble safety timer. */
+static void *c4fInputWorker(void *)
+{
+    C4fNativeInput nativeInput = {};
+    nativeInput.handles[0] = nativeInput.handles[1] = -1;
+    C4fInputOps inputOps = { &nativeInput, c4fNativeInitialUser, c4fNativeOpen, c4fNativeRead, c4fNativeClose };
+    C4fInput inputs;
+    c4fInputInit(&inputs, &inputOps);
+    C4fTesterOps testerOps = { &nativeInput, c4fTesterLoginUsers, c4fTesterUserName, c4fTesterOpenPad, c4fTesterRead,
+                               c4fTesterClosePad, c4fTesterVibrate, c4fTesterLight, c4fTesterResetLight,
+                               c4fTesterResetOrientation, c4fTesterMotion, c4fTesterLogState };
+    C4fTester tester;
+    c4fTesterInit(&tester, &testerOps);
+    C4fTesterHold launcherHold = {};
+    int waitRelease = 0, paused = 0;
+    uint64_t lastInputAt = c4fLauncherTimeMs();
+#ifdef C4F_DIAG
+    uint64_t polls = 0, gapMax = 0, pollMax = 0, reportAt = lastInputAt + 5000;
+#endif
+    for (;;) {
+        uint64_t now = c4fLauncherTimeMs();
+        pthread_mutex_lock(&c4fMutex);
+        int quit = c4fQuit || c4fCloseRequested;
+        uint64_t renderedAt = c4fRenderAt;
+        pthread_mutex_unlock(&c4fMutex);
+        if (quit) break;
+        /* A suspended or stalled display must not leave test output running.
+         * The first fresh frame reopens readers with their normal neutral gate. */
+        if (now > renderedAt && now - renderedAt > 1000) {
+            if (!paused) {
+                c4fTesterSuspend(&tester, now);
+                c4fInputReset(&inputs, now);
+                C4fTesterView view;
+                c4fTesterView(&tester, &view);
+                pthread_mutex_lock(&c4fMutex);
+                c4fScreen.tester = view;
+                pthread_mutex_unlock(&c4fMutex);
+            }
+            paused = 1;
+            usleep(10000);
+            continue;
+        }
+        int resumed = paused || (now > lastInputAt && now - lastInputAt > 1000);
+        if (resumed) {
+            c4fTesterSuspend(&tester, now);
+            c4fInputReset(&inputs, now);
+            launcherHold = {};
+        }
+        paused = 0;
+#ifdef C4F_DIAG
+        uint64_t gap = now - lastInputAt;
+        if (!resumed && gap > gapMax) gapMax = gap;
+#endif
+        lastInputAt = now;
+        C4fInputFrame input;
+        c4fInputPoll(&inputs, now, &input);
+        int wasTesting = tester.active;
+        if (wasTesting && !c4fTesterFrame(&tester, now, input.remote.pressed)) waitRelease = 1;
+        int held = c4fTesterHoldUpdate(&launcherHold, input.standard.buttons, now);
+        C4fTesterView view;
+        c4fTesterView(&tester, &view);
+        char inputNote[sizeof(c4fScreen.inputNote)];
+        c4fNativeInputNote(&nativeInput, inputNote, sizeof(inputNote));
+        int openTester = 0;
+#ifdef C4F_DIAG
+        const int diagnostic = 1;
+        int capture = 0;
+#else
+        const int diagnostic = 0;
+#endif
+        /* No native pad/user calls or drawing while this publication lock is
+         * held. The service worker owns its own status fields in the same view. */
+        pthread_mutex_lock(&c4fMutex);
+        snprintf(c4fScreen.inputNote, sizeof(c4fScreen.inputNote), "%s", inputNote);
+        c4fScreen.tester = view;
+        c4fInputAt = c4fLauncherTimeMs();
+        if (resumed) {
+            c4fScreen.actionMenu = c4fScreen.confirmStop = c4fScreen.confirmMenu = 0;
+            c4fScreen.actionFocus = C4F_ACTION_NONE;
+        }
+        uint32_t standardUnhandled = 0, remoteUnhandled = 0;
+        C4fLauncherAction action = C4F_ACTION_NONE;
+        if (!wasTesting) {
+            uint32_t standardPressed = input.standard.pressed, remotePressed = input.remote.pressed;
+            if (waitRelease) {
+                if (!input.standard.buttons && !input.remote.buttons) waitRelease = 0;
+                standardPressed = remotePressed = 0;
+            }
+            action = c4fNavigate(&c4fScreen, standardPressed, remotePressed,
+                                 diagnostic, &standardUnhandled, &remoteUnhandled);
+            if (action == C4F_ACTION_TESTER || (action == C4F_ACTION_NONE && held && !c4fScreen.actionMenu &&
+                                                 !c4fScreen.confirmStop && !c4fScreen.locked)) {
+                openTester = 1;
+                action = C4F_ACTION_NONE;
+            }
+        }
+        if (action == C4F_ACTION_CLOSE) c4fCloseRequested = 1;
+        else if (action == C4F_ACTION_START) {
+            int setUp = c4fScreen.autorun != C4F_AUTORUN_ON;
+            c4fCommand = setUp ? C4F_DO_SET_UP : C4F_DO_START; c4fScreen.busy = 1;
+            snprintf(c4fScreen.message, sizeof(c4fScreen.message), "%s",
+                     setUp ? "Setting up Control4Free. Please wait..." : "Starting Control4Free. Please wait...");
+        } else if (action == C4F_ACTION_STOP) {
+            c4fCommand = C4F_DO_STOP; c4fScreen.busy = 1;
+            snprintf(c4fScreen.message, sizeof(c4fScreen.message), "Stopping and releasing controllers...");
+        } else if (action == C4F_ACTION_AUTORUN) {
+            int off = c4fScreen.autorun == C4F_AUTORUN_ON;
+            c4fCommand = off ? C4F_DO_AUTORUN_OFF : C4F_DO_AUTORUN_ON; c4fScreen.busy = 1;
+            snprintf(c4fScreen.message, sizeof(c4fScreen.message), "%s",
+                     off ? "Turning auto-start off..." : "Turning auto-start on...");
+        }
+#ifdef C4F_DIAG
+        uint32_t pressed = wasTesting ? 0 : standardUnhandled | remoteUnhandled;
+        int page = c4fScreen.diagPage;
+        if (pressed & (ORBIS_PAD_BUTTON_R1 | ORBIS_PAD_BUTTON_RIGHT)) c4fScreen.diagPage = (page + 1) % C4F_DIAG_PAGES;
+        if (pressed & (ORBIS_PAD_BUTTON_L1 | ORBIS_PAD_BUTTON_LEFT)) c4fScreen.diagPage = (page + C4F_DIAG_PAGES - 1) % C4F_DIAG_PAGES;
+        if (pressed & (ORBIS_PAD_BUTTON_UP | ORBIS_PAD_BUTTON_DOWN)) {
+            int max = c4fDiagMaxScroll(page), at = c4fScreen.diagScroll[page];
+            if (at >= C4F_DIAG_END) at = max;
+            at += pressed & ORBIS_PAD_BUTTON_UP ? -10 : 10;
+            c4fScreen.diagScroll[page] = at >= max ? C4F_DIAG_END : at < 0 ? 0 : at;
+        }
+        capture = action == C4F_ACTION_CAPTURE || (pressed & ORBIS_PAD_BUTTON_OPTIONS);
+#endif
+        pthread_mutex_unlock(&c4fMutex);
+        if (openTester) {
+            c4fTesterOpen(&tester, now);
+            c4fTesterView(&tester, &view);
+            pthread_mutex_lock(&c4fMutex);
+            c4fScreen.tester = view;
+            pthread_mutex_unlock(&c4fMutex);
+        }
+#ifdef C4F_DIAG
+        if (capture) c4fDiagCapture(4000);
+        uint64_t took = c4fLauncherTimeMs() - now;
+        if (took > pollMax) pollMax = took;
+        polls++;
+        if (now >= reportAt) {
+            printf("[c4f-launcher] input sampler: %llu polls, largest gap %llu ms, slowest poll %llu ms\n",
+                   (unsigned long long)polls, (unsigned long long)gapMax, (unsigned long long)pollMax);
+            polls = gapMax = pollMax = 0; reportAt = now + 5000;
+        }
+#endif
+        uint64_t finished = c4fLauncherTimeMs();
+        unsigned delay = finished < now + 4 ? (unsigned)(now + 4 - finished) : 1;
+        usleep(delay * 1000);
+    }
+    c4fTesterClose(&tester);
+    c4fInputClose(&inputs);
+    return NULL;
+}
+
+/* RTT is reported by the controller page for its own input-channel probe.
+ * Match all virtual slots for the selected user; never call a local pad 0 ms. */
+static C4fTesterConnection c4fTesterConnectionView(const C4fServiceStatus *status, int running,
+                                                 uint64_t checkedAt, uint64_t now, const C4fTesterView *tester)
+{
+    C4fTesterConnection result = {};
+    for (int p = 0; p < C4F_SERVICE_PADS; p++) result.rttMs[p] = -1;
+    if (running != C4F_SERVICE_RUNNING || !status->latencyAvailable || now < checkedAt ||
+        now - checkedAt > C4F_SERVICE_LATENCY_STALE_MS) return result;
+    result.available = 1;
+    if (tester->selected < 0 || tester->selected >= C4F_TESTER_USERS ||
+        !tester->user[tester->selected].used || tester->user[tester->selected].state != C4F_TESTER_READY) return result;
+    uint32_t user = (uint32_t)tester->user[tester->selected].id;
+    for (int p = 0; p < C4F_SERVICE_PADS; p++) {
+        const C4fServiceLatency *link = &status->latency[p];
+        if (!link->userKnown || link->userId != user) continue;
+        result.pads |= 1U << p;
+        if (link->rttMs >= 0 && link->ageMs >= 0 &&
+            (uint64_t)link->ageMs + now - checkedAt <= C4F_SERVICE_LATENCY_STALE_MS) result.rttMs[p] = link->rttMs;
+    }
+    return result;
+}
+
+/* Background service fields and hidden live readings cannot change the tester
+ * tools view. Compare only what is visible before spending a frame on it. */
+static C4fLauncherScreen c4fVisibleScreen(const C4fLauncherScreen *screen)
+{
+    C4fLauncherScreen visible = *screen;
+    if (!screen->tester.active) return visible;
+    memset(&visible, 0, sizeof(visible));
+    visible.tester = screen->tester;
+    visible.connection = screen->connection;
+    if (visible.tester.menu) {
+        C4fTesterView *v = &visible.tester;
+        v->buttons = 0;
+        v->lx = v->ly = v->rx = v->ry = v->l2 = v->r2 = v->touches = 0;
+        memset(v->touchX, 0, sizeof(v->touchX)); memset(v->touchY, 0, sizeof(v->touchY));
+        memset(v->quat, 0, sizeof(v->quat)); memset(v->accel, 0, sizeof(v->accel));
+        memset(v->gyro, 0, sizeof(v->gyro));
+    }
+    return visible;
+}
+
 int main(void)
 {
     const size_t frameBytes = (size_t)C4F_SCREEN_WIDTH * C4F_SCREEN_HEIGHT * sizeof(uint32_t);
@@ -409,18 +614,6 @@ int main(void)
     OrbisUserServiceInitializeParams params = {};
     params.priority = ORBIS_KERNEL_PRIO_FIFO_LOWEST;
     sceUserServiceInitialize(&params);
-    C4fNativeInput nativeInput = {};
-    nativeInput.handles[0] = nativeInput.handles[1] = -1;
-    C4fInputOps inputOps = { &nativeInput, c4fNativeInitialUser, c4fNativeOpen, c4fNativeRead, c4fNativeClose };
-    C4fInput inputs;
-    c4fInputInit(&inputs, &inputOps);
-    C4fTesterOps testerOps = { &nativeInput, c4fTesterLoginUsers, c4fTesterUserName, c4fTesterOpenPad, c4fTesterRead,
-                               c4fTesterClosePad, c4fTesterVibrate, c4fTesterLight, c4fTesterResetLight,
-                               c4fTesterResetOrientation, c4fTesterMotion, c4fTesterLogState };
-    static C4fTester tester;
-    c4fTesterInit(&tester, &testerOps);
-    C4fTesterHold launcherHold = {};
-    int waitRelease = 0;
     c4fScreen.running = -1; c4fScreen.busy = 1; c4fScreen.autorun = C4F_AUTORUN_UNKNOWN;
     snprintf(c4fScreen.message, sizeof(c4fScreen.message), "Checking Control4Free...");
     /* Read before leaving the sandbox: /app0 is only visible from inside it. */
@@ -441,95 +634,48 @@ int main(void)
         snprintf(c4fScreen.message, sizeof(c4fScreen.message), "Could not initialize launcher. Close with PS and retry.");
         pthread_mutex_unlock(&c4fMutex);
     }
+    c4fRenderAt = c4fLauncherTimeMs();
+    pthread_t inputWorker;
+    int inputStarted = pthread_create(&inputWorker, NULL, c4fInputWorker, NULL) == 0;
+    if (!inputStarted) {
+        pthread_mutex_lock(&c4fMutex);
+        c4fScreen.locked = 1;
+        snprintf(c4fScreen.message, sizeof(c4fScreen.message), "Could not initialize input. Close with PS and retry.");
+        pthread_mutex_unlock(&c4fMutex);
+    }
     sceSystemServiceHideSplashScreen();
-    uint64_t lastInputAt = c4fLauncherTimeMs();
-    int buffer = 0, done = 0, drawn = 0, shown[2] = { 0, 0 };
+    int buffer = 0, done = 0, drawn = 0, shown[2] = { 0, 0 }, requestedRate = 1;
     int64_t frame = 1;
     C4fLauncherScreen drawnState;
     memset(&drawnState, 0, sizeof(drawnState));
 #ifdef C4F_DIAG
-    uint64_t testDraws = 0, testDrawMax = 0, testDrawReportAt = 0;
+    uint64_t testFrames = 0, testDraws = 0, testDrawMax = 0, testCopyMax = 0;
+    uint64_t testPresentMax = 0, testFrameMax = 0, testInputAgeMax = 0, testDrawReportAt = 0;
 #endif
     while (!done) {
         uint64_t now = c4fLauncherTimeMs();
-        /* A suspended app must not resume a pending confirmation or reuse a
-         * held navigation button. Do not guess unreversed focus API signatures. */
-        int resumed = now > lastInputAt && now - lastInputAt > 1000;
-        if (resumed) c4fInputReset(&inputs, now);
-        lastInputAt = now;
-        C4fInputFrame input;
-        c4fInputPoll(&inputs, now, &input);
-        if (resumed) c4fTesterSuspend(&tester, now);
-        /* L3+R3 on the launcher's controller opens the controller test. It is
-         * tracked while testing too, so a hold still down after leaving the
-         * test does not open it again. */
-        int held = c4fTesterHoldUpdate(&launcherHold, input.standard.buttons, now);
         pthread_mutex_lock(&c4fMutex);
-        c4fNativeInputNote(&nativeInput, c4fScreen.inputNote, sizeof(c4fScreen.inputNote));
-        if (resumed) {
-            c4fScreen.actionMenu = c4fScreen.confirmStop = c4fScreen.confirmMenu = 0;
-            c4fScreen.actionFocus = C4F_ACTION_NONE;
-        }
-        uint32_t standardUnhandled = 0, remoteUnhandled = 0;
-#ifdef C4F_DIAG
-        const int diagnostic = 1;
-#else
-        const int diagnostic = 0;
-#endif
-        C4fLauncherAction action = C4F_ACTION_NONE;
-        if (tester.active) {
-            /* Every button is under test, so the launcher's shortcuts are off. */
-            if (!c4fTesterFrame(&tester, now, input.remote.pressed)) waitRelease = 1;
-        } else {
-            uint32_t standardPressed = input.standard.pressed, remotePressed = input.remote.pressed;
-            if (waitRelease) {
-                /* The press that left the test must not act here as well. */
-                if (!input.standard.buttons && !input.remote.buttons) waitRelease = 0;
-                standardPressed = remotePressed = 0;
-            }
-            action = c4fNavigate(&c4fScreen, standardPressed, remotePressed,
-                                 diagnostic, &standardUnhandled, &remoteUnhandled);
-            if (action == C4F_ACTION_TESTER || (action == C4F_ACTION_NONE && held && !c4fScreen.actionMenu &&
-                                                 !c4fScreen.confirmStop && !c4fScreen.locked)) {
-                c4fTesterOpen(&tester, now);
-                action = C4F_ACTION_NONE;
-            }
-        }
-        c4fTesterView(&tester, &c4fScreen.tester);
-        if (action == C4F_ACTION_CLOSE) done = 1;
-        else if (action == C4F_ACTION_START) {
-            /* Until auto-start is on, Start sets it up and starts it. */
-            int setUp = c4fScreen.autorun != C4F_AUTORUN_ON;
-            c4fCommand = setUp ? C4F_DO_SET_UP : C4F_DO_START; c4fScreen.busy = 1;
-            snprintf(c4fScreen.message, sizeof(c4fScreen.message), "%s",
-                     setUp ? "Setting up Control4Free. Please wait..." : "Starting Control4Free. Please wait...");
-        } else if (action == C4F_ACTION_STOP) {
-            c4fCommand = C4F_DO_STOP; c4fScreen.busy = 1;
-            snprintf(c4fScreen.message, sizeof(c4fScreen.message), "Stopping and releasing controllers...");
-        } else if (action == C4F_ACTION_AUTORUN) {
-            int off = c4fScreen.autorun == C4F_AUTORUN_ON;
-            c4fCommand = off ? C4F_DO_AUTORUN_OFF : C4F_DO_AUTORUN_ON; c4fScreen.busy = 1;
-            snprintf(c4fScreen.message, sizeof(c4fScreen.message), "%s",
-                     off ? "Turning auto-start off..." : "Turning auto-start on...");
-        }
-#ifdef C4F_DIAG
-        /* Pages and scrolling work while busy too; not during the controller test. */
-        uint32_t pressed = tester.active ? 0 : standardUnhandled | remoteUnhandled;
-        int page = c4fScreen.diagPage;
-        if (pressed & (ORBIS_PAD_BUTTON_R1 | ORBIS_PAD_BUTTON_RIGHT)) c4fScreen.diagPage = (page + 1) % C4F_DIAG_PAGES;
-        if (pressed & (ORBIS_PAD_BUTTON_L1 | ORBIS_PAD_BUTTON_LEFT)) c4fScreen.diagPage = (page + C4F_DIAG_PAGES - 1) % C4F_DIAG_PAGES;
-        if (pressed & (ORBIS_PAD_BUTTON_UP | ORBIS_PAD_BUTTON_DOWN)) {
-            int max = c4fDiagMaxScroll(page), at = c4fScreen.diagScroll[page];
-            if (at >= C4F_DIAG_END) at = max;
-            at += pressed & ORBIS_PAD_BUTTON_UP ? -10 : 10;
-            c4fScreen.diagScroll[page] = at >= max ? C4F_DIAG_END : at < 0 ? 0 : at;
-        }
-        if (action == C4F_ACTION_CAPTURE || (pressed & ORBIS_PAD_BUTTON_OPTIONS)) c4fDiagCapture(4000);
-#endif
+        c4fRenderAt = now;
+        done = c4fCloseRequested;
         C4fLauncherScreen snapshot = c4fScreen;
+        C4fServiceStatus connectionStatus = c4fConnectionStatus;
+        int connectionService = c4fConnectionService;
+        uint64_t connectionCheckedAt = c4fConnectionCheckedAt;
+#ifdef C4F_DIAG
+        uint64_t sampledAt = c4fInputAt;
+#endif
         pthread_mutex_unlock(&c4fMutex);
-        /* Redraw only when something changed, then copy it to each buffer once. */
-        if (!drawn || memcmp(&snapshot, &drawnState, sizeof(snapshot))) {
+        if (done) break;
+        snapshot.connection = c4fTesterConnectionView(&connectionStatus, connectionService, connectionCheckedAt, now, &snapshot.tester);
+        int wantedRate = snapshot.tester.active ? 0 : 1;
+        if (wantedRate != requestedRate) {
+            int result = sceVideoOutSetFlipRate(c4fVideo, wantedRate);
+            if (result < 0) printf("[c4f-launcher] display rate change failed: 0x%08x\n", (unsigned)result);
+            requestedRate = wantedRate;
+        }
+        C4fLauncherScreen visible = c4fVisibleScreen(&snapshot);
+        /* Redraw only when something visible changed, then copy each buffer once. */
+        if (!drawn || memcmp(&visible, &drawnState, sizeof(visible))) {
             if (snapshot.tester.active) {
 #ifdef C4F_DIAG
                 uint64_t drawStart = c4fLauncherTimeMs();
@@ -547,18 +693,16 @@ int main(void)
                 c4fDrawLauncher(canvas, &snapshot);
 #endif
             }
-            drawnState = snapshot; drawn = 1; shown[0] = shown[1] = 0;
+            drawnState = visible; drawn = 1; shown[0] = shown[1] = 0;
         }
 #ifdef C4F_DIAG
-        /* How long the controller test takes to draw, for the frame budget. */
-        if (testDraws && now >= testDrawReportAt) {
-            printf("[c4f-launcher] controller test: %llu redraws, slowest %llu ms\n",
-                   (unsigned long long)testDraws, (unsigned long long)testDrawMax);
-            testDraws = testDrawMax = 0;
-            testDrawReportAt = now + 5000;
-        }
+        uint64_t copiedAt = c4fLauncherTimeMs();
 #endif
         if (!shown[buffer]) { memcpy(c4fBuffers[buffer], canvas, frameBytes); shown[buffer] = 1; }
+#ifdef C4F_DIAG
+        uint64_t presentAt = c4fLauncherTimeMs();
+        uint64_t copyMs = presentAt - copiedAt;
+#endif
         if (sceVideoOutSubmitFlip(c4fVideo, buffer, ORBIS_VIDEO_OUT_FLIP_VSYNC, frame) < 0) break;
         for (;;) {
             OrbisVideoOutFlipStatus status;
@@ -570,15 +714,35 @@ int main(void)
             OrbisKernelUseconds timeout = 100000;
             sceKernelWaitEqueue(c4fFlipQueue, &event, 1, &count, &timeout);
         }
+#ifdef C4F_DIAG
+        if (snapshot.tester.active) {
+            uint64_t completedAt = c4fLauncherTimeMs();
+            uint64_t presentMs = completedAt - presentAt, frameMs = completedAt - now;
+            uint64_t inputAge = sampledAt && now >= sampledAt ? now - sampledAt : 0;
+            if (copyMs > testCopyMax) testCopyMax = copyMs;
+            if (presentMs > testPresentMax) testPresentMax = presentMs;
+            if (frameMs > testFrameMax) testFrameMax = frameMs;
+            if (inputAge > testInputAgeMax) testInputAgeMax = inputAge;
+            testFrames++;
+        }
+        if (testFrames && now >= testDrawReportAt) {
+            printf("[c4f-launcher] controller test: %llu frames, %llu redraws; max draw %llu, copy %llu, present %llu, frame %llu, sample age %llu ms\n",
+                   (unsigned long long)testFrames, (unsigned long long)testDraws,
+                   (unsigned long long)testDrawMax, (unsigned long long)testCopyMax,
+                   (unsigned long long)testPresentMax, (unsigned long long)testFrameMax,
+                   (unsigned long long)testInputAgeMax);
+            testFrames = testDraws = testDrawMax = testCopyMax = testPresentMax = testFrameMax = testInputAgeMax = 0;
+            testDrawReportAt = now + 5000;
+        }
+#endif
         buffer ^= 1; frame++;
     }
     pthread_mutex_lock(&c4fMutex); c4fQuit = 1; pthread_mutex_unlock(&c4fMutex);
+    if (inputStarted) pthread_join(inputWorker, NULL);
     if (workerStarted) pthread_join(worker, NULL);
 #ifdef C4F_DIAG
     c4fDiagStop();
 #endif
-    c4fTesterClose(&tester);
-    c4fInputClose(&inputs);
     sceNetCtlTerm();
     c4fCloseVideo();
     free(canvas);

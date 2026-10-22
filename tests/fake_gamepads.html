@@ -125,12 +125,12 @@
     profiles = data; index = null;
     $('profile').textContent = '';
     for (const profile of profiles) $('profile').add(new Option(profile.label + ' — ' + profile.name, profile.name));
-    const relay = location.protocol === 'http:' && location.hostname === '127.0.0.1' ? 'ws://' + location.host + '/local-service' : null;
+    const relay = location.protocol === 'http:' && location.hostname === '127.0.0.1' ? 'http://' + location.host + '/local-service' : null;
     const bootstrap = script + '\nwindow.fakePads.loadProfiles(' + JSON.stringify(profiles).replace(/</g, '\\u003c') + ');\n' +
       'try { localStorage.setItem("c4f.address", JSON.stringify("127.0.0.1:4264")); } catch(e) {}\n' +
-      'window.WebSocket = class LocalTestSocket extends WebSocket { constructor(address, protocols) {\n' +
-      'const url = new URL(address); if (url.protocol !== "ws:" || url.hostname !== "127.0.0.1" || url.port !== "4264") throw new Error("The gamepad lab only connects to the local test service");\n' +
-      'super(' + JSON.stringify(relay) + ' || address, protocols); } };';
+      'const localFetch = window.fetch.bind(window); window.fetch = async (address, options) => {\n' +
+      'const url = new URL(address); if (url.protocol !== "http:" || url.hostname !== "127.0.0.1" || url.port !== "4264" || url.pathname !== "/rtc") throw new Error("The gamepad lab only connects to the local test service");\n' +
+      'return localFetch(' + JSON.stringify(relay) + ' || address, options); };';
     frame.srcdoc = html.replace(/<head>/i, '<head><script>' + bootstrap.replace(/<\/script/gi, '<\\/script') + '<\/script>');
     frame.onload = () => { $('profile').disabled = false; render(); message('Choose a profile, then Connect.'); };
   }

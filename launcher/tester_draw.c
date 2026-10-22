@@ -1,7 +1,7 @@
 /* The controller test screen, in the launcher's look, with the controller drawn
  * the way the controller page draws it (client/index.html: DEFAULT_LAYOUT and the
- * .pad-area styles). A still layer is built once; each frame copies it and draws
- * only what the controller is doing, so a moving stick redraws quickly. */
+ * .pad-area styles). Static backgrounds and expensive control artwork are
+ * cached. Live values still update every draw; tools have their own view. */
 #include "screen.h"
 #include <math.h>
 #include <stdio.h>
@@ -61,6 +61,16 @@ typedef struct { float at; C4fColor color; } C4fStop;
 
 static const C4fPlacement c4fIdentity = { 0, 0, 1, 0, 0, 0 };
 static uint32_t *c4fLayer;
+static uint32_t *c4fToolsBase, *c4fToolsFrame;
+static int c4fToolsBaseReady;
+
+typedef struct { uint32_t *px; int x, y, w, h; } C4fSprite;
+static C4fSprite c4fKnobs[3], c4fPressed[16], c4fTouchGlow, c4fLightStrip;
+static uint32_t c4fSpriteAccent;
+static int c4fHasSpriteAccent;
+static uint32_t *c4fSpriteScratch;
+typedef struct { unsigned char *px; int x, y, w, h; } C4fMask;
+static C4fMask c4fTriggerMasks[2];
 
 /* The page's size unit, --u: min(1cqh, .46cqw) of the picture. */
 static float c4fUnit(void) { return fminf(C4F_P_H / 100, .46f * C4F_P_W / 100); }
@@ -623,6 +633,12 @@ static void c4fBuildLayer(void)
         c.px = px;
         c4fPaintBackdrop(&c, C4F_S);
     }
+    /* Preserve the clean waves before the live controller is painted. Opening
+     * tools later must not regenerate a whole-screen gradient and wave paths. */
+    if (!c4fToolsBase) {
+        c4fToolsBase = malloc(bytes);
+        if (c4fToolsBase) memcpy(c4fToolsBase, px, bytes);
+    }
     /* .tile has backdrop-filter: blur(6px). */
     c4fBlurUnder(&c, C4F_T_LEFT, C4F_T_TOP, C4F_T_PAD_W, C4F_T_HEIGHT, 6 * C4F_S, 6 * C4F_S);
     c4fBlurUnder(&c, C4F_T_INFO_X, C4F_T_TOP, C4F_T_INFO_W, C4F_T_HEIGHT, 6 * C4F_S, 6 * C4F_S);
@@ -633,6 +649,7 @@ static void c4fBuildLayer(void)
     x += c4fText(&c, C4F_FONT_LIGHT, 17 * C4F_S, x, 63, C4F_TEXT, "Control4Free") + 14 * C4F_S;
     c4fDot(&c, x + 4 * C4F_S, 55, C4F_ACCENT, 0);
     c4fText(&c, C4F_FONT_LIGHT, 13 * C4F_S, x + 16 * C4F_S, 62, C4F_MUTED, "Controller test");
+    c4fDrawSolidarityBadge(&c, C4F_SCREEN_WIDTH - 64, 40);
 
     c4fText(&c, C4F_FONT_LIGHT, 48, C4F_T_LEFT, 140, C4F_TEXT, "Controller test");
     c4fTextWrapped(&c, C4F_FONT_LIGHT, 24, C4F_T_LEFT, 184, C4F_T_RIGHT - C4F_T_LEFT, 34, 2, C4F_MUTED,
@@ -717,33 +734,31 @@ static void c4fTriggerFill(C4fCanvas *c, int id, int pressure, C4fColor accent)
     if (pressure <= 0) return;
     const C4fBox b = c4fControl(id);
     const float top = b.y + b.h * (1 - pressure / 255.0f);
-    C4fPath p = { 0 };
-    c4fShapePath(&p, id, 0);
-    unsigned char *mask;
-    int x0, y0, w, h;
-    if (c4fPathMask(c, &p, c4fIdentity, &mask, &x0, &y0, &w, &h)) {
-        for (int y = 0; y < h; y++) {
-            float rowTop = y0 + y, cover = fmaxf(0, fminf(1, rowTop + 1 - top));
-            if (cover <= 0) continue;
-            for (int x = 0; x < w; x++)
-                if (mask[y * w + x]) c4fBlend(c, x0 + x, y0 + y, c4fAlpha(accent, .42f), cover * mask[y * w + x] / 255.0f);
-        }
-        free(mask);
+    C4fMask *mask = &c4fTriggerMasks[id == C4F_C_R2];
+    if (!mask->px) {
+        C4fPath p = { 0 };
+        c4fShapePath(&p, id, 0);
+        c4fPathMask(c, &p, c4fIdentity, &mask->px, &mask->x, &mask->y, &mask->w, &mask->h);
+        c4fPathFree(&p);
     }
-    c4fPathFree(&p);
+    if (mask->px) {
+        for (int y = 0; y < mask->h; y++) {
+            float rowTop = mask->y + y, cover = fmaxf(0, fminf(1, rowTop + 1 - top));
+            if (cover <= 0) continue;
+            for (int x = 0; x < mask->w; x++)
+                if (mask->px[y * mask->w + x]) c4fBlend(c, mask->x + x, mask->y + y, c4fAlpha(accent, .42f),
+                                                      cover * mask->px[y * mask->w + x] / 255.0f);
+        }
+    }
 }
 
-static void c4fKnob(C4fCanvas *c, int id, int sx, int sy, int clicked, C4fColor accent)
+static void c4fPaintKnob(C4fCanvas *c, float cx, float cy, float radius, int clicked, int highlighted, C4fColor accent)
 {
-    const C4fBox b = c4fControl(id);
-    const int moved = sx != 128 || sy != 128;
-    const float travel = b.w * C4F_KNOB_TRAVEL;
-    const float cx = b.x + b.w / 2 + (sx - 128) / 127.5f * travel, cy = b.y + b.h / 2 + (sy - 128) / 127.5f * travel;
-    const float r = b.w / 4 * (clicked ? .9f : 1);
+    const float r = radius * (clicked ? .9f : 1);
     C4fPath p = { 0 };
     c4fPathCircle(&p, cx, cy, r, 1);
     c4fShadowPath(c, &p, c4fIdentity, 0, 8, 9, C4F_RGBA(0, 0, 0, .7f));
-    if (moved || clicked) c4fShadowPath(c, &p, c4fIdentity, 0, 0, 9, c4fAlpha(accent, .65f));
+    if (highlighted) c4fShadowPath(c, &p, c4fIdentity, 0, 0, 9, c4fAlpha(accent, .65f));
     const C4fStop body[3] = { { 0, c4fHex(clicked ? 0x56607b : 0x3f475b) }, { .55f, c4fHex(clicked ? 0x323a4d : 0x252b39) },
                               { 1, c4fHex(clicked ? 0x1e2331 : 0x161a24) } };
     c4fGradientPath(c, &p, body, 3, cy - r, 2 * r, 0, 0, 0);
@@ -756,7 +771,7 @@ static void c4fKnob(C4fCanvas *c, int id, int sx, int sy, int clicked, C4fColor 
             if (fmodf(degrees, 8) < 4) c4fBlend(c, x, y, C4F_RGBA(255, 255, 255, .045f), fminf(1, r - d));
         }
     c4fInsetPath(c, &p, 1, 1, 0, C4F_RGBA(255, 255, 255, .2f));
-    c4fRing(c, cx, cy, r + .5f, 1, (moved || clicked) ? c4fAlpha(accent, .8f) : C4F_RGBA(0, 0, 0, .55f));
+    c4fRing(c, cx, cy, r + .5f, 1, highlighted ? c4fAlpha(accent, .8f) : C4F_RGBA(0, 0, 0, .55f));
     c4fPathFree(&p);
     /* The thumb dish: dark at the top and lit at the bottom, so it reads as hollow. */
     const float dish = r * .66f;
@@ -767,55 +782,203 @@ static void c4fKnob(C4fCanvas *c, int id, int sx, int sy, int clicked, C4fColor 
     c4fPathFree(&p);
 }
 
-static void c4fDrawInput(C4fCanvas *c, const C4fTesterView *v, C4fColor accent)
+static void c4fPaintLightStrip(C4fCanvas *c, C4fColor accent)
 {
-    const uint32_t b = v->buttons;
-    static const uint32_t shoulders[4] = { C4F_INPUT_BUTTON_L2, C4F_INPUT_BUTTON_L1, C4F_INPUT_BUTTON_R2, C4F_INPUT_BUTTON_R1 };
-    for (int i = 0; i < 4; i++) {
-        if (b & shoulders[i]) {
-            C4fPath p = { 0 };
-            c4fShapePath(&p, i, 0);
-            c4fPlasticLit(c, &p, c4fControl(i), accent);
-            c4fPathFree(&p);
-        }
-        if (i == C4F_C_L2 || i == C4F_C_R2) c4fTriggerFill(c, i, i == C4F_C_L2 ? v->l2 : v->r2, accent);
-        if ((b & shoulders[i]) || (i == C4F_C_L2 && v->l2) || (i == C4F_C_R2 && v->r2))
-            c4fEngraved(c, c4fControl(i), c4fShoulderNames[i], C4F_P_ENGRAVED);
-    }
-    if (b & C4F_INPUT_BUTTON_OPTIONS) {
+    const C4fBox pad = c4fControl(C4F_C_TOUCHPAD);
+    const float u = c4fUnit(), sx = pad.x + .07f * pad.w, sw = .86f * pad.w, sh = fmaxf(3, .8f * u);
+    c4fShadowRoundRect(c, sx, pad.y - 2, sw, sh + 2, 2, 0, -2, 3.5f * u, 0, c4fAlpha(accent, .55f));
+    c4fShadowRoundRect(c, sx, pad.y, sw, sh, 2, 0, 0, 2.5f * u, 0, c4fAlpha(accent, .9f));
+    c4fFillRoundRect(c, sx, pad.y, sw, sh, sh / 2, accent);
+}
+
+static void c4fPaintTouch(C4fCanvas *c, float x, float y, C4fColor accent)
+{
+    const float r = 3.5f * c4fUnit();
+    c4fGlowCircle(c, x, y, r, 20, 0, c4fAlpha(accent, .8f));
+    c4fFillCircle(c, x, y, r, c4fAlpha(accent, .45f));
+    c4fRing(c, x, y, r, 1, c4fAlpha(accent, .85f));
+}
+
+/* One transparent sprite per pressed control. Overlapping glows still compose
+ * in their original order; the static controller is never baked into a sprite. */
+static void c4fPaintPressed(C4fCanvas *c, int index, C4fColor accent)
+{
+    if (index < 4 || index >= 14) {
+        const int id = index < 4 ? index : index == 14 ? C4F_C_L3 : C4F_C_R3;
+        C4fPath p = { 0 };
+        c4fShapePath(&p, id, 0);
+        c4fPlasticLit(c, &p, c4fControl(id), accent);
+        if (index >= 14) c4fEngraved(c, c4fControl(id), index == 14 ? "L3" : "R3", C4F_P_ENGRAVED);
+        c4fPathFree(&p);
+    } else if (index == 4) {
         C4fPath p = { 0 };
         c4fCapsulePath(&p, C4F_C_OPTIONS, 0);
         c4fPlasticLit(c, &p, c4fCapsule(C4F_C_OPTIONS), accent);
         c4fPathFree(&p);
-    }
-    static const uint32_t arms[4] = { C4F_INPUT_BUTTON_UP, C4F_INPUT_BUTTON_RIGHT, C4F_INPUT_BUTTON_DOWN, C4F_INPUT_BUTTON_LEFT };
-    for (int arm = 0; arm < 4; arm++) if (b & arms[arm]) c4fArm(c, arm, 1, accent);
-    static const uint32_t faces[4] = { C4F_INPUT_BUTTON_TRIANGLE, C4F_INPUT_BUTTON_CIRCLE, C4F_INPUT_BUTTON_CROSS, C4F_INPUT_BUTTON_SQUARE };
-    for (int i = 0; i < 4; i++) if (b & faces[i]) c4fFaceButton(c, i, 1, 1);
-    const C4fBox pad = c4fControl(C4F_C_TOUCHPAD);
-    if (b & C4F_INPUT_BUTTON_TOUCHPAD) {
-        /* .touchpad.clicked: a lit edge (its outer glow stays under the plate). */
+    } else if (index < 9) {
+        c4fArm(c, index - 5, 1, accent);
+    } else if (index < 13) {
+        c4fFaceButton(c, index - 9, 1, 1);
+    } else {
         C4fPath p = { 0 };
         c4fShapePath(&p, C4F_C_TOUCHPAD, 0);
         c4fInsetPath(c, &p, 2, 0, 0, c4fAlpha(accent, .7f));
         c4fPathFree(&p);
     }
-    const float u = c4fUnit();
+}
+
+static const uint32_t c4fPressedBits[16] = {
+    C4F_INPUT_BUTTON_L2, C4F_INPUT_BUTTON_L1, C4F_INPUT_BUTTON_R2, C4F_INPUT_BUTTON_R1, C4F_INPUT_BUTTON_OPTIONS,
+    C4F_INPUT_BUTTON_UP, C4F_INPUT_BUTTON_RIGHT, C4F_INPUT_BUTTON_DOWN, C4F_INPUT_BUTTON_LEFT,
+    C4F_INPUT_BUTTON_TRIANGLE, C4F_INPUT_BUTTON_CIRCLE, C4F_INPUT_BUTTON_CROSS, C4F_INPUT_BUTTON_SQUARE,
+    C4F_INPUT_BUTTON_TOUCHPAD, C4F_INPUT_BUTTON_L3, C4F_INPUT_BUTTON_R3,
+};
+
+/* The drawing API blends onto an opaque destination. Black/white matte renders
+ * recover a premultiplied sprite once, including antialiasing and soft shadows.
+ * The caller's frame is scratch here, before the still layer is copied into it. */
+static void c4fPaintSprite(C4fCanvas *c, int kind, int index, C4fColor accent)
+{
+    if (kind == 0) c4fPaintKnob(c, 100, 100, c4fControl(C4F_C_LSTICK).w / 4, index == 2, index != 0, accent);
+    else if (kind == 1) c4fPaintPressed(c, index, accent);
+    else if (kind == 2) c4fPaintTouch(c, 100, 100, accent);
+    else c4fPaintLightStrip(c, accent);
+}
+
+static void c4fBuildSprite(C4fCanvas *work, C4fSprite *s, C4fBox box, int kind, int index, C4fColor accent)
+{
+    if (s->px) return;
+    s->x = (int)floorf(fmaxf(0, box.x)); s->y = (int)floorf(fmaxf(0, box.y));
+    s->w = (int)ceilf(fminf(work->w, box.x + box.w)) - s->x;
+    s->h = (int)ceilf(fminf(work->h, box.y + box.h)) - s->y;
+    if (s->w <= 0 || s->h <= 0) return;
+    s->px = malloc((size_t)s->w * s->h * sizeof(uint32_t));
+    if (!s->px) return;
+    if (!c4fSpriteScratch) c4fSpriteScratch = malloc((size_t)work->w * work->h * sizeof(uint32_t));
+    if (!c4fSpriteScratch) { free(s->px); s->px = NULL; return; }
+    C4fCanvas black = { c4fSpriteScratch, work->w, work->h };
+    /* Painters may sample/paint outside the capture rectangle. Initializing the
+     * complete matte avoids undefined reads even if their footprint changes. */
+    for (int i = 0; i < work->w * work->h; i++) black.px[i] = 0xff000000;
+    c4fPaintSprite(&black, kind, index, accent);
+    for (int y = 0; y < s->h; y++)
+        memcpy(s->px + y * s->w, black.px + (s->y + y) * black.w + s->x, (size_t)s->w * sizeof(uint32_t));
+    for (int i = 0; i < work->w * work->h; i++) work->px[i] = 0xffffffff;
+    c4fPaintSprite(work, kind, index, accent);
+    for (int y = 0; y < s->h; y++)
+        for (int x = 0; x < s->w; x++) {
+            const uint32_t b = s->px[y * s->w + x], w = work->px[(s->y + y) * work->w + s->x + x];
+            int a = 255 - ((int)((w >> 8) & 255) - (int)((b >> 8) & 255));
+            if (a < 0) a = 0;
+            if (a > 255) a = 255;
+            const unsigned r = (b >> 16) & 255, g = (b >> 8) & 255, blue = b & 255;
+            s->px[y * s->w + x] = (uint32_t)a << 24 | (r > (unsigned)a ? (unsigned)a : r) << 16 |
+                                  (g > (unsigned)a ? (unsigned)a : g) << 8 | (blue > (unsigned)a ? (unsigned)a : blue);
+        }
+}
+
+static void c4fBlitSprite(C4fCanvas *c, const C4fSprite *s, int dx, int dy)
+{
+    for (int y = 0; y < s->h; y++) {
+        const int py = s->y + y + dy;
+        if (py < 0 || py >= c->h) continue;
+        for (int x = 0; x < s->w; x++) {
+            const int px = s->x + x + dx;
+            if (px < 0 || px >= c->w) continue;
+            const uint32_t src = s->px[y * s->w + x];
+            const unsigned a = src >> 24;
+            if (!a) continue;
+            uint32_t *dst = c->px + py * c->w + px;
+            if (a == 255) { *dst = src; continue; }
+            const unsigned inv = 255 - a;
+            const unsigned r = ((src >> 16) & 255) + (((*dst >> 16) & 255) * inv + 127) / 255;
+            const unsigned g = ((src >> 8) & 255) + (((*dst >> 8) & 255) * inv + 127) / 255;
+            const unsigned b = (src & 255) + ((*dst & 255) * inv + 127) / 255;
+            *dst = 0xff000000 | r << 16 | g << 8 | b;
+        }
+    }
+}
+
+static C4fBox c4fPressedBounds(int index)
+{
+    C4fBox b;
+    if (index < 4) b = c4fControl(index);
+    else if (index == 4) b = c4fCapsule(C4F_C_OPTIONS);
+    else if (index < 9) b = c4fControl(C4F_C_DPAD);
+    else if (index < 13) {
+        float x, y, r;
+        c4fFaceCentre(index - 9, &x, &y, &r);
+        b = (C4fBox){ x - r, y - r, 2 * r, 2 * r };
+    } else b = c4fControl(index == 13 ? C4F_C_TOUCHPAD : index == 14 ? C4F_C_L3 : C4F_C_R3);
+    return (C4fBox){ b.x - 40, b.y - 40, b.w + 80, b.h + 80 };
+}
+
+static void c4fPrepareSprites(C4fCanvas *work, const C4fTesterView *v, C4fColor accent, int ready)
+{
+    const uint32_t rgb = (uint32_t)accent.r << 16 | (uint32_t)accent.g << 8 | accent.b;
+    if (!c4fHasSpriteAccent || c4fSpriteAccent != rgb) {
+        for (int i = 0; i < 3; i++) { free(c4fKnobs[i].px); c4fKnobs[i].px = NULL; }
+        for (int i = 0; i < 16; i++) { free(c4fPressed[i].px); c4fPressed[i].px = NULL; }
+        free(c4fTouchGlow.px); c4fTouchGlow.px = NULL;
+        free(c4fLightStrip.px); c4fLightStrip.px = NULL;
+        c4fSpriteAccent = rgb; c4fHasSpriteAccent = 1;
+    }
+    const C4fBox pad = c4fControl(C4F_C_TOUCHPAD);
+    c4fBuildSprite(work, &c4fLightStrip, (C4fBox){ pad.x - 30, pad.y - 55, pad.w + 60, 110 }, 3, 0, accent);
+    if (ready) {
+        /* All three knobs are warmed together: moving/clicking a stick should
+         * never introduce a first-use shadow/ridge calculation into a frame. */
+        for (int i = 0; i < 3; i++) c4fBuildSprite(work, &c4fKnobs[i], (C4fBox){ 30, 30, 140, 150 }, 0, i, accent);
+        for (int i = 0; i < 16; i++) if (v->buttons & c4fPressedBits[i])
+            c4fBuildSprite(work, &c4fPressed[i], c4fPressedBounds(i), 1, i, accent);
+        if (v->touches) c4fBuildSprite(work, &c4fTouchGlow, (C4fBox){ 45, 45, 110, 110 }, 2, 0, accent);
+    }
+    free(c4fSpriteScratch); c4fSpriteScratch = NULL;
+}
+
+static void c4fKnob(C4fCanvas *c, int id, int sx, int sy, int clicked, C4fColor accent)
+{
+    const C4fBox b = c4fControl(id);
+    const float cx = b.x + b.w / 2 + (sx - 128) / 128.0f * b.w * C4F_KNOB_TRAVEL;
+    const float cy = b.y + b.h / 2 + (sy - 128) / 128.0f * b.h * C4F_KNOB_TRAVEL;
+    const int moved = abs(sx - 128) > 3 || abs(sy - 128) > 3, state = clicked ? 2 : moved ? 1 : 0;
+    if (c4fKnobs[state].px) c4fBlitSprite(c, &c4fKnobs[state], (int)lroundf(cx) - 100, (int)lroundf(cy) - 100);
+    else c4fPaintKnob(c, cx, cy, b.w / 4, clicked, moved || clicked, accent);
+}
+
+static void c4fDrawPressed(C4fCanvas *c, int index, C4fColor accent)
+{
+    if (c4fPressed[index].px) c4fBlitSprite(c, &c4fPressed[index], 0, 0);
+    else c4fPaintPressed(c, index, accent);
+}
+
+static void c4fDrawInput(C4fCanvas *c, const C4fTesterView *v, C4fColor accent)
+{
+    const uint32_t b = v->buttons;
+    static const uint32_t shoulders[4] = { C4F_INPUT_BUTTON_L2, C4F_INPUT_BUTTON_L1, C4F_INPUT_BUTTON_R2, C4F_INPUT_BUTTON_R1 };
+    for (int i = 0; i < 4; i++) {
+        if (b & shoulders[i]) c4fDrawPressed(c, i, accent);
+        if (i == C4F_C_L2 || i == C4F_C_R2) c4fTriggerFill(c, i, i == C4F_C_L2 ? v->l2 : v->r2, accent);
+        if ((b & shoulders[i]) || (i == C4F_C_L2 && v->l2) || (i == C4F_C_R2 && v->r2))
+            c4fEngraved(c, c4fControl(i), c4fShoulderNames[i], C4F_P_ENGRAVED);
+    }
+    if (b & C4F_INPUT_BUTTON_OPTIONS) c4fDrawPressed(c, 4, accent);
+    static const uint32_t arms[4] = { C4F_INPUT_BUTTON_UP, C4F_INPUT_BUTTON_RIGHT, C4F_INPUT_BUTTON_DOWN, C4F_INPUT_BUTTON_LEFT };
+    for (int arm = 0; arm < 4; arm++) if (b & arms[arm]) c4fDrawPressed(c, 5 + arm, accent);
+    static const uint32_t faces[4] = { C4F_INPUT_BUTTON_TRIANGLE, C4F_INPUT_BUTTON_CIRCLE, C4F_INPUT_BUTTON_CROSS, C4F_INPUT_BUTTON_SQUARE };
+    for (int i = 0; i < 4; i++) if (b & faces[i]) c4fDrawPressed(c, 9 + i, accent);
+    const C4fBox pad = c4fControl(C4F_C_TOUCHPAD);
+    if (b & C4F_INPUT_BUTTON_TOUCHPAD) c4fDrawPressed(c, 13, accent);
     for (int i = 0; i < v->touches && i < 2; i++) {
         float tx = pad.x + pad.w * (v->touchX[i] / 1919.0f), ty = pad.y + pad.h * (v->touchY[i] / 941.0f);
-        c4fGlowCircle(c, tx, ty, 3.5f * u, 20, 0, c4fAlpha(accent, .8f));
-        c4fFillCircle(c, tx, ty, 3.5f * u, c4fAlpha(accent, .45f));
-        c4fRing(c, tx, ty, 3.5f * u, 1, c4fAlpha(accent, .85f));
+        if (c4fTouchGlow.px) c4fBlitSprite(c, &c4fTouchGlow, (int)lroundf(tx) - 100, (int)lroundf(ty) - 100);
+        else c4fPaintTouch(c, tx, ty, accent);
     }
     c4fKnob(c, C4F_C_LSTICK, v->lx, v->ly, !!(b & C4F_INPUT_BUTTON_L3), accent);
     c4fKnob(c, C4F_C_RSTICK, v->rx, v->ry, !!(b & C4F_INPUT_BUTTON_R3), accent);
     for (int id = C4F_C_L3; id <= C4F_C_R3; id++) {
         if (!(b & (id == C4F_C_L3 ? C4F_INPUT_BUTTON_L3 : C4F_INPUT_BUTTON_R3))) continue;
-        C4fPath p = { 0 };
-        c4fShapePath(&p, id, 0);
-        c4fPlasticLit(c, &p, c4fControl(id), accent);
-        c4fEngraved(c, c4fControl(id), id == C4F_C_L3 ? "L3" : "R3", C4F_P_ENGRAVED);
-        c4fPathFree(&p);
+        c4fDrawPressed(c, id == C4F_C_L3 ? 14 : 15, accent);
     }
 }
 
@@ -823,11 +986,8 @@ static void c4fDrawInput(C4fCanvas *c, const C4fTesterView *v, C4fColor accent)
 static void c4fDrawTouchpad(C4fCanvas *c, C4fColor accent, const char *line1, const char *line2)
 {
     const C4fBox pad = c4fControl(C4F_C_TOUCHPAD);
-    const float u = c4fUnit(), sx = pad.x + .07f * pad.w, sw = .86f * pad.w, sh = fmaxf(3, .8f * u);
-    /* The light spills up over the plate's top edge. */
-    c4fShadowRoundRect(c, sx, pad.y - 2, sw, sh + 2, 2, 0, -2, 3.5f * u, 0, c4fAlpha(accent, .55f));
-    c4fShadowRoundRect(c, sx, pad.y, sw, sh, 2, 0, 0, 2.5f * u, 0, c4fAlpha(accent, .9f));
-    c4fFillRoundRect(c, sx, pad.y, sw, sh, sh / 2, accent);
+    if (c4fLightStrip.px) c4fBlitSprite(c, &c4fLightStrip, 0, 0);
+    else c4fPaintLightStrip(c, accent);
     if (line1) c4fTextCentered(c, C4F_FONT_LIGHT, 22, pad.x + pad.w / 2, pad.y + pad.h * .9f - 30, C4F_P_ENGRAVED, line1);
     if (line2) c4fTextCentered(c, C4F_FONT_LIGHT, 20, pad.x + pad.w / 2, pad.y + pad.h * .9f - 4,
                                C4F_RGBA(236, 240, 248, .36f), line2);
@@ -878,41 +1038,327 @@ static void c4fDrawValues(C4fCanvas *c, const C4fTesterView *v, int ready)
     }
 }
 
-static void c4fDrawMenu(C4fCanvas *c, const C4fTesterView *v)
+/* Browser-reported round trips, as on the controller page. This is separate
+ * from the native pad samples and does not measure input or TV display delay. */
+static void c4fDrawConnection(C4fCanvas *c, const C4fTesterView *v, const C4fTesterConnection *connection,
+                             float x, float baseline)
 {
-    const float dw = 900, row = 60, dh = 168 + C4F_TESTER_ITEMS * row + 70;
-    const float dx = (c->w - dw) / 2, dy = (c->h - dh) / 2;
-    c4fFillRect(c, 0, 0, c->w, c->h, C4F_RGBA(2, 11, 31, .65f));
-    c4fShadowRoundRect(c, dx, dy, dw, dh, 6 * C4F_S, 0, 16 * C4F_S, 34 * C4F_S, -18 * C4F_S, C4F_RGBA(0, 0, 0, .9f));
-    c4fPanel(c, dx, dy, dw, dh, C4F_RGBA(2, 11, 31, .97f), C4F_LINE);
-    c4fBandRoundRect(c, dx, dy, dw, dh, 6 * C4F_S, 3 * C4F_S, C4F_ACCENT);
-    c4fText(c, C4F_FONT_LIGHT, 44, dx + 48, dy + 80, C4F_TEXT, "Controller test");
-    c4fText(c, C4F_FONT_LIGHT, 24, dx + 48, dy + 122, C4F_MUTED, "Choose with the D-pad or arrows, then press Cross or OK.");
-    for (int i = 0; i < C4F_TESTER_ITEMS; i++) {
-        const float rx = dx + 32, ry = dy + 150 + i * row, rw = dw - 64, rh = row - 8;
-        int focused = i == v->focus;
-        c4fFillRoundRect(c, rx, ry, rw, rh, 6 * C4F_S, focused ? C4F_RGBA(40, 103, 205, .85f) : C4F_RGBA(255, 255, 255, .04f));
-        c4fInsetRoundRect(c, rx, ry, rw, rh, 6 * C4F_S, focused ? 3 : 1 * C4F_S, focused ? C4F_ACCENT : C4F_LINE_SOFT);
-        c4fText(c, C4F_FONT_REGULAR, 28, rx + 24, ry + 36, focused ? C4F_TEXT : C4F_MUTED, c4fTesterItemLabel(i));
-        if (i == C4F_TESTER_USER) {
-            const char *name = v->selected >= 0 ? v->user[v->selected].name : "None";
-            float right = rx + rw - (focused ? 48 : 24);
-            c4fTextRight(c, C4F_FONT_REGULAR, 28, right, ry + 36, C4F_TEXT, name);
-            if (focused) {
-                float lx = right - c4fTextWidth(C4F_FONT_REGULAR, 28, name) - 22, cy = ry + rh / 2;
-                c4fSegment(c, lx + 4, cy - 9, lx - 5, cy, 3, C4F_TEXT);
-                c4fSegment(c, lx - 5, cy, lx + 4, cy + 9, 3, C4F_TEXT);
-            }
-        }
-        if (focused) {
-            float cx = rx + rw - 26, cy = ry + rh / 2;
-            c4fSegment(c, cx - 5, cy - 9, cx + 4, cy, 3, C4F_TEXT);
-            c4fSegment(c, cx + 4, cy, cx - 5, cy + 9, 3, C4F_TEXT);
+    c4fText(c, C4F_FONT_LIGHT, 20, x, baseline, C4F_MUTED, "Controller page RTT");
+    const float values = x + 236;
+    if (v->selected < 0 || v->selected >= C4F_TESTER_USERS || !connection->available) {
+        c4fText(c, C4F_FONT_REGULAR, 22, values, baseline, C4F_FAINT, "--");
+    } else if (!(connection->pads & 15U)) {
+        c4fText(c, C4F_FONT_LIGHT, 22, values, baseline, C4F_MUTED, "No controller page for this user");
+    } else {
+        int column = 0;
+        for (int slot = 0; slot < 4; slot++) {
+            if (!(connection->pads & (1U << slot))) continue;
+            char text[40];
+            if (connection->rttMs[slot] < 0) snprintf(text, sizeof(text), "C%d measuring...", slot + 1);
+            else snprintf(text, sizeof(text), "C%d %d ms", slot + 1, connection->rttMs[slot]);
+            c4fText(c, C4F_FONT_REGULAR, 22, values + column++ * 176, baseline,
+                    connection->rttMs[slot] < 0 ? C4F_MUTED : C4F_TEXT, text);
         }
     }
-    static const C4fHint hints[2] = { { C4F_KEY_CROSS, "Select" }, { C4F_KEY_CIRCLE, "Back" } };
-    c4fText(c, C4F_FONT_LIGHT, 23, dx + 48, dy + dh - 30, C4F_MUTED, "TV remote: OK select / Back return");
-    c4fHints(c, dx + dw - 48, dy + dh - 38, hints, 2);
+}
+
+/* ---- dedicated tools view ---- */
+
+#define C4F_TOOL_W 386
+#define C4F_TOOL_H 220
+#define C4F_TOOL_GAP_X 25
+#define C4F_TOOL_GAP_Y 28
+#define C4F_TOOL_Y 360
+
+static C4fSprite c4fToolTiles[C4F_TESTER_ITEMS][4];
+static C4fTesterView c4fToolsKey;
+static C4fTesterConnection c4fToolsConnection;
+static unsigned c4fToolsAvailable;
+static int c4fHasToolsKey;
+
+static C4fBox c4fToolBox(int item)
+{
+    return (C4fBox){ C4F_T_LEFT + (item % C4F_TESTER_MENU_COLUMNS) * (C4F_TOOL_W + C4F_TOOL_GAP_X),
+                     C4F_TOOL_Y + (item / C4F_TESTER_MENU_COLUMNS) * (C4F_TOOL_H + C4F_TOOL_GAP_Y),
+                     C4F_TOOL_W, C4F_TOOL_H };
+}
+
+/* Small, consistent line icons, drawn once into the tile cache. */
+static void c4fToolIcon(C4fCanvas *c, int item, float x, float y, C4fColor color)
+{
+    static const char *const icons[C4F_TESTER_ITEMS] = {
+        "M21 14L49 32L21 50Z",
+        "M31 17C31 22 27 26 22 26C17 26 13 22 13 17C13 12 17 8 22 8C27 8 31 12 31 17Z "
+        "M7 48V43C7 36 14 31 22 31C30 31 37 36 37 43V48 M40 11C46 11 51 15 51 21C51 26 47 30 42 31 "
+        "M43 41H60M54 35L60 41L54 47",
+        "M53 25C50 14 39 8 28 11C17 14 11 25 14 36C17 47 29 53 40 49C45 48 49 44 51 40 "
+        "M53 12V25H40 M32 23V41M23 32H41",
+        "M24 43V39C24 35 17 32 17 24C17 16 24 10 32 10C40 10 47 16 47 24C47 32 40 35 40 39V43Z "
+        "M25 49H39M28 55H36 M32 1V4M10 8L14 12M1 25H7M54 12L58 8M57 25H63",
+        "M18 22H41V45H18Z M25 17V22M34 17V22M25 45V50M34 45V50 M12 23C7 29 7 38 12 44 "
+        "M47 23C52 29 52 38 47 44 M4 18C-4 27-4 40 4 49M55 18C63 27 63 40 55 49",
+        "M24 25H39V42H24Z M29 20V25M34 20V25M29 42V47M34 42V47 "
+        "M18 25C13 30 13 37 18 42 M45 25C50 30 50 37 45 42",
+        "M25 43V39C25 35 19 32 19 25C19 18 25 13 32 13C39 13 45 18 45 25C45 32 39 35 39 39V43Z "
+        "M26 49H38M29 55H35 M8 26C8 13 18 3 31 3C39 3 46 7 50 13M50 3V13H40",
+        "M28 10H11V54H28M35 14L53 32L35 50M23 32H53",
+    };
+    C4fPath p = { 0 };
+    c4fSvgPath(&p, icons[item], x, y, 1);
+    c4fStrokePath(c, &p, 3, color);
+    c4fPathFree(&p);
+}
+
+static const char *c4fToolHelp(int item, int available)
+{
+    static const char *const help[C4F_TESTER_ITEMS] = {
+        "Return to live input", "Choose another player", "Recenter motion", "Choose any RGB color",
+        "One-second vibration", "One-second vibration", "Restore default color", "Back to the launcher",
+    };
+    if (!available) return item == C4F_TESTER_USER ? "No other signed-in user" : "Controller unavailable";
+    return help[item];
+}
+
+static void c4fPaintToolTile(C4fCanvas *c, int item, int focused, int available)
+{
+    static const char *const labels[C4F_TESTER_ITEMS] = {
+        "Resume", "Switch user", "Reset orientation", "Light bar",
+        "Large motor", "Small motor", "Reset light", "Leave test",
+    };
+    const C4fBox b = c4fToolBox(item);
+    const C4fColor fill = focused ? (available ? C4F_RGBA(35, 91, 180, .94f) : C4F_RGBA(27, 57, 104, .96f)) :
+                                  available ? C4F_RGBA(7, 29, 72, .82f) : C4F_RGBA(5, 20, 49, .82f);
+    c4fFillRoundRect(c, b.x, b.y, b.w, b.h, 10, fill);
+    c4fInsetRoundRect(c, b.x, b.y, b.w, b.h, 10, focused ? 3 : 1.5f,
+                     focused ? C4F_ACCENT : available ? C4F_LINE : C4F_LINE_SOFT);
+    C4fColor icon = available ? (focused ? C4F_TEXT : C4F_CROSS_KEY) : C4F_FAINT;
+    c4fToolIcon(c, item, b.x + 28, b.y + 29, icon);
+    c4fText(c, C4F_FONT_REGULAR, 30, b.x + 26, b.y + 137, available ? C4F_TEXT : C4F_FAINT, labels[item]);
+    c4fText(c, C4F_FONT_LIGHT, 22, b.x + 26, b.y + 174, available ? C4F_MUTED : C4F_FAINT, c4fToolHelp(item, available));
+    if (focused) {
+        c4fFillRoundRect(c, b.x + 26, b.y + b.h - 16, b.w - 52, 3, 1.5f, C4F_ACCENT);
+        c4fFillCircle(c, b.x + b.w - 28, b.y + 32, 4, C4F_TEXT);
+    }
+    if (!available) {
+        /* A lock gives unavailable actions a second cue besides muted color. */
+        const float x = b.x + b.w - 39, y = b.y + 54;
+        c4fFillRoundRect(c, x, y, 17, 14, 3, C4F_FAINT);
+        C4fPath p = { 0 };
+        c4fSvgPath(&p, "M3 8V4C3-3 14-3 14 4V8", x, y - 7, 1);
+        c4fStrokePath(c, &p, 2, C4F_FAINT);
+        c4fPathFree(&p);
+    }
+}
+
+static void c4fCopyOpaque(C4fCanvas *c, const C4fSprite *s)
+{
+    for (int y = 0; y < s->h; y++)
+        memcpy(c->px + (s->y + y) * c->w + s->x, s->px + y * s->w, (size_t)s->w * sizeof(uint32_t));
+}
+
+static int c4fBuildTools(C4fCanvas *work)
+{
+    if (c4fToolsBase && c4fToolsFrame) return 1;
+    const size_t bytes = (size_t)work->w * work->h * sizeof(uint32_t);
+    if (!c4fToolsBase) {
+        c4fToolsBase = c4fTakeCleanBackdrop();
+        if (!c4fToolsBase) {
+            c4fToolsBase = malloc(bytes);
+            if (!c4fToolsBase) return 0;
+            C4fCanvas background = { c4fToolsBase, work->w, work->h };
+            c4fPaintBackdrop(&background, C4F_S);
+        }
+    }
+    if (!c4fToolsBaseReady) {
+        C4fCanvas c = { c4fToolsBase, work->w, work->h };
+        c4fMark(&c, 88, 54, 48, C4F_WHITE);
+        float x = 128;
+        x += c4fText(&c, C4F_FONT_LIGHT, 17 * C4F_S, x, 63, C4F_TEXT, "Control4Free") + 14 * C4F_S;
+        c4fDot(&c, x + 4 * C4F_S, 55, C4F_ACCENT, 0);
+        c4fText(&c, C4F_FONT_LIGHT, 13 * C4F_S, x + 16 * C4F_S, 62, C4F_MUTED, "Controller test");
+        c4fDrawSolidarityBadge(&c, C4F_SCREEN_WIDTH - 64, 40);
+        c4fFillRect(&c, C4F_T_LEFT, 345, C4F_T_RIGHT - C4F_T_LEFT, 2, C4F_LINE);
+        c4fFillRoundRect(&c, C4F_T_LEFT, 858, C4F_T_RIGHT - C4F_T_LEFT, 92, 10, C4F_RGBA(3, 16, 44, .5f));
+        c4fText(&c, C4F_FONT_LIGHT, 20, C4F_T_LEFT, 1030, C4F_FAINT, "Control4Free " C4F_LAUNCHER_VERSION);
+        c4fToolsBaseReady = 1;
+    }
+    if (!c4fToolsFrame) c4fToolsFrame = malloc(bytes);
+    return c4fToolsFrame != NULL;
+}
+
+static void c4fDrawToolsDetails(C4fCanvas *c, const C4fTesterView *v, const C4fTesterConnection *connection)
+{
+    c4fText(c, C4F_FONT_LIGHT, 48, C4F_T_LEFT, 154, C4F_TEXT, v->colorMenu ? "Light bar" : "Controller tools");
+    c4fText(c, C4F_FONT_LIGHT, 24, C4F_T_LEFT, 202, C4F_MUTED, v->colorMenu ?
+            "Mix red, green and blue. Changes preview on the selected controller." : "Test motion, vibration and the light bar.");
+    if (!v->colorMenu) c4fTextRight(c, C4F_FONT_LIGHT, 24, C4F_T_RIGHT, 202, C4F_MUTED, "D-pad or arrows to move");
+    const C4fHint hints[2] = { { C4F_KEY_CROSS, v->colorMenu ? (v->colorFine ? "Fast adjustment" : "Fine adjustment") : "Select" },
+                              { C4F_KEY_CIRCLE, v->colorMenu ? "Done" : "Back" } };
+    c4fHints(c, C4F_T_RIGHT, 1022, hints, 2);
+    c4fText(c, C4F_FONT_LIGHT, 23, C4F_T_LEFT, 991, C4F_MUTED, v->colorMenu ?
+            "Up/Down: channel / Left/Right: adjust / OK: step size / Back: done" : "TV remote: OK select / Back return");
+    const int selected = v->selected >= 0 && v->selected < C4F_TESTER_USERS;
+    const int state = selected ? v->user[v->selected].state : -1;
+    const char *name = selected ? v->user[v->selected].name : "No one signed in", *status;
+    char detail[96];
+    if (state == C4F_TESTER_READY) status = "Controller connected";
+    else if (state == C4F_TESTER_NO_CONTROLLER) status = "No controller connected";
+    else if (state == C4F_TESTER_SIGNED_OUT) status = "Signed out";
+    else if (state == C4F_TESTER_FAILED) {
+        snprintf(detail, sizeof(detail), "Cannot read (0x%08x)", (unsigned)v->user[v->selected].error);
+        status = detail;
+    } else status = selected ? "Opening controller..." : "Waiting for a signed-in user";
+    c4fText(c, C4F_FONT_LIGHT, 20, C4F_T_LEFT, 257, C4F_FAINT, "SELECTED USER");
+    c4fText(c, C4F_FONT_REGULAR, 30, C4F_T_LEFT, 300, C4F_TEXT, name);
+    c4fText(c, C4F_FONT_LIGHT, 20, 620, 257, C4F_FAINT, "CONTROLLER");
+    c4fDot(c, 629, 290, c4fStateColor(state), 0);
+    c4fText(c, C4F_FONT_REGULAR, 26, 650, 300, state == C4F_TESTER_FAILED ? C4F_BAD : C4F_MUTED, status);
+    c4fText(c, C4F_FONT_LIGHT, 20, 1240, 257, C4F_FAINT, "TEST OUTPUT");
+    if (v->lightSet) {
+        const C4fColor light = { v->light[0], v->light[1], v->light[2], 255 };
+        c4fFillRoundRect(c, 1240, 278, 28, 18, 4, light);
+        c4fText(c, C4F_FONT_LIGHT, 24, 1281, 294, C4F_MUTED, "Light bar set by this test");
+    } else c4fText(c, C4F_FONT_LIGHT, 24, 1240, 294, C4F_MUTED, "Light bar: PS4 default");
+    if (v->rumble) c4fText(c, C4F_FONT_REGULAR, 22, 1240, 322, C4F_WARN,
+                           v->rumble == 1 ? "Large motor running" : "Small motor running");
+    c4fDrawConnection(c, v, connection, C4F_T_LEFT, 329);
+    const int focus = v->focus >= 0 && v->focus < C4F_TESTER_ITEMS ? v->focus : C4F_TESTER_RESUME;
+    const int available = c4fTesterItemAvailable(v, focus);
+    const char *note = v->note[0] ? v->note : v->colorMenu ? "The light bar returns to its PS4 color when you leave the tester." :
+                       available ? "Choose a tool, or resume testing to see live input." :
+                       focus == C4F_TESTER_USER ? "Sign in another PS4 user to switch players here." :
+                       "Connect this user's controller to use this tool.";
+    c4fTextWrapped(c, C4F_FONT_LIGHT, 24, C4F_T_LEFT + 26, 898, C4F_T_RIGHT - C4F_T_LEFT - 52, 31, 2,
+                   v->note[0] ? C4F_TEXT : available ? C4F_MUTED : C4F_WARN, note);
+}
+
+static C4fSprite c4fColorRows[3][2], c4fColorPreview;
+
+static void c4fRememberPickerPanel(C4fCanvas *c, C4fSprite *sprite, int x, int y, int w, int h)
+{
+    if (!c4fToolsBase) return;
+    sprite->px = malloc((size_t)w * h * sizeof(uint32_t));
+    if (!sprite->px) return;
+    sprite->x = x; sprite->y = y; sprite->w = w; sprite->h = h;
+    for (int row = 0; row < h; row++)
+        memcpy(sprite->px + row * w, c->px + (y + row) * c->w + x, (size_t)w * sizeof(uint32_t));
+}
+
+/* Fill the opaque interior in straight spans; only rounded corners and the
+ * thin edge need distance coverage. The color changes, the geometry does not. */
+static void c4fPickerSwatch(C4fCanvas *c, C4fColor color)
+{
+    enum { X = 1324, Y = 430, W = 412, H = 210, R = 9 };
+    c4fFillRect(c, X + R, Y, W - 2 * R, H, color);
+    c4fFillRect(c, X, Y + R, R, H - 2 * R, color);
+    c4fFillRect(c, X + W - R, Y + R, R, H - 2 * R, color);
+    c4fFillCircle(c, X + R, Y + R, R, color);
+    c4fFillCircle(c, X + W - R, Y + R, R, color);
+    c4fFillCircle(c, X + R, Y + H - R, R, color);
+    c4fFillCircle(c, X + W - R, Y + H - R, R, color);
+    for (int y = 0; y < H; y++) {
+        for (int x = 0; x < W; x++) {
+            if (y >= R + 1 && y < H - R - 1 && x >= 2 && x < W - 2) continue;
+            float d = c4fRoundBoxDistance(X + x + .5f, Y + y + .5f, X + W / 2.0f, Y + H / 2.0f, W / 2.0f, H / 2.0f, R);
+            float outer = fmaxf(0, fminf(1, .5f - d)), inner = fmaxf(0, fminf(1, -.5f - d));
+            if (outer > inner) c4fBlend(c, X + x, Y + y, C4F_LINE, outer - inner);
+        }
+    }
+}
+
+static void c4fDrawColorPicker(C4fCanvas *c, const C4fTesterView *v)
+{
+    static const char *const channels[] = { "Red", "Green", "Blue" };
+    static const C4fColor ink[] = { C4F_RGBA(255, 103, 120, 1), C4F_RGBA(69, 224, 138, 1), C4F_RGBA(134, 182, 255, 1) };
+    const int trackX = 195, trackW = 885;
+    for (int channel = 0; channel < 3; channel++) {
+        const int y = 360 + channel * 156, focused = channel == v->colorChannel;
+        C4fSprite *row = &c4fColorRows[channel][focused];
+        if (row->px) c4fCopyOpaque(c, row);
+        else {
+            c4fFillRoundRect(c, 150, y, 1110, 136, 10, focused ? C4F_RGBA(18, 58, 123, .96f) : C4F_RGBA(7, 29, 72, .82f));
+            c4fInsetRoundRect(c, 150, y, 1110, 136, 10, focused ? 3 : 1, focused ? C4F_TEXT : C4F_LINE);
+            c4fText(c, C4F_FONT_REGULAR, 28, 184, y + 43, ink[channel], channels[channel]);
+            c4fRememberPickerPanel(c, row, 150, y, 1110, 136);
+        }
+        char value[16];
+        snprintf(value, sizeof(value), "%u", v->light[channel]);
+        c4fTextRight(c, C4F_FONT_REGULAR, 46, 1220, y + 88, C4F_TEXT, value);
+        for (int x = 0; x < trackW; x++) {
+            uint8_t rgb[3];
+            memcpy(rgb, v->light, sizeof(rgb));
+            rgb[channel] = (uint8_t)(x * 255 / (trackW - 1));
+            c4fFillRect(c, trackX + x, y + 75, 1, 22, (C4fColor){ rgb[0], rgb[1], rgb[2], 255 });
+        }
+        c4fInsetRoundRect(c, trackX, y + 75, trackW, 22, 0, 1, C4F_LINE);
+        const float knobX = trackX + v->light[channel] * (trackW - 1) / 255.0f;
+        c4fFillCircle(c, knobX, y + 86, focused ? 14 : 11, C4F_TEXT);
+        c4fFillCircle(c, knobX, y + 86, focused ? 9 : 7, ink[channel]);
+    }
+    if (c4fColorPreview.px) c4fCopyOpaque(c, &c4fColorPreview);
+    else {
+        c4fFillRoundRect(c, 1290, 360, 480, 448, 10, C4F_RGBA(3, 16, 44, .72f));
+        c4fText(c, C4F_FONT_LIGHT, 21, 1324, 404, C4F_MUTED, "COLOR PREVIEW");
+        c4fText(c, C4F_FONT_LIGHT, 22, 1324, 785, C4F_MUTED, "Cross / OK switches fine and fast");
+        c4fRememberPickerPanel(c, &c4fColorPreview, 1290, 360, 480, 448);
+    }
+    c4fPickerSwatch(c, (C4fColor){ v->light[0], v->light[1], v->light[2], 255 });
+    char value[32];
+    snprintf(value, sizeof(value), "#%02X%02X%02X", v->light[0], v->light[1], v->light[2]);
+    c4fText(c, C4F_FONT_REGULAR, 38, 1324, 701, C4F_TEXT, value);
+    snprintf(value, sizeof(value), "Step: %d", v->colorFine ? 1 : 16);
+    c4fText(c, C4F_FONT_REGULAR, 28, 1324, 753, C4F_TEXT, value);
+}
+
+static void c4fDrawMenu(C4fCanvas *c, const C4fTesterView *v, const C4fTesterConnection *connection)
+{
+    const size_t bytes = (size_t)c->w * c->h * sizeof(uint32_t);
+    if (!c4fBuildTools(c)) {
+        /* Keep the tools usable if caching could not allocate a frame. */
+        if (c4fToolsBase) memcpy(c->px, c4fToolsBase, bytes);
+        else for (int i = 0; i < c->w * c->h; i++) c->px[i] = 0xff061b42;
+        if (v->colorMenu) c4fDrawColorPicker(c, v);
+        else for (int i = 0; i < C4F_TESTER_ITEMS; i++) c4fPaintToolTile(c, i, i == v->focus, c4fTesterItemAvailable(v, i));
+        c4fDrawToolsDetails(c, v, connection);
+        return;
+    }
+    C4fTesterView key = { 0 };
+    key.focus = v->focus; key.selected = v->selected; key.rumble = v->rumble; key.lightSet = v->lightSet;
+    key.colorMenu = v->colorMenu; key.colorChannel = v->colorChannel; key.colorFine = v->colorFine;
+    memcpy(key.light, v->light, sizeof(key.light));
+    memcpy(key.note, v->note, sizeof(key.note));
+    C4fTesterConnection connectionKey = { 0 };
+    connectionKey.available = connection->available; connectionKey.pads = connection->pads;
+    memcpy(connectionKey.rttMs, connection->rttMs, sizeof(connectionKey.rttMs));
+    unsigned available = 0;
+    for (int i = 0; i < C4F_TESTER_USERS; i++) {
+        key.user[i].used = v->user[i].used; key.user[i].state = v->user[i].state; key.user[i].error = v->user[i].error;
+        memcpy(key.user[i].name, v->user[i].name, sizeof(key.user[i].name));
+    }
+    for (int i = 0; i < C4F_TESTER_ITEMS; i++) if (c4fTesterItemAvailable(v, i)) available |= 1U << i;
+    if (!c4fHasToolsKey || c4fToolsAvailable != available || memcmp(&key, &c4fToolsKey, sizeof(key)) ||
+        memcmp(&connectionKey, &c4fToolsConnection, sizeof(connectionKey))) {
+        C4fCanvas frame = { c4fToolsFrame, c->w, c->h };
+        memcpy(frame.px, c4fToolsBase, bytes);
+        if (v->colorMenu) c4fDrawColorPicker(&frame, v);
+        else for (int i = 0; i < C4F_TESTER_ITEMS; i++) {
+            const int on = i == v->focus, enabled = !!(available & (1U << i)), variant = on + 2 * !enabled;
+            C4fSprite *tile = &c4fToolTiles[i][variant];
+            if (!tile->px) {
+                const C4fBox b = c4fToolBox(i);
+                tile->x = (int)b.x; tile->y = (int)b.y; tile->w = C4F_TOOL_W; tile->h = C4F_TOOL_H;
+                c4fPaintToolTile(&frame, i, on, enabled);
+                tile->px = malloc((size_t)tile->w * tile->h * sizeof(uint32_t));
+                if (tile->px) for (int y = 0; y < tile->h; y++)
+                    memcpy(tile->px + y * tile->w, frame.px + (tile->y + y) * frame.w + tile->x,
+                           (size_t)tile->w * sizeof(uint32_t));
+            } else c4fCopyOpaque(&frame, tile);
+        }
+        c4fDrawToolsDetails(&frame, v, connection);
+        c4fToolsKey = key; c4fToolsAvailable = available; c4fHasToolsKey = 1;
+        c4fToolsConnection = connectionKey;
+    }
+    memcpy(c->px, c4fToolsFrame, bytes);
 }
 
 void c4fDrawTester(uint32_t *pixels, const C4fLauncherScreen *s)
@@ -920,14 +1366,16 @@ void c4fDrawTester(uint32_t *pixels, const C4fLauncherScreen *s)
     const C4fTesterView *v = &s->tester;
     C4fCanvas c = { pixels, C4F_SCREEN_WIDTH, C4F_SCREEN_HEIGHT };
     const size_t bytes = (size_t)c.w * (size_t)c.h * sizeof(uint32_t);
+    if (v->menu) { c4fDrawMenu(&c, v, &s->connection); return; }
+    const int state = v->selected >= 0 ? v->user[v->selected].state : -1, ready = state == C4F_TESTER_READY;
+    const C4fColor accent = v->lightSet ? (C4fColor){ v->light[0], v->light[1], v->light[2], 255 } : C4F_ACCENT;
     if (!c4fLayer) c4fBuildLayer();
+    c4fPrepareSprites(&c, v, accent, ready);
     if (c4fLayer) memcpy(pixels, c4fLayer, bytes);
     else memset(pixels, 0, bytes);
 
     c4fDrawTabs(&c, v);
-    const int state = v->selected >= 0 ? v->user[v->selected].state : -1, ready = state == C4F_TESTER_READY;
     /* The page lights the controller in its colour; here, the colour this test set. */
-    const C4fColor accent = v->lightSet ? (C4fColor){ v->light[0], v->light[1], v->light[2], 255 } : C4F_ACCENT;
     char line[96];
     const char *name = v->selected >= 0 ? v->user[v->selected].name : "", *detail;
     if (ready) {
@@ -946,11 +1394,11 @@ void c4fDrawTester(uint32_t *pixels, const C4fLauncherScreen *s)
     }
     c4fDrawTouchpad(&c, accent, name, detail);
     c4fDrawValues(&c, v, ready);
+    c4fDrawConnection(&c, v, &s->connection, C4F_P_X + 4, 853);
     if (v->rumble)
         c4fText(&c, C4F_FONT_REGULAR, 26, C4F_P_X + 4, C4F_T_TOP + C4F_T_HEIGHT - 30, C4F_WARN,
                 v->rumble == 1 ? "Rumbling: large motor" : "Rumbling: small motor");
     if (v->note[0]) c4fText(&c, C4F_FONT_LIGHT, 24, C4F_T_LEFT, 972, C4F_TEXT, v->note);
     else c4fText(&c, C4F_FONT_LIGHT, 24, C4F_T_LEFT, 972, C4F_MUTED,
                  "Hold L3 + R3 for two seconds for the menu: change user, rumble, light bar, leave.");
-    if (v->menu) c4fDrawMenu(&c, v);
 }

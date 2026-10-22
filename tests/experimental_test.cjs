@@ -1,15 +1,16 @@
 // Settings → Experimental in a real browser, against the real service with the PS4
-// stubbed (build/web-host-test). WebHID devices, gamepads and motion sensors are
+// stubbed (build/web-rtc-host-test). WebHID devices, gamepads and motion sensors are
 // fakes that record what the page does. Test instrumentation is inserted into
 // the page in memory, never shipped. Run in the Playwright Docker image:
 //   NODE_PATH=… node tests/experimental_test.cjs
 const { chromium } = require('playwright');
 const fs = require('node:fs'), assert = require('node:assert/strict'), { spawn } = require('node:child_process');
+const { relayOffer, recordRtcMessages, copyService } = require('./rtc_browser_helpers.cjs');
 
 const hook = '\nwindow.c4fTest = { experiments, hidLinks, setExperiment, hidReport, triggerEffect, phoneMotion, status, ' +
   'gamepadSources, setGamepadPad, openPad, closePad, openSettings, showPage, conn, rumble };\n';
 const html = fs.readFileSync('/src/client/index.html', 'utf8').replace('\n  })();', hook + '  })();');
-fs.copyFileSync('/src/build/web-host-test', '/tmp/c4f-experimental-service');
+copyService('/tmp/c4f-experimental-service');
 
 // An independent CRC-32 (zlib's), to check the Bluetooth reports' last four bytes.
 function crc32(bytes) {
@@ -23,14 +24,9 @@ function crc32(bytes) {
 const le32 = (bytes, at) => (bytes[at] | bytes[at + 1] << 8 | bytes[at + 2] << 16 | bytes[at + 3] << 24) >>> 0;
 
 // In the page before its own script: fake gamepads, WebHID and motion, and a
-// record of the socket's messages and the page's sensor listeners.
+// record of the input messages and the page's sensor listeners.
 function fakes({ insecure = false } = {}) {
-  window.sentMessages = [];
-  const socketSend = WebSocket.prototype.send;
-  WebSocket.prototype.send = function(data) {
-    try { sentMessages.push(JSON.parse(data)); } catch {}
-    return socketSend.call(this, data);
-  };
+  Object.defineProperty(window, 'sentMessages', { get: () => controllerMessages });
   window.motionListeners = 0;
   const addListener = window.addEventListener;
   window.addEventListener = function(type, ...rest) {
@@ -121,9 +117,11 @@ async function open(browser, options) {
   await startService();
   const context = await browser.newContext({ viewport: { width: 1280, height: 900 } });
   await context.grantPermissions(['local-network-access']);
+  await context.addInitScript(recordRtcMessages);
   await context.addInitScript(fakes, options);
   const page = await context.newPage();
   page.on('pageerror', e => { console.error('Page error:', e.stack); process.exitCode = 1; });
+  await relayOffer(page);
   await page.route(/^http:\/\/127\.0\.0\.1:4264\/(?:\?.*)?$/, async r => r.fulfill({ response: await r.fetch(), body: html }));
   for (let tries = 0; ; tries++) {
     try { await page.goto('http://127.0.0.1:4264/'); break; } catch (e) {
@@ -137,6 +135,39 @@ async function open(browser, options) {
 }
 
 const lastReport = (page, device) => page.evaluate(d => fakeHid[d].sent.at(-1), device);
+
+// Sony reports carry a digital trigger flag alongside the independent analog
+// pressure byte. A partial pull must survive both fields being present.
+function triggerInput(device, l2, r2) {
+  const ds4 = device.startsWith('ds4'), bt = device.endsWith('bt');
+  const bytes = new Array(bt ? 77 : 63).fill(0);
+  const sticksAt = ds4 ? (bt ? 2 : 0) : (bt ? 1 : 0);
+  const buttonsAt = ds4 ? sticksAt + 4 : (bt ? 8 : 7);
+  const triggersAt = ds4 ? sticksAt + 7 : (bt ? 5 : 4);
+  bytes.fill(128, sticksAt, sticksAt + 4);
+  bytes[buttonsAt] = 0x08; // D-pad released
+  bytes[buttonsAt + 1] = (l2 ? 0x04 : 0) | (r2 ? 0x08 : 0);
+  bytes[triggersAt] = l2; bytes[triggersAt + 1] = r2;
+  if (!ds4) { const touchAt = bt ? 33 : 32; bytes[touchAt] = bytes[touchAt + 4] = 0x80; }
+  return { device, reportId: ds4 ? (bt ? 0x11 : 0x01) : (bt ? 0x31 : 0x01), bytes };
+}
+
+async function inputAndRead(page, input, pad) {
+  return page.evaluate(async ({ input, pad }) => {
+    fakeHid[input.device].input(input.reportId, input.bytes);
+    await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+    return sentMessages.findLast(m => m.method === 'u' && m.params[0] === pad)?.params;
+  }, { input, pad });
+}
+
+async function checkTriggerPressure(page, device, pad) {
+  for (const [l2, r2] of [[0, 0], [32, 96], [96, 160], [160, 224], [224, 32], [0, 0]]) {
+    const state = await inputAndRead(page, triggerInput(device, l2, r2), pad);
+    assert(state, device + ': no controller state sent');
+    assert.deepEqual(state.slice(6, 8), [l2, r2], device + ': digital trigger flags must preserve partial analog pressure');
+    assert.equal(state[1] & 0x300, (l2 > 20 ? 0x100 : 0) | (r2 > 20 ? 0x200 : 0), device + ': trigger button flags stay independent of analog pressure');
+  }
+}
 
 (async () => {
   let browser;
@@ -190,6 +221,15 @@ const lastReport = (page, device) => page.evaluate(d => fakeHid[d].sent.at(-1), 
     assert.equal(report.id, 0x05);
     assert.equal(report.data.length, 31);
     assert.deepEqual(report.data.slice(0, 8), [0x03, 0, 0, 0, 0, 32, 96, 255], 'still, in controller 1\'s own colour');
+    await checkTriggerPressure(page, 'ds4', 0);
+    // A linked DS4 and ordinary Gamepad API source share this controller. The
+    // strongest pressure wins independently for each trigger, without a digital
+    // flag turning either partial pull into a full pull.
+    await page.evaluate(() => { testPads[1].buttons[6].value = 160 / 255; testPads[1].buttons[7].value = 32 / 255; });
+    const mixedTriggers = await inputAndRead(page, triggerInput('ds4', 32, 96), 0);
+    assert.deepEqual(mixedTriggers.slice(6, 8), [160, 96], 'linked HID and Gamepad API sources merge partial trigger pressure');
+    await page.evaluate(() => { testPads[1].buttons[6].value = testPads[1].buttons[7].value = 0; });
+    assert.deepEqual((await inputAndRead(page, triggerInput('ds4', 0, 0), 0)).slice(6, 8), [0, 0], 'both trigger sources release');
     const effectsBefore = await page.evaluate(() => effects.length);
     feedback('11030d', 200, 40, 64, 0, 0);
     await page.waitForFunction(() => { const r = fakeHid.ds4.sent.at(-1).data; return r[3] === 40 && r[4] === 200 && r[5] === 255; });
@@ -201,8 +241,20 @@ const lastReport = (page, device) => page.evaluate(d => fakeHid[d].sent.at(-1), 
     const count = await page.evaluate(() => fakeHid.ds4.sent.length);
     await page.waitForTimeout(200);
     assert.ok(await page.evaluate(() => fakeHid.ds4.sent.length) - count <= 1, 'unchanged reports were repeated');
+    // Lose the final stop on the unreliable channel: the local lease must
+    // still stop WebHID motors, as well as bounded Gamepad API effects.
+    await page.evaluate(() => {
+      const input = c4fTest.conn.input, received = input.onmessage;
+      input.onmessage = event => {
+        const m = JSON.parse(event.data);
+        if (m.method === 'v' && m.params[0] === 0 && !m.params[1] && !m.params[2]) return;
+        received(event);
+      };
+      window.restoreRumbleMessages = () => { input.onmessage = received; };
+    });
     feedback('11030d', 0, 0, 64, 0, 0);
     await page.waitForFunction(() => fakeHid.ds4.sent.at(-1).data[4] === 0);
+    await page.evaluate(() => restoreRumbleMessages());
     // Unlinking leaves it still and dim, and closes it.
     await page.click('#expPads [data-link="0"]');
     await page.waitForFunction(() => fakeHid.ds4.closes === 1);
@@ -217,6 +269,7 @@ const lastReport = (page, device) => page.evaluate(d => fakeHid[d].sent.at(-1), 
     assert.equal(report.data.length, 77);
     assert.deepEqual(report.data.slice(0, 10), [0xc4, 0, 0x03, 0, 0, 0, 0, 255, 0, 0]);
     assert.equal(le32(report.data, 73), crc32([0xa2, 0x11, ...report.data.slice(0, 73)]), 'Bluetooth CRC');
+    await checkTriggerPressure(page, 'ds4bt', 0);
     console.log('PASS experimental: DualShock 4 by USB and Bluetooth: colour, both motors, unchanged state not resent, CRC, unlink');
 
     // DualSense by USB with trigger rumble: start-up light faded once, then the
@@ -234,6 +287,7 @@ const lastReport = (page, device) => page.evaluate(d => fakeHid[d].sent.at(-1), 
     assert.equal(report.data[38] & 0x04, 0x04, 'newer rumble flag');
     assert.equal(report.data[1], 0x04);
     assert.deepEqual(report.data.slice(44, 47), [255, 48, 64], 'controller 2\'s own colour');
+    await checkTriggerPressure(page, 'dualsense', 1);
     // Its touchpad's fingers reach the PS4, its 1080-high pad scaled to the PS4's 942.
     await page.evaluate(() => {
       const bytes = new Array(63).fill(0);
@@ -256,7 +310,8 @@ const lastReport = (page, device) => page.evaluate(d => fakeHid[d].sent.at(-1), 
       window.dsTriggers = [0, 0];
       window.dsTimer = setInterval(() => {
         const bytes = new Array(63).fill(0);
-        bytes.fill(128, 0, 4); bytes[4] = dsTriggers[0]; bytes[5] = dsTriggers[1]; bytes[7] = 0x08; bytes[32] = 0x80; bytes[36] = 0x80;
+        bytes.fill(128, 0, 4); bytes[4] = dsTriggers[0]; bytes[5] = dsTriggers[1]; bytes[7] = 0x08;
+        bytes[8] = (dsTriggers[0] ? 0x04 : 0) | (dsTriggers[1] ? 0x08 : 0); bytes[32] = 0x80; bytes[36] = 0x80;
         fakeHid.dualsense.input(0x01, bytes);
       }, 10);
     });
@@ -329,10 +384,11 @@ const lastReport = (page, device) => page.evaluate(d => fakeHid[d].sent.at(-1), 
     }
     assert.deepEqual([sent[0].data[2 + 38], sent[0].data[2 + 41]], [0x02, 0x02], 'light bar setup first');
     assert.deepEqual(sent[1].data.slice(2 + 44, 2 + 47), [0, 255, 0], 'the green the game set earlier');
+    await checkTriggerPressure(page, 'dualsensebt', 1);
     const btInput = (b0, b1, b2, x, r2) => {
       const bytes = new Array(77).fill(0);
       bytes.fill(128, 1, 5);
-      bytes[1] = x; bytes[6] = r2; bytes[8] = b0; bytes[9] = b1; bytes[10] = b2;
+      bytes[1] = x; bytes[6] = r2; bytes[8] = b0; bytes[9] = b1 | (r2 ? 0x08 : 0); bytes[10] = b2;
       return bytes;
     };
     const pad1 = () => page.evaluate(() => sentMessages.findLast(m => m.method === 'u' && m.params[0] === 1)?.params);
@@ -418,6 +474,39 @@ const lastReport = (page, device) => page.evaluate(d => fakeHid[d].sent.at(-1), 
     await page.uncheck('#expRows [data-experiment="motion"]');
     await page.waitForFunction(() => JSON.stringify(sentMessages.findLast(m => m.method === 'm')?.params) === '[0,0,0,0,10000,0,0,0,0,0,0]');
     console.log('PASS experimental: phone motion (level, gravity on y, gyro), still on leaving; DualShock 4 sensors calibrated and touches');
+
+    // A linked controller stays linked through a lost connection, but holding
+    // Cross across the reconnect must not start a new press on the PS4.
+    const heldReport = report1([0, 0, 0], [0, 8192, 0]);
+    heldReport[4] = 0x28; heldReport[5] = 0x0c; heldReport[7] = 96; heldReport[8] = 160;
+    await page.evaluate(bytes => fakeHid.ds4.input(0x01, bytes), heldReport);
+    await page.waitForFunction(() => !!(sentMessages.findLast(m => m.method === 'u' && m.params[0] === 0)?.params[1] & 0x4000));
+    assert.deepEqual((await lastInput()).slice(6, 8), [96, 160], 'partial trigger pulls before reconnect');
+    await page.evaluate(() => { window.previousPeer = c4fTest.conn.pc; previousPeer.close(); });
+    await page.waitForFunction(() => c4fTest.conn.pc !== previousPeer && c4fTest.conn.state === 'open' && c4fTest.status[0].mine);
+    await page.waitForFunction(() => sentMessages.findLast(m => m.method === 'u' && m.params[0] === 0)?.params[1] === 0);
+    assert.equal(await page.evaluate(() => c4fTest.hidLinks.get(0).device === fakeHid.ds4 && fakeHid.ds4.opened), true, 'the HID link survives reconnect');
+    await page.evaluate(bytes => fakeHid.ds4.input(0x01, bytes), heldReport);
+    await page.waitForFunction(() => c4fTest.gamepadSources.get(0).waitNeutral);
+    assert.equal((await lastInput())[1], 0, 'the held HID button stays gated');
+    assert.deepEqual((await lastInput()).slice(6, 8), [0, 0], 'held analog triggers stay gated after reconnect');
+    await page.evaluate(bytes => fakeHid.ds4.input(0x01, bytes), report1([0, 0, 0], [0, 8192, 0]));
+    await page.waitForFunction(() => !c4fTest.gamepadSources.get(0).waitNeutral);
+    await page.evaluate(bytes => fakeHid.ds4.input(0x01, bytes), heldReport);
+    await page.waitForFunction(() => !!(sentMessages.findLast(m => m.method === 'u' && m.params[0] === 0)?.params[1] & 0x4000));
+    assert.deepEqual((await lastInput()).slice(6, 8), [96, 160], 'partial trigger pressure returns after release and re-press');
+
+    // Leaving the visible page explicitly releases both input and motion.
+    await page.check('#expRows [data-experiment="motion"]');
+    await page.evaluate(bytes => fakeHid.ds4.input(0x01, bytes), report1([8 * 90, 0, 0], [0, 8192, 0]));
+    await page.waitForFunction(() => sentMessages.findLast(m => m.method === 'm' && m.params[0] === 0)?.params[8] === 1571);
+    await page.evaluate(() => {
+      Object.defineProperty(document, 'hidden', { configurable: true, value: true });
+      document.dispatchEvent(new Event('visibilitychange'));
+    });
+    assert.equal((await lastInput())[1], 0, 'hiding the page releases buttons');
+    assert.deepEqual((await motions()).filter(p => p[0] === 0).at(-1), [0, 0, 0, 0, 10000, 0, 0, 0, 0, 0, 0], 'hiding the page stops motion');
+    console.log('PASS experimental: linked HID reconnect keeps the link, gates held input until release, and hides safely with neutral motion');
     await context.close();
   } finally {
     if (browser) await browser.close();

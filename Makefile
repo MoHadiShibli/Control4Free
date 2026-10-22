@@ -20,7 +20,10 @@ VERSION := $(shell cat VERSION)
 NAME    := control4free
 ELF     := build/$(NAME).elf
 OBJDIR  := build/payload
-SOURCES := src/main.c src/log.c src/vda.c src/klog_line.c src/feedback.c src/web.c src/net.c
+SOURCES := src/main.c src/log.c src/vda.c src/klog_line.c src/feedback.c src/web.c src/net.c src/rtc.c src/stun.c src/sctp.c
+# The pages' WebRTC connection is encrypted with Mbed TLS (vendor/mbedtls, Apache-2.0),
+# built with only what include/c4f_mbedtls_config.h asks for.
+MBEDTLS := $(patsubst vendor/mbedtls/library/%.c,%,$(wildcard vendor/mbedtls/library/*.c))
 
 # Research build: logs what scePadVirtualDeviceGetRemoteSetting returns. Its ELF
 # gets its own name, so it can never be mistaken for a release.
@@ -39,11 +42,13 @@ ifdef C4F_DIAG
     OBJDIR := build/diag
 endif
 
-OBJECTS := $(SOURCES:src/%.c=$(OBJDIR)/%.o) $(OBJDIR)/client.o $(OBJDIR)/assets.o $(OBJDIR)/qrcodegen.o
+OBJECTS := $(SOURCES:src/%.c=$(OBJDIR)/%.o) $(OBJDIR)/client.o $(OBJDIR)/assets.o $(OBJDIR)/qrcodegen.o \
+           $(MBEDTLS:%=$(OBJDIR)/mbedtls/%.o)
 
 CFLAGS  += -std=gnu11 -Wall -Wextra -Wpointer-arith -g -O2
 CFLAGS  += -MMD -MP
 CFLAGS  += -Iinclude -Ivendor/jsmn -Ivendor/qrcodegen -DC4F_VERSION='"$(VERSION)"' $(EXTRA_CFLAGS)
+CFLAGS  += -Ivendor/mbedtls/include -DMBEDTLS_CONFIG_FILE='<c4f_mbedtls_config.h>'
 LDFLAGS += -lScePad -lSceUserService -ldl -lpthread
 
 .PHONY: all clean
@@ -53,12 +58,15 @@ LDFLAGS += -lScePad -lSceUserService -ldl -lpthread
 
 all: $(ELF)
 
-$(OBJDIR) build:
+$(OBJDIR) $(OBJDIR)/mbedtls build:
 	mkdir -p $@
 
 # VERSION is compiled into the objects, and make doesn't notice a changed flag,
 # so a new version has to rebuild them.
 $(OBJDIR)/%.o: src/%.c VERSION | $(OBJDIR)
+	$(CC) $(CFLAGS) -c $< -o $@
+
+$(OBJDIR)/mbedtls/%.o: vendor/mbedtls/library/%.c include/c4f_mbedtls_config.h | $(OBJDIR)/mbedtls
 	$(CC) $(CFLAGS) -c $< -o $@
 
 build/client.c: client/index.html tools/embed_client.py | build

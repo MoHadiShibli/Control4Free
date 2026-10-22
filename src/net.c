@@ -1,4 +1,7 @@
-/* Bounded HTTP/WebSocket transport for the embedded controller page. */
+/* Bounded HTTP transport for the embedded controller page: the page itself,
+ * the launcher's requests, and the WebRTC offer (POST /rtc). The page's
+ * connection then runs over UDP (rtc.c). The WebSocket path stays for the
+ * host tests. */
 #include <arpa/inet.h>
 #include <ctype.h>
 #include <errno.h>
@@ -6,16 +9,17 @@
 #include <netinet/in.h>
 #include <netinet/tcp.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 #include <strings.h>
 #include <sys/select.h>
 #include <sys/socket.h>
 #include <time.h>
 #include <unistd.h>
+#include "c4f_log.h"
 #include "c4f_net.h"
 
 #ifdef C4F_DIAG
-#include "c4f_log.h"
 /* Diagnostic build: each connection from another device, step by step. The
  * launcher's status checks over loopback come every 2 seconds and stay out. */
 #define C4F_NET_LOG(c, fmt, ...) do { if (strcmp((c)->peer, "127.0.0.1")) \
@@ -51,6 +55,7 @@ uint64_t c4fTimeMs(void)
     return (uint64_t)t.tv_sec * 1000 + (uint64_t)t.tv_nsec / 1000000;
 }
 
+#ifdef C4F_TEST_WEBSOCKET
 static uint32_t c4fRol(uint32_t v, unsigned n) { return (v << n) | (v >> (32 - n)); }
 
 /* RFC 6455's SHA-1 + base64 handshake. Keys are fixed at 24 ASCII bytes; this
@@ -94,6 +99,7 @@ void c4fWebSocketAccept(const char *key, char out[29])
     }
     out[j] = 0;
 }
+#endif
 
 static int c4fQueue(C4fNetClient *c, const void *data, size_t n)
 {
@@ -108,6 +114,7 @@ static int c4fQueue(C4fNetClient *c, const void *data, size_t n)
     return 0;
 }
 
+#ifdef C4F_TEST_WEBSOCKET
 static int c4fFrame(C4fNetClient *c, unsigned op, const void *data, size_t n)
 {
     unsigned char head[4] = { (unsigned char)(0x80 | op), (unsigned char)n, 0, 0 };
@@ -118,9 +125,12 @@ static int c4fFrame(C4fNetClient *c, unsigned op, const void *data, size_t n)
 }
 
 int c4fNetText(C4fNetClient *c, const char *text) { return c4fFrame(c, 1, text, strlen(text)); }
+static int c4fNetConnText(C4fConn *conn, const char *text) { return c4fNetText((C4fNetClient *)conn, text); }
+#endif
 
-void c4fNetHttpJson(C4fNetClient *c, const char *json)
+void c4fNetHttpJson(C4fConn *conn, const char *json)
 {
+    C4fNetClient *c = (C4fNetClient *)conn;
     char header[256];
     int n = snprintf(header, sizeof(header), "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: %zu\r\nCache-Control: no-store\r\nConnection: close\r\n\r\n", strlen(json));
     if (c4fQueue(c, header, (size_t)n) || c4fQueue(c, json, strlen(json))) return;
@@ -129,7 +139,7 @@ void c4fNetHttpJson(C4fNetClient *c, const char *json)
 
 static void c4fDrop(C4fNet *net, C4fNetClient *c)
 {
-    if (c->websocket) net->handler(c, C4F_NET_CLOSE, NULL, 0, net->context);
+    if (c->websocket) net->handler(&c->conn, C4F_NET_CLOSE, NULL, 0, net->context);
     close(c->fd);
     memset(c, 0, sizeof(*c)); c->fd = -1;
 }
@@ -161,14 +171,62 @@ static int c4fHeader(const char *request, const char *key, char *value, size_t s
 static void c4fHttpError(C4fNetClient *c, int code, const char *message)
 {
     char buf[512];
-    int n = snprintf(buf, sizeof(buf), "HTTP/1.1 %d Error\r\nConnection: close\r\nContent-Type: text/plain\r\nContent-Length: %zu\r\n\r\n%s", code, strlen(message), message);
+    int n = snprintf(buf, sizeof(buf), "HTTP/1.1 %d Error\r\nConnection: close\r\nContent-Type: text/plain\r\nContent-Length: %zu\r\n%s\r\n%s", code, strlen(message),
+                     c->savedOrigin ? "Access-Control-Allow-Origin: null\r\n" : "", message);
     C4F_NET_LOG(c, "answered %d %s", code, message);
     c4fQueue(c, buf, (size_t)n); c->closing = 2;
 }
 
+/* POST /rtc: the page's WebRTC offer in, our answer out, as plain text (a
+ * "simple" request, so a saved copy of the page needs no preflight). The same
+ * Origin rule as the page's own connection: none, this page, or a saved file
+ * ("null"). A saved file is also answered on a preflight, for browsers that ask
+ * before reaching into a local network. */
+static void c4fHttpOffer(C4fNet *net, C4fNetClient *c, const char *request, size_t used,
+                         const char *host, const char *origin, int preflight)
+{
+    char expected[160], length[16], transfer[32], reply[512];
+    snprintf(expected, sizeof(expected), "http://%s", host);
+    int saved = !strcmp(origin, "null");
+    if (origin[0] && !saved && strcmp(origin, expected)) { c4fHttpError(c, 403, "Origin not allowed"); return; }
+    c->savedOrigin = saved;
+    const char *allow = saved ? "Access-Control-Allow-Origin: null\r\n" : "";
+    if (preflight) {
+        if (!saved) { c4fHttpError(c, 403, "Origin not allowed"); return; }
+        int n = snprintf(reply, sizeof(reply), "HTTP/1.1 204 No Content\r\n%sAccess-Control-Allow-Methods: POST\r\n"
+                         "Access-Control-Allow-Headers: Content-Type\r\nAccess-Control-Allow-Private-Network: true\r\n"
+                         "Access-Control-Max-Age: 600\r\nContent-Length: 0\r\nConnection: close\r\n\r\n", allow);
+        c4fQueue(c, reply, (size_t)n); c->closing = 2;
+        return;
+    }
+    if (c4fHeader(request, "Content-Length", length, sizeof(length)) != 1 ||
+        c4fHeader(request, "Transfer-Encoding", transfer, sizeof(transfer)) != 0 ||
+        !length[0] || strspn(length, "0123456789") != strlen(length) || strlen(length) > 5) {
+        c4fHttpError(c, 400, "An offer needs a Content-Length"); return;
+    }
+    size_t body = (size_t)atoi(length);
+    if (!body || used + body > sizeof(c->rx)) { c4fHttpError(c, 413, "Offer too large"); return; }
+    if (c->rxUsed < used + body) return;   /* the rest of it is still coming */
+    struct sockaddr_in local;
+    socklen_t localSize = sizeof(local);
+    if (getsockname(c->fd, (struct sockaddr *)&local, &localSize)) { c4fHttpError(c, 500, "No local address"); return; }
+    static char answer[2048];
+    int status = c4fRtcOffer(&net->rtc, (const char *)c->rx + used, body, local.sin_addr.s_addr, answer, sizeof(answer));
+    c->rxUsed = 0;
+    if (status == 503) { c4fHttpError(c, 503, "Controller connections full; close an unused page"); return; }
+    if (status) { c4fHttpError(c, 400, "That is not a WebRTC data-channel offer"); return; }
+    int n = snprintf(reply, sizeof(reply), "HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Length: %zu\r\n"
+                     "Cache-Control: no-store\r\n%sConnection: close\r\n\r\n", strlen(answer), allow);
+    C4F_NET_LOG(c, "answered a WebRTC offer%s", "");
+    if (c4fQueue(c, reply, (size_t)n) == 0 && c4fQueue(c, answer, strlen(answer)) == 0) c->closing = 2;
+}
+
 static void c4fHttp(C4fNet *net, C4fNetClient *c)
 {
-    char request[8193], host[128], origin[160], key[40], upgrade[32], version[12], connection[128];
+    char request[8193], host[128], origin[160], upgrade[32];
+#ifdef C4F_TEST_WEBSOCKET
+    char key[40], version[12], connection[128];
+#endif
     char *end;
     size_t used;
     memcpy(request, c->rx, c->rxUsed); request[c->rxUsed] = 0;
@@ -179,6 +237,12 @@ static void c4fHttp(C4fNet *net, C4fNetClient *c)
     C4F_NET_LOG(c, "asked: %.*s", (int)strcspn(request, "\r\n") > 100 ? 100 : (int)strcspn(request, "\r\n"), request);
     int statusRequest = !strncmp(request, "GET /api/status HTTP/1.1\r\n", 26);
     int stopRequest = !strncmp(request, "POST /api/stop HTTP/1.1\r\n", 25);
+    int offerRequest = !strncmp(request, "POST /rtc HTTP/1.1\r\n", 20);
+    int preflightRequest = !strncmp(request, "OPTIONS /rtc HTTP/1.1\r\n", 23);
+    int websocketRequest = 0;
+#ifdef C4F_TEST_WEBSOCKET
+    websocketRequest = !strncmp(request, "GET /ws HTTP/1.1\r\n", 18);
+#endif
     /* The two files a phone needs to keep this page on its home screen. */
     const unsigned char *asset = NULL;
     size_t assetSize = 0;
@@ -188,9 +252,10 @@ static void c4fHttp(C4fNet *net, C4fNetClient *c)
     } else if (!strncmp(request, "GET /icon-192.png HTTP/1.1\r\n", 28)) {
         asset = c4fIcon; assetSize = c4fIconSize; assetType = "image/png";
     }
-    if (!statusRequest && !stopRequest && !asset && strncmp(request, "GET / HTTP/1.1\r\n", 16) &&
+    if (!statusRequest && !stopRequest && !offerRequest && !preflightRequest && !asset &&
+        strncmp(request, "GET / HTTP/1.1\r\n", 16) &&
         strncmp(request, "GET /index.html HTTP/1.1\r\n", 26) &&
-        strncmp(request, "GET /ws HTTP/1.1\r\n", 18) &&
+        !websocketRequest &&
         strncmp(request, "GET /?", 6)) {
         c4fHttpError(c, 404, "Not found"); return;
     }
@@ -208,7 +273,9 @@ static void c4fHttp(C4fNet *net, C4fNetClient *c)
             c4fHttpError(c, 403, "Open the PS4 IP address"); return;
         }
     }
-    if (statusRequest || stopRequest) {
+    if (offerRequest || preflightRequest) {
+        c4fHttpOffer(net, c, request, used, host, origin, preflightRequest);
+    } else if (statusRequest || stopRequest) {
         char launcher[8], length[16], transfer[32];
         /* For the launcher app. A website cannot reach this: it would need the
          * custom header, which a browser only sends cross-origin after a CORS
@@ -223,8 +290,10 @@ static void c4fHttp(C4fNet *net, C4fNetClient *c)
             c4fHttpError(c, 403, "Launcher only"); return;
         }
         c->rxUsed = 0;
-        net->handler(c, stopRequest ? C4F_NET_HTTP_STOP : C4F_NET_HTTP_STATUS, NULL, 0, net->context);
+        net->handler(&c->conn, stopRequest ? C4F_NET_HTTP_STOP : C4F_NET_HTTP_STATUS, NULL, 0, net->context);
     } else if (upgrade[0]) {
+#ifdef C4F_TEST_WEBSOCKET
+        if (!websocketRequest) { c4fHttpError(c, 404, "Not found"); return; }
         char accept[29], reply[256], expected[160];
         int n;
         snprintf(expected, sizeof(expected), "http://%s", host);
@@ -250,7 +319,10 @@ static void c4fHttp(C4fNet *net, C4fNetClient *c)
         c4fQueue(c, reply, (size_t)n); c->websocket = 1;
         c->pingAt = c4fTimeMs() + C4F_NET_PING_MS;
         memmove(c->rx, c->rx+used, c->rxUsed-used); c->rxUsed -= used;
-        net->handler(c, C4F_NET_OPEN, NULL, 0, net->context);
+        net->handler(&c->conn, C4F_NET_OPEN, NULL, 0, net->context);
+#else
+        c4fHttpError(c, 400, "Use the controller page to connect over WebRTC");
+#endif
     } else if (asset) {
         char reply[256];
         int n = snprintf(reply, sizeof(reply), "HTTP/1.1 200 OK\r\nContent-Type: %s\r\nContent-Length: %zu\r\nConnection: close\r\nCache-Control: max-age=86400\r\nX-Content-Type-Options: nosniff\r\n\r\n", assetType, assetSize);
@@ -259,13 +331,14 @@ static void c4fHttp(C4fNet *net, C4fNetClient *c)
         c->body = asset; c->bodySize = assetSize; c->rxUsed = 0;
     } else {
         char reply[768];
-        int n = snprintf(reply, sizeof(reply), "HTTP/1.1 200 OK\r\nContent-Type: text/html; charset=utf-8\r\nContent-Encoding: gzip\r\nContent-Length: %zu\r\nConnection: close\r\nCache-Control: no-store\r\nX-Content-Type-Options: nosniff\r\nReferrer-Policy: no-referrer\r\nContent-Security-Policy: default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src 'self' data:; media-src data:; connect-src ws:; manifest-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'none'\r\n\r\n", c4fPageSize);
+        int n = snprintf(reply, sizeof(reply), "HTTP/1.1 200 OK\r\nContent-Type: text/html; charset=utf-8\r\nContent-Encoding: gzip\r\nContent-Length: %zu\r\nConnection: close\r\nCache-Control: no-store\r\nX-Content-Type-Options: nosniff\r\nReferrer-Policy: no-referrer\r\nContent-Security-Policy: default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src 'self' data:; media-src data:; connect-src 'self'; manifest-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'none'\r\n\r\n", c4fPageSize);
         C4F_NET_LOG(c, "sending the page, %zu bytes", c4fPageSize);
         c4fQueue(c, reply, (size_t)n);
         c->body = c4fPage; c->bodySize = c4fPageSize; c->rxUsed = 0;
     }
 }
 
+#ifdef C4F_TEST_WEBSOCKET
 static void c4fWs(C4fNet *net, C4fNetClient *c)
 {
     while (c->rxUsed >= 2 && !c->closing) {
@@ -299,7 +372,7 @@ static void c4fWs(C4fNet *net, C4fNetClient *c)
             c->fragmented = !fin;
             if (fin) {
                 c->message[c->messageUsed] = 0;
-                net->handler(c, C4F_NET_MESSAGE_EVENT, c->message, c->messageUsed, net->context);
+                net->handler(&c->conn, C4F_NET_MESSAGE_EVENT, c->message, c->messageUsed, net->context);
                 c->messageUsed = 0;
             }
         } else { c->closing = 1; break; }
@@ -307,12 +380,20 @@ static void c4fWs(C4fNet *net, C4fNetClient *c)
         memmove(c->rx, c->rx+taken, c->rxUsed-taken); c->rxUsed -= taken;
     }
 }
+#endif
 
 int c4fNetOpen(C4fNet *net, int port, C4fNetHandler handler, void *context)
 {
     struct sockaddr_in addr;
     int one = 1;
+    /* The certificate outlives a reopen: making one takes a moment. */
+    C4fRtcCrypto *crypto = net->rtc.crypto;
+    char fingerprint[sizeof(net->rtc.fingerprint)];
+    unsigned nextId = net->rtc.nextId;
+    memcpy(fingerprint, net->rtc.fingerprint, sizeof(fingerprint));
     memset(net, 0, sizeof(*net)); net->fd = -1;
+    net->rtc.crypto = crypto; net->rtc.nextId = nextId; net->rtc.fd = -1;
+    memcpy(net->rtc.fingerprint, fingerprint, sizeof(fingerprint));
     for (int i = 0; i < C4F_NET_CLIENTS; i++) net->clients[i].fd = -1;
     net->handler = handler; net->context = context;
     net->fd = socket(AF_INET, SOCK_STREAM, 0);
@@ -327,15 +408,22 @@ int c4fNetOpen(C4fNet *net, int port, C4fNetHandler handler, void *context)
         bind(net->fd, (struct sockaddr *)&addr, sizeof(addr)) || listen(net->fd, 8)) {
         close(net->fd); net->fd = -1; return -1;
     }
+    /* A listener without the input transport is not a running service. */
+    if (c4fRtcOpen(&net->rtc, port, handler, context)) {
+        c4fLog("rtc: not available on port %d\n", port);
+        close(net->fd); net->fd = -1;
+        return -1;
+    }
     return 0;
 }
 
 int c4fNetPoll(C4fNet *net, int timeoutMs)
 {
     fd_set rd, wr;
-    struct timeval timeout = { .tv_sec = 0, .tv_usec = timeoutMs * 1000 };
     int maxFd = net->fd, ready;
     uint64_t now = c4fTimeMs();
+    timeoutMs = c4fRtcWait(&net->rtc, now, timeoutMs);
+    struct timeval timeout = { .tv_sec = timeoutMs / 1000, .tv_usec = (timeoutMs % 1000) * 1000 };
     if (now >= net->checkedMs) {
         int error = 0, listening = 0; socklen_t size = sizeof(error);
         if (getsockopt(net->fd, SOL_SOCKET, SO_ERROR, &error, &size)) return -1;
@@ -346,9 +434,15 @@ int c4fNetPoll(C4fNet *net, int timeoutMs)
         net->checkedMs = now + 1000;
     }
     FD_ZERO(&rd); FD_ZERO(&wr); FD_SET(net->fd, &rd);
+    if (net->rtc.fd >= 0 && net->rtc.fd < (int)FD_SETSIZE) {
+        FD_SET(net->rtc.fd, &rd);
+        if (c4fRtcWantsWrite(&net->rtc)) FD_SET(net->rtc.fd, &wr);
+        if (net->rtc.fd > maxFd) maxFd = net->rtc.fd;
+    }
     for (int i = 0; i < C4F_NET_CLIENTS; i++) {
         C4fNetClient *c = &net->clients[i];
         if (c->fd < 0) continue;
+#ifdef C4F_TEST_WEBSOCKET
         if (c->websocket && !c->closing) {
             if (c->pongDeadline && now >= c->pongDeadline) c->closing = 1;
             else if (!c->pongDeadline && now >= c->pingAt) {
@@ -357,6 +451,7 @@ int c4fNetPoll(C4fNet *net, int timeoutMs)
                     c->pongDeadline = now + C4F_NET_PONG_MS;
             }
         }
+#endif
         if (c->closing == 1) { c4fDrop(net, c); continue; }
         if (!c->closing && !c->body) FD_SET(c->fd, &rd);
         if (c->txSent < c->txUsed || c->body) FD_SET(c->fd, &wr);
@@ -369,6 +464,9 @@ int c4fNetPoll(C4fNet *net, int timeoutMs)
     if (waitedTo < waitedFrom || waitedTo - waitedFrom > 5000 || time(NULL) - wallFrom > 5)
         return -2;
     if (ready < 0) return errno == EINTR ? 0 : -1;
+    if (net->rtc.fd >= 0 && FD_ISSET(net->rtc.fd, &rd)) c4fRtcReadable(&net->rtc);
+    if (net->rtc.fd >= 0 && FD_ISSET(net->rtc.fd, &wr)) c4fRtcWritable(&net->rtc);
+    c4fRtcTick(&net->rtc, c4fTimeMs());
     if (FD_ISSET(net->fd, &rd)) {
         struct sockaddr_in peer;
         socklen_t peerSize = sizeof(peer);
@@ -391,6 +489,9 @@ int c4fNetPoll(C4fNet *net, int timeoutMs)
                 setsockopt(fd, SOL_SOCKET, SO_NOSIGPIPE, &one, sizeof(one));
 #endif
                 net->clients[index].fd = fd; net->clients[index].openedMs = c4fTimeMs();
+#ifdef C4F_TEST_WEBSOCKET
+                net->clients[index].conn.text = c4fNetConnText;
+#endif
 #ifdef C4F_DIAG
                 memcpy(net->clients[index].peer, peerName, sizeof(peerName));
                 C4F_NET_LOG(&net->clients[index], "connected: slot %d, fd %d", index, fd);
@@ -409,7 +510,9 @@ int c4fNetPoll(C4fNet *net, int timeoutMs)
             } else if (n > 0) {
                 c->rxUsed += (size_t)n;
                 if (!c->websocket) c4fHttp(net, c);
+#ifdef C4F_TEST_WEBSOCKET
                 if (c->websocket) c4fWs(net, c);
+#endif
             }
         }
         if (c->closing != 1 && FD_ISSET(c->fd, &wr)) {
@@ -446,6 +549,7 @@ int c4fNetPoll(C4fNet *net, int timeoutMs)
 
 void c4fNetClose(C4fNet *net)
 {
+    c4fRtcClose(&net->rtc);
     for (int i = 0; i < C4F_NET_CLIENTS; i++) if (net->clients[i].fd >= 0) c4fDrop(net, &net->clients[i]);
     if (net->fd >= 0) close(net->fd);
     net->fd = -1;

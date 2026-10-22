@@ -5,6 +5,11 @@ the four virtual DualShock 4 controllers. Wheel and guitar model compatibility r
 are mapping capabilities, not native accessory emulation. You map on a picture of a DualShock 4. The
 keyboard is mapped the same way. Mappings are kept in the browser, like your layout.
 
+An experimentally linked DualShock 4 or DualSense sends its own buttons, sticks and analog trigger
+pressure directly, so its mapping is bypassed while linked. Its touchpad also sends up to two fingers.
+Use **Unlink**, reconnecting the controller if needed, to return to browser input and the saved mapping. See
+[Experimental features](playing.md#experimental-features).
+
 With several gamepads on Chrome or Edge for Windows, Xbox/Guide presses can be reported on the wrong
 gamepad by the browser. Check **Gamepad Controls** first; see the
 [Xbox-button workaround](troubleshooting.md#gamepads). Mapping cannot restore an input's missing source.

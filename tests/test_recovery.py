@@ -7,6 +7,7 @@ import subprocess
 import tempfile
 import time
 import test_web as web
+import mbedtls_host
 
 
 def connect_again():
@@ -21,8 +22,9 @@ def connect_again():
 
 def main():
     subprocess.run(['clang-18', '-std=gnu11', '-Wall', '-Wextra', '-Werror', '-g',
-                    '-Iinclude', '-Ivendor/jsmn', '-Ivendor/qrcodegen', 'src/net.c', 'src/web.c', 'src/klog_line.c', 'vendor/qrcodegen/qrcodegen.c',
-                    'tests/web_stub.c', 'tests/recovery_faults.c', 'build/client.c', 'build/assets.c', '-pthread',
+                    '-Iinclude', '-Ivendor/jsmn', '-Ivendor/qrcodegen', '-DC4F_TEST_WEBSOCKET', *mbedtls_host.FLAGS,
+                    'src/net.c', 'src/web.c', 'src/rtc.c', 'src/stun.c', 'src/sctp.c', 'src/klog_line.c', 'vendor/qrcodegen/qrcodegen.c',
+                    'tests/web_stub.c', 'tests/recovery_faults.c', 'build/client.c', 'build/assets.c', mbedtls_host.library(), '-pthread',
                     '-Wl,--wrap=select,--wrap=accept,--wrap=getsockopt', '-o', str(web.BINARY)], check=True)
     with tempfile.TemporaryDirectory() as directory:
         fault = Path(directory) / 'fault'
@@ -48,7 +50,8 @@ def main():
                 assert server.c.request('claim', [0])['result']['pads'][0]['mine']
                 rows = server.rows()
                 split = next(i for i, row in enumerate(rows) if 'network failed' in row)
-                assert all(row.split()[3] == '0' for row in rows[split:] if row.startswith('FRAME'))
+                held = [row for row in rows[split:] if row.startswith('FRAME') and row.split()[3] != '0']
+                assert not held, f'{name}: non-neutral frames after network reset:\n' + '\n'.join(held)
                 assert len([r for r in rows if r.startswith('ADD')]) == 1
                 assert any('listener recovered' in row for row in rows)
                 print(f'PASS {name} failure: listener returns, old buttons cleared, no duplicate pad', flush=True)

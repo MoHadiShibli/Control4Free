@@ -6,7 +6,8 @@ Control4Free comes in two pieces:
   controllers, and serves the controller page on port 4264.
 - **The app** (`Control4Free-<version>.pkg`), which goes on the PS4's home screen. It starts and stops the
   service, shows the address and a QR code, and sets up auto-start. The package carries its own copy of the
-  service, so the package is all you need.
+  service, so the package is all you need. **Test controllers** shows received input, motion and the
+  controller-page connection RTT, with tools for rumble, light bar and orientation.
 
 ## Requirements
 
@@ -17,12 +18,12 @@ Control4Free comes in two pieces:
 - **PayLoader Server** enabled for starting the service directly from the app:
   **GoldHEN → Server Settings → Enable PayLoader Server**. AutoRun and Payloader LaunchPad can start the
   service without this server.
-- A phone, tablet or computer with a modern browser, on the same network as the PS4.
+- A phone, tablet or computer with a modern browser supporting WebRTC data channels, on the same network
+  as the PS4. Both TCP and UDP port 4264 must be reachable between them.
 
 ## Compatibility
 
-Every firmware GoldHEN supports has a GoldHEN version of v2.4b18.10 or later, so updating GoldHEN is all it
-takes. **Tested** means someone confirmed it on a console; the other rows have GoldHEN support and support in
+**Tested** means someone confirmed it on a console; the other rows have GoldHEN support and support in
 Control4Free's start-up code, but nobody has tried them yet.
 
 | Firmware | GoldHEN | Status |
@@ -83,6 +84,7 @@ screen, that's fine too: the app doesn't get in the way of Control4Free.
 | **Triangle** | Turns auto-start on or off. After you install a newer package, it updates the auto-start copy. |
 | **Square**, then **Cross** | Stops Control4Free and disconnects every controller. |
 | **Circle** | Closes the app. Control4Free keeps running without it. |
+| **Options** | Opens **Test controllers** in the normal app. Hold **L3 + R3** for two seconds as another way in. |
 
 With a TV remote over HDMI-CEC, press **OK** to open **Actions**, use the arrows to choose,
 and press **OK** again. **Back** returns. See [HDMI-CEC navigation](hdmi-cec.md) for setup
@@ -93,13 +95,16 @@ and compatibility.
 1. Install the new package over the old one. Delete the old app first if the installer refuses.
    You don't need to stop Control4Free first: deleting or replacing the app leaves the running service and
    its auto-start copy alone.
-2. Open Control4Free. It says the auto-start copy is older than the one in the app: press **Triangle** to
-   update it.
+2. Fully close the old app if it was left open, then open Control4Free. If it says the auto-start copy
+   differs from the one in the app, press **Triangle** to update it.
 3. The old version is still the one running. Press **Square**, then **Cross** to stop it, and **Cross**
    again to start the new one (this needs GoldHEN's PayLoader). Or restart the PS4 and run the jailbreak:
    auto-start then starts the new one.
 
 Your controller layouts, keys and gamepad mappings live in each phone's or computer's browser, so they survive updates.
+
+Reload the controller page after the new service starts. If you kept a saved copy, load the page from
+the updated service and save a fresh copy so it includes the current connection and controller features.
 
 ## Without the app
 

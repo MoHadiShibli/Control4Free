@@ -46,23 +46,40 @@ sees a virtual DualShock 4, which provides:
 - **Rumble and light bar.** When a game rumbles, your phone buzzes (Android), and so does your gamepad,
   though not every controller supports vibration in the browser. The page glows in the controller's
   light-bar colour, the one the PS4 or the game sets.
-- **Experimental extras**, off until you turn them on in **Settings → Experimental**: a DualShock 4 or
-  DualSense connected to a computer lights up in the game's colour, rumbles directly (DualSense included) and
-  passes on its touchpad's fingers;
-  trigger rumble on Xbox controllers and a linked DualSense; and motion controls from a phone or a linked
-  DualShock 4 or DualSense. They need browser features that secure pages get, and the page is plain `http`:
-  see [Experimental features](docs/troubleshooting.md#experimental-features).
-- **Fast.** Input reaches the console the moment it arrives, at a DualShock 4's own rate while you play.
+- **DualShock 4 and DualSense touchpads**, including two finger positions, when linked in Chrome or Edge
+  on a computer. Experimental Sony controller support also adds direct rumble and PS4 light-bar colours.
+- **Experimental motion controls** from a phone or a linked DualShock 4 / DualSense, and **trigger rumble**
+  on supported Xbox controllers and a linked DualSense. Turn them on in **Settings → Experimental**.
+  See [Experimental features](docs/playing.md#experimental-features) for what each switch does and setup.
+- **WebRTC controller connections** keep newer input moving while reliable messages handle controller
+  selection and status. See [why the connection changed](#controller-connection).
+- **Reconnects after a brief interruption**, reclaiming controllers the service still retains.
 - **An app on the PS4** that shows the address and a QR code, how many controllers are connected, and starts
   or stops Control4Free. Use a controller or your TV remote through [HDMI-CEC](docs/hdmi-cec.md).
 - **Test controllers on the PS4.** Press **Options** in the app to see what each signed-in user's controller
-  sends, read the way a game reads it: buttons, sticks, triggers, touchpad and motion. Its menu rumbles each
-  motor and sets the light bar. See [Testing controllers](docs/playing.md#testing-controllers-on-the-ps4).
+  sends: buttons, sticks, analog triggers, touchpad and motion. Check connection latency and test rumble,
+  light-bar colours and orientation. See [Testing controllers](docs/playing.md#testing-controllers-on-the-ps4).
 - **Starts by itself.** One button in the app sets up GoldHEN's AutoRun, so Control4Free is ready after
   every restart.
 - **On your phone's home screen**, like an app.
 - **Stays awake**: your phone's screen doesn't turn off while you play.
 - **Gets through rest mode.** After the PS4 wakes up, open the page and pick your controller again.
+
+## Controller connection
+
+The controller page now connects directly to the PS4 through WebRTC data channels over UDP. Previously,
+all messages travelled through one ordered
+WebSocket connection over TCP: if a packet was lost, newer input could wait behind its retransmission.
+For a controller, that can turn a brief loss into late presses or several updates arriving together.
+
+WebRTC lets the page use separate channels for different jobs. Controller input is unordered and is not
+retransmitted; the PS4 accepts newer state and ignores older updates arriving late. Controller selection
+and status use a reliable channel. A short history of button changes helps recover isolated missed
+presses, and automatic reconnection restores controllers after a brief interruption.
+
+The improvement is how input behaves when the connection loses packets. An already healthy connection
+may have a similar round-trip time. For the implementation and message formats, see
+[How it works](docs/how-it-works.md#browser-connection) and [Protocol](docs/protocol.md).
 
 ## Quick start
 
@@ -82,6 +99,10 @@ New to GoldHEN packages? The **[installation guide](docs/installation.md)** walk
 |---|---|---|
 | ![Home screen on a phone](docs/images/home.png) | ![The page in a PC's browser](docs/images/desktop.png) | ![The Control4Free app on the PS4](docs/images/launcher.png) |
 
+| Controller test | Controller tools |
+|---|---|
+| ![Controller test with example readings](docs/images/tester.png) | ![Controller tools](docs/images/tester-tools.png) |
+
 ## Documentation
 
 - **[Installation](docs/installation.md)**: requirements, installing, auto-start, updating, uninstalling.
@@ -90,7 +111,9 @@ New to GoldHEN packages? The **[installation guide](docs/installation.md)** walk
 - **[HDMI-CEC navigation](docs/hdmi-cec.md)**: using your TV remote in the PS4 app.
 - **[Troubleshooting](docs/troubleshooting.md)**: the messages you might see and what to do about each.
 - **[How it works](docs/how-it-works.md)**: the virtual-device API, sign-in, and what runs where.
-- **[Protocol](docs/protocol.md)**: the WebSocket protocol between the page and the console.
+- **[Virtual DS4 controls and values](docs/how-it-works.md#virtual-ds4-controls-and-values)**: individual
+  buttons, sticks, triggers, touch, motion, and motor/light-bar feedback exposed by Control4Free.
+- **[Protocol](docs/protocol.md)**: the WebRTC channels and messages between the page and the console.
 - **[Security](SECURITY.md)**: what being open on your home network does and doesn't mean.
 - **[Contributing](CONTRIBUTING.md)**: building, testing and code style.
 - **[Changelog](CHANGELOG.md)**.
@@ -100,7 +123,8 @@ New to GoldHEN packages? The **[installation guide](docs/installation.md)** walk
 - A PS4 with GoldHEN v2.4b18.10 or later. Tested on firmware 10.01, 11.02, 13.02, 13.04 and 13.52; the
   [compatibility table](docs/installation.md#compatibility) lists every firmware and the GoldHEN version it
   needs.
-- A phone, tablet or computer with a browser, on the same network as the PS4.
+- A phone, tablet or computer with a browser supporting WebRTC data channels, on the same network as the PS4.
+  TCP and UDP port 4264 must be reachable; guest Wi-Fi or client isolation can block the connection.
 - To start the service directly from the app, enable **GoldHEN → Server Settings → Enable PayLoader
   Server**. AutoRun can start it without this server.
 - Turn off other GoldHEN controller plugins in games you play with Control4Free. A plugin that takes over a
@@ -115,7 +139,7 @@ New to GoldHEN packages? The **[installation guide](docs/installation.md)** walk
 - **Browser input limits apply.** Hidden buttons and lost input identity cannot be recovered by mapping.
   With several Xbox controllers, some Chrome/Edge Windows backends combine their Xbox buttons; see the
   [GameInput workaround](docs/troubleshooting.md#gamepads).
-- **Six pages at a time.** Up to six phones or computers can have the page open at once.
+- **Eight connections at a time.** Up to eight phones or computers can connect to the service at once.
 - **Motion and direct controller lights are experimental.** Browsers only give motion sensors and direct
   controller access to secure pages, and the console's page is plain `http`. Chrome and Edge can treat it
   as secure with one setting; Safari on an iPhone can't. Direct controller access works in Chrome and Edge
@@ -127,7 +151,7 @@ New to GoldHEN packages? The **[installation guide](docs/installation.md)** walk
 - **Rest mode signs everyone out**, so controllers have to be picked again after the PS4 wakes up, just like
   real ones.
 - **No pairing or password.** Anyone on your network can take a free controller. Read [SECURITY.md](SECURITY.md)
-  and keep port 4264 off the internet.
+  and keep TCP and UDP port 4264 off the internet.
 
 ## Support
 

@@ -48,6 +48,19 @@ see [Updating](installation.md#updating).
 - If the address worked before and doesn't now, the router may have given the PS4 a new one. Reserving an
   address for the PS4 in the router's settings keeps it the same.
 
+## The page opens but cannot connect
+
+The page loads over HTTP, then opens its controller connection over WebRTC. Loading successfully does not
+prove that the controller connection can get through.
+
+- Reload the page from the PS4. After an update, replace saved copies so they use the current connection code.
+- Use a browser with WebRTC data channels enabled. If the browser asks for local-network access, allow
+  it for the controller page.
+- Both TCP and UDP port 4264 must be reachable between the phone or PC and the PS4. Guest networks,
+  client isolation, VPNs or firewall rules can allow page loading while blocking the controller connection.
+  Keep these ports on your own network; internet port forwarding is not needed.
+- Close unused controller pages if the service has reached its connection limit.
+
 ## Picking a user
 
 **The *"Who's using this controller?"* screen doesn't appear.** Wait a few seconds after picking the
@@ -65,13 +78,25 @@ way.
 **A game ignores the virtual controller.** Turn off other GoldHEN controller plugins for that game. A plugin
 that takes over a signed-in user's controller can stop games from reading Control4Free's.
 
-**Buttons feel slow.** The number next to the version at the bottom of the home screen is the round trip to
-the console. Above about 30 ms, your Wi-Fi is the slow part: move closer to the router or use 5 GHz.
+**Buttons feel slow, arrive late or stay held briefly.** The number next to the version at the bottom of
+the home screen is the round trip to the console, not the full button-to-game delay. Keep the controller
+page visible and the device awake. Note whether the problem happens continuously or in short bursts, the
+devices and browser used, and whether motion or linked controllers were enabled when reporting it.
 
-**No vibration from the game.** Check **Vibration** is on in the settings. Only Android phones can vibrate:
-Safari on iPhone doesn't let pages do it. Not every controller supports vibration in the browser, and one
-whose row says *no rumble in this browser* can't be rumbled from the page at all. Keep the page's window in
-front. And not every game rumbles every player.
+For bursts of lag, ghost inputs or brief held buttons, connect the **PS4 to the router by wired LAN**
+first. The phone or PC can stay on Wi-Fi. This removes the PS4's wireless link from the path and is a
+useful first check even when the usual reading is only a few milliseconds. Compare the same game and
+devices before changing other settings.
+
+If bursts remain with the PS4 wired, check the phone or PC's Wi-Fi signal and compare another device or
+browser. Report whether the RTT number spikes at the same time and whether the issue also occurs with
+Control4Free stopped; that helps separate connection trouble from the controller or game.
+
+**No vibration from the game.** For an Android phone, turn on **Vibration** in the settings; Safari on
+iPhone cannot vibrate the phone. For a gamepad, check its assigned controller and keep the page in front.
+A gamepad marked *no rumble in this browser* needs another supported browser or, for a Sony controller,
+the experimental direct link. The phone's **Vibration** switch does not control gamepad rumble.
+Not every game rumbles every player.
 
 ## Gamepads
 
@@ -149,6 +174,11 @@ the app and open it again; if that doesn't help, restart the PS4 and run the jai
 
 **"The bundled payload is damaged."** Reinstall the package.
 
+**Controller page RTT is measuring or unavailable.** Update and start the service bundled with the app,
+then reload the controller page from the PS4; replace any saved copy too. Select the user signed in on
+that page's controller. A local physical controller has no page connection to measure. The reading
+expires when reports stop; it measures the page's connection round trip, not the full game or TV delay.
+
 **Control4Free is listed under Games instead of Applications.** That's a package from before 1.0.0. Delete the
 app and install the current package.
 
@@ -164,11 +194,9 @@ can treat your PS4's address as secure:
    and set the option to **Enabled**.
 3. Press **Relaunch**.
 
-The setting belongs to that browser on that device. If the PS4's address changes, change it here too:
-reserving the address for the PS4 in your router avoids that. Chrome warns about the setting on its pages;
-it applies only to the address you typed. That address then gets the browser features an `https` site gets,
-over a connection that isn't encrypted, so add only your PS4's address. Safari on an iPhone has no such
-setting.
+The setting belongs to that browser on that device. If the PS4's address changes, update it here too.
+Add only your PS4's address: the flag allows those browser features but does not encrypt the HTTP page.
+Safari on an iPhone has no equivalent flag.
 
 **"This browser can't talk to controllers directly."** Linking a DualShock 4 or DualSense needs Chrome or
 Edge on a computer. Android, Firefox and Safari don't offer it.
@@ -179,13 +207,24 @@ Steam or DS4Windows, reconnect it, press a button on it, then press **Link** aga
 **Motion feels off.** Hold the phone sideways with the screen towards you, keep it still, and press
 **Recenter** in **Settings → Experimental**.
 
+**A linked DS4 or DualSense only clicks its touchpad, without showing fingers.** Turn on **Lights and
+rumble on Sony controllers**, press **Link** and select the matching controller. Once linked, up to two
+fingers are sent. Use **Test controllers** on the PS4 to check the received touch positions.
+
+**Trigger rumble does nothing.** Turn on **Trigger rumble**, assign the gamepad to the controller being
+used, and pull a trigger while the game is rumbling. Xbox controllers need a browser that exposes
+trigger-rumble support. A DualSense also needs **Lights and rumble on Sony controllers** enabled and a
+direct **Link**. A DS4 has no separate trigger effect. With both triggers held, only the one pulled last
+receives the effect; release it to move the effect to the other. See
+[Trigger rumble](playing.md#trigger-rumble) for what the effect does and a quick test.
+
 ## Reporting a problem
 
-Every release comes with a diagnostic package, `Control4Free-<version>-diag.pkg`. It's the same Control4Free,
+Every release comes with a diagnostic package, `troubleshooting-Control4Free-<version>-diag.pkg`. It's the same Control4Free,
 except that its app shows on screen what the PS4 reports, so you can send screenshots instead of digging out
 log files. Please use it before you open an issue:
 
-1. Download `Control4Free-<version>-diag.pkg` from the
+1. Download `troubleshooting-Control4Free-<version>-diag.pkg` from the
    [latest release](https://github.com/MoHadiShibli/Control4Free/releases/latest) and install it over the app.
    It replaces the app and shows up as **Control4Free (diagnostic)**.
 2. Open it. If it says RUNNING, the normal version is still the one running: press **Square**, then **Cross**

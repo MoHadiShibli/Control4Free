@@ -57,6 +57,10 @@ static int c4fTesterPreview(const char *state, C4fLauncherScreen *s)
     v->user[0].state = v->user[1].state = C4F_TESTER_READY;
     v->lx = v->ly = v->rx = v->ry = 128;
     v->quat[3] = 1000;
+    s->connection.available = 1;
+    s->connection.pads = 1;
+    for (int i = 0; i < 4; i++) s->connection.rttMs[i] = -1;
+    s->connection.rttMs[0] = 8;
     if (!strcmp(state, "tester")) {
         v->buttons = 0x4000 | 0x0400 | 0x0010 | 0x0200; /* Cross, L1, Up, R2 */
         v->lx = 40; v->ly = 90; v->rx = 210; v->r2 = 180;
@@ -72,17 +76,63 @@ static int c4fTesterPreview(const char *state, C4fLauncherScreen *s)
         v->lightSet = 1; v->light[0] = 255;
         v->rumble = 1;
         snprintf(v->note, sizeof(v->note), "Large motor: rumbling for a second.");
-    } else if (!strcmp(state, "tester-menu") || !strcmp(state, "tester-remote")) {
+    } else if (!strcmp(state, "tester-menu") || !strcmp(state, "tester-remote") ||
+               !strcmp(state, "tester-menu-user") || !strcmp(state, "tester-menu-unavailable") ||
+               !strcmp(state, "tester-menu-error") || !strcmp(state, "tester-menu-output") ||
+               !strcmp(state, "tester-menu-no-users") || !strncmp(state, "tester-menu-rtt-", 16)) {
         v->menu = 1;
         v->focus = !strcmp(state, "tester-menu") ? C4F_TESTER_RUMBLE_LARGE : C4F_TESTER_USER;
+        if (!strcmp(state, "tester-menu-user")) {
+            v->selected = 1; s->connection.pads = 2; s->connection.rttMs[1] = 6;
+        }
+        else if (!strcmp(state, "tester-menu-unavailable")) {
+            v->user[0].state = C4F_TESTER_NO_CONTROLLER;
+            v->focus = C4F_TESTER_RUMBLE_LARGE;
+        } else if (!strcmp(state, "tester-menu-error")) {
+            v->user[0].state = C4F_TESTER_FAILED;
+            v->user[0].error = 0x80920001u;
+            v->focus = C4F_TESTER_ORIENTATION;
+        } else if (!strcmp(state, "tester-menu-output")) {
+            v->lightSet = 1; v->light[1] = 255; v->rumble = 2;
+            v->focus = C4F_TESTER_RUMBLE_SMALL;
+            snprintf(v->note, sizeof(v->note), "Small motor: rumbling for a second.");
+        } else if (!strcmp(state, "tester-menu-no-users")) {
+            v->selected = -1;
+            v->user[0].used = v->user[1].used = 0;
+        }
+    } else if (!strcmp(state, "tester-color") || !strcmp(state, "tester-color-green") ||
+               !strcmp(state, "tester-color-fine") || !strcmp(state, "tester-color-black") ||
+               !strcmp(state, "tester-color-white") || !strcmp(state, "tester-color-error")) {
+        v->menu = v->colorMenu = v->lightSet = 1;
+        v->focus = C4F_TESTER_LIGHT_COLOR;
+        v->light[0] = 51; v->light[1] = 128; v->light[2] = 230;
+        if (!strcmp(state, "tester-color-green")) v->colorChannel = 1;
+        else if (!strcmp(state, "tester-color-fine")) v->colorFine = 1;
+        else if (!strcmp(state, "tester-color-black")) memset(v->light, 0, sizeof(v->light));
+        else if (!strcmp(state, "tester-color-white")) memset(v->light, 255, sizeof(v->light));
+        else if (!strcmp(state, "tester-color-error")) snprintf(v->note, sizeof(v->note), "The PS4 refused that (0xfffffffb).");
     } else if (!strcmp(state, "tester-disconnected")) {
         v->user[0].state = C4F_TESTER_NO_CONTROLLER;
     } else if (!strcmp(state, "tester-error")) {
         v->selected = 1;
         v->user[1].state = C4F_TESTER_FAILED;
         v->user[1].error = 0x80920001u;
-    } else {
+    } else if (strncmp(state, "tester-rtt-", 11)) {
         return -1;
+    }
+    const char *rtt = strstr(state, "rtt-");
+    if (rtt) {
+        rtt += 4;
+        if (!strcmp(rtt, "four")) {
+            s->connection.pads = 15;
+            s->connection.rttMs[0] = 0; s->connection.rttMs[1] = 8;
+            s->connection.rttMs[2] = 60000; s->connection.rttMs[3] = -1;
+        } else if (!strcmp(rtt, "measuring")) {
+            s->connection.pads = 15;
+            for (int i = 0; i < 4; i++) s->connection.rttMs[i] = -1;
+        } else if (!strcmp(rtt, "no-page")) s->connection.pads = 0;
+        else if (!strcmp(rtt, "unavailable")) s->connection.available = 0;
+        else return -1;
     }
     return 1;
 }

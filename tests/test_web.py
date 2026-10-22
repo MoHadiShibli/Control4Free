@@ -12,6 +12,8 @@ import tempfile
 import threading
 import time
 
+import mbedtls_host
+
 ROOT = Path(__file__).resolve().parents[1]
 BINARY = ROOT / 'build/web-host-test'
 
@@ -21,9 +23,11 @@ def build():
     subprocess.run(['python3', 'tools/embed_file.py', 'build/assets.c',
                     'c4fManifest=client/manifest.webmanifest', 'c4fIcon=client/icon-192.png'], check=True)
     subprocess.run(['clang-18', '-std=gnu11', '-Wall', '-Wextra', '-Werror', '-g',
-                    '-Iinclude', '-Ivendor/jsmn', '-Ivendor/qrcodegen', '-DC4F_STALE_MS=400', '-DC4F_RELEASE_MS=1800',
-                    'src/net.c', 'src/web.c', 'src/klog_line.c', 'vendor/qrcodegen/qrcodegen.c', 'tests/web_stub.c', 'build/client.c',
-                    'build/assets.c', '-pthread', '-o', str(BINARY)], check=True)
+                    '-Iinclude', '-Ivendor/jsmn', '-Ivendor/qrcodegen', '-DC4F_TEST_WEBSOCKET', '-DC4F_STALE_MS=400', '-DC4F_RELEASE_MS=1800', '-DC4F_LATENCY_MS=700',
+                    *mbedtls_host.FLAGS,
+                    'src/net.c', 'src/web.c', 'src/rtc.c', 'src/stun.c', 'src/sctp.c', 'src/klog_line.c',
+                    'vendor/qrcodegen/qrcodegen.c', 'tests/web_stub.c', 'build/client.c',
+                    'build/assets.c', mbedtls_host.library(), '-pthread', '-o', str(BINARY)], check=True)
 
 
 class Client:
@@ -129,8 +133,9 @@ class Server:
             raise AssertionError('server not listening')
 
     def rows(self):
-        self.trace.seek(0)
-        return self.trace.read().splitlines()
+        # Child stdout shares this file offset, so reading must never seek it.
+        fd = self.trace.fileno()
+        return os.pread(fd, os.fstat(fd).st_size, 0).decode(self.trace.encoding).splitlines()
 
     def close(self):
         self.c.close()
@@ -151,8 +156,119 @@ def http(request):
         return b''.join(parts)
 
 
+def check_latency():
+    """Exact page RTT is optional telemetry, bound to a recent owner probe."""
+    server = Server()
+    other = None
+    try:
+        owner = server.c
+        keep_input = True
+
+        def keepalive():
+            if keep_input:
+                owner.input(0); owner.input(1)
+
+        def state():
+            keepalive()
+            response = http(b'GET /api/status HTTP/1.1\r\nHost: 127.0.0.1:4264\r\nX-Control4Free-Launcher: 1\r\n\r\n')
+            return json.loads(response.split(b'\r\n\r\n', 1)[1])
+
+        def echo(client, seq):
+            keepalive()
+            client.frame(json.dumps(dict(method='e', params=[seq, 123])))
+            return client.wait_for(lambda m: m.get('method') == 'e' and m.get('params') == [seq, 123])
+
+        def report(client, seq, rtt):
+            keepalive()
+            client.frame(json.dumps(dict(method='latency', params=[seq, rtt])))
+            client.request('ping')  # a barrier behind the unacknowledged report
+
+        assert owner.request('info')['result']['latency'] is True
+        assert state()['latency'] is True
+        assert all(state()[f'pad{i}User'] == -1 for i in range(4))
+        owner.request('claim', [0, 1])
+        os.write(server.log, b'DEVICE_OWNER_CHANGED [DeviceId:0x11030d][UserId:0x1a2b3c4d]\n'
+                             b'DEVICE_OWNER_CHANGED [DeviceId:0x12030d][UserId:0x1a2b3c4d]\n')
+        end = time.monotonic() + 1
+        while state()['pad0User'] != 0x1a2b3c4d or state()['pad1User'] != 0x1a2b3c4d:
+            assert time.monotonic() < end
+            owner.input(0); owner.input(1); time.sleep(.01)
+        time.sleep(.005)  # the first accepted probe must follow ownership
+        echo(owner, 1); report(owner, 1, 17)
+        snapshot = state()
+        assert snapshot['pad0Rtt'] == snapshot['pad1Rtt'] == 17, snapshot
+        assert 0 <= snapshot['pad0Age'] < 200
+        report(owner, 1, 400)  # one measurement per probe
+        assert state()['pad0Rtt'] == 17
+        other = Client()
+        report(other, 1, 123)  # no probe on this connection
+        echo(other, 1); report(other, 1, 321)
+        assert state()['pad0Rtt'] == 17, 'another connection replaced the owner RTT'
+        for seq, invalid in ((2, -1), (3, 60001)):
+            echo(owner, seq)
+            report(owner, seq, invalid)
+        assert state()['pad0Rtt'] == 17
+        echo(owner, 4); report(owner, 99, 88)
+        assert state()['pad0Rtt'] == 17
+        # Zero is a valid rounded measurement on a fresh increasing probe.
+        echo(owner, 70000); report(owner, 70000, 0)
+        assert state()['pad0Rtt'] == 0
+        echo(owner, 70000); report(owner, 70000, 55)
+        assert state()['pad0Rtt'] == 0, 'a replay reopened a consumed probe'
+        # A delayed report inherits its probe's age; arrival cannot give an
+        # already old measurement a second complete freshness window.
+        echo(owner, 70001)
+        until = time.monotonic() + .4
+        while time.monotonic() < until:
+            owner.input(0); owner.input(1); time.sleep(.05)
+        report(owner, 70001, 19)
+        snapshot = state()
+        assert snapshot['pad0Rtt'] == 19 and snapshot['pad0Age'] >= 350, snapshot
+        until = time.monotonic() + .35
+        while time.monotonic() < until:
+            owner.input(0); owner.input(1); time.sleep(.05)
+        assert state()['pad0Rtt'] == state()['pad0Age'] == -1, 'delayed report renewed an old probe'
+        echo(owner, 70002)
+        until = time.monotonic() + .8
+        while time.monotonic() < until:
+            owner.input(0); owner.input(1); time.sleep(.08)
+        report(owner, 70002, 55)
+        assert state()['pad0User'] == 0x1a2b3c4d
+        assert state()['pad0Rtt'] == state()['pad0Age'] == -1, 'RTT or pending probe did not expire'
+        echo(owner, 70003); report(owner, 70003, 23)
+        assert state()['pad0Rtt'] == 23
+        # RTT messages cannot keep a pad's held input alive.
+        keep_input = False
+        owner.input(0, 0x4000); owner.input(1)
+        until = time.monotonic() + .5
+        seq = 70004
+        while time.monotonic() < until:
+            echo(owner, seq); report(owner, seq, 23); seq += 1
+            time.sleep(.07)
+        assert state()['pad0User'] == state()['pad0Rtt'] == -1
+        owner.input(0); owner.input(1); owner.request('ping')
+        assert state()['pad0Rtt'] == -1, 'pre-stale measurement revived after fresh input'
+        time.sleep(.005)
+        echo(owner, seq); report(owner, seq, 31); seq += 1
+        assert state()['pad0Rtt'] == 31
+        owner.close()
+        owner = server.c = Client()
+        owner.request('claim', [0, 1]); owner.input(0); owner.input(1); owner.request('ping')
+        assert state()['pad0Rtt'] == -1, 'reclaimed owner inherited the previous connection RTT'
+        # The new connection may restart its sequence at one.
+        time.sleep(.005)
+        echo(owner, 1); report(owner, 1, 42)
+        assert state()['pad0Rtt'] == 42
+        print('PASS controller-page RTT: capability, exact values, owner isolation, duplicate/range checks, expiry, stale/reclaim reset and unchanged input lease', flush=True)
+    finally:
+        if other:
+            other.close()
+        server.close()
+
+
 def main():
     build()
+    check_latency()
     server = Server()
     try:
         response = http(b'GET / HTTP/1.1\r\nHost: 127.0.0.1:4264\r\n\r\n')
@@ -441,7 +557,7 @@ def main():
     try:
         c = server.c
         info = c.request('info')['result']
-        assert info['motion'] is True and info['protocol'] == 2, info
+        assert info['motion'] is True and info['input'] is True and info['protocol'] == 3, info
         assert c.request('claim', [0])['result']['pads'][0]['mine']
         c.input(0)
         time.sleep(.05)
@@ -470,12 +586,15 @@ def main():
         row = motion_row(lambda r: r[15] == '0.199')
         assert row[3] == '8192', row
         assert len(motion_rows()) - start < 100, f'{len(motion_rows()) - start} reports for 200 motion messages'
-        # Idle: neutral and still. Motion counts as input and wakes it.
+        # Idle: neutral and still. Motion cannot revive an old button lease.
         time.sleep(.6)
         assert c.request('status')['result']['pads'][0]['state'] == 'paused'
         assert motion_rows()[-1][11:21] == still, motion_rows()[-1]
         motion(c, [0, 0, 0, 0, 10000, 0, 1000, 0, 0, 0, 0])
         time.sleep(.05)
+        assert c.request('status')['result']['pads'][0]['state'] == 'paused'
+        c.input(0)
+        time.sleep(.03)
         assert c.request('status')['result']['pads'][0]['state'] != 'paused'
         # A new owner starts still.
         c.close()

@@ -48,6 +48,26 @@ for (let byte = 0; byte <= 255; byte++) {
   const result = M.toSource(M.fromSource(original));
   assert.equal(result.lx, byte); assert.equal(result.l2, byte);
 }
+// HID reports carry independent digital trigger flags and pressure bytes. A
+// pressed flag must not turn a partial analog pull into full pressure.
+for (let byte = 0; byte <= 255; byte++) {
+  const hid = { buttons: B.L2 | B.R2, lx: 128, ly: 128, rx: 128, ry: 128, l2: byte, r2: 255 - byte };
+  const result = M.toSource(M.fromSource(hid, true));
+  assert.equal(result.l2, byte, 'HID L2 pressure with its digital flag set');
+  assert.equal(result.r2, 255 - byte, 'HID R2 pressure with its digital flag set');
+  assert.equal(result.buttons, B.L2 | B.R2, 'HID digital flags remain independent');
+}
+const triggerSource = { buttons: B.L2 | B.R2, lx: 128, ly: 128, rx: 128, ry: 128, l2: 64, r2: 160 };
+const digitalTriggers = M.toSource(M.fromSource({ ...triggerSource, l2: 0, r2: 0 }));
+assert.equal(digitalTriggers.l2, 255, 'touch and keyboard L2 stay digital');
+assert.equal(digitalTriggers.r2, 255, 'touch and keyboard R2 stay digital');
+const triggerMerge = M.toSource(M.merge([M.fromSource(triggerSource, true),
+  M.fromSource({ ...triggerSource, l2: 192, r2: 32 }, true)]));
+assert.equal(triggerMerge.l2, 192); assert.equal(triggerMerge.r2, 160);
+const mixedTrigger = M.toSource(M.merge([M.fromSource(triggerSource, true),
+  M.fromSource({ ...triggerSource, buttons: B.L2, l2: 0, r2: 0 })]));
+assert.equal(mixedTrigger.l2, 255); assert.equal(mixedTrigger.r2, 160);
+console.log('PASS HID trigger pressure with digital flags, digital touch/keys and mixed-source maximum');
 
 p = fresh(); p.calibration = { 0: { type: 'center', min: -.8, center: .2, max: .9 },
   1: { type: 'pedal', released: -1, full: 1 }, 2: { type: 'pedal', released: 1, full: -1 } };

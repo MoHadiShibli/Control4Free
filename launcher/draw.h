@@ -70,4 +70,8 @@ float c4fTextWidth(int font, float size, const char *text);
 int c4fTextWrapped(C4fCanvas *c, int font, float size, float x, float y, float maxWidth,
                    float lineHeight, int maxLines, C4fColor color, const char *text);
 
+/* Corner label and two equally sized vector flags; paint into static layers.
+ * `right` is the right edge, `top` the top of the 60 x 30 pixel flags. */
+void c4fDrawSolidarityBadge(C4fCanvas *c, int right, int top);
+
 #endif

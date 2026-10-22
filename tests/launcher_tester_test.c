@@ -15,7 +15,7 @@
 typedef struct {
     int32_t user;
     int handle, owned, openError, readError, connected;
-    int opens, closes, reads, motionOn, lightResets, orientationResets, vibrations;
+    int opens, closes, reads, motionOn, lightResets, orientationResets, vibrations, lightCalls, lightError;
     int vibrating, large, small, lit;
     uint8_t rgb[3];
     C4fTesterSample sample;
@@ -96,6 +96,8 @@ static int fakeVibrate(void *context, int handle, uint8_t large, uint8_t small)
 static int fakeLight(void *context, int handle, uint8_t r, uint8_t g, uint8_t b)
 {
     FakePad *p = byHandle(context, handle);
+    p->lightCalls++;
+    if (p->lightError) return p->lightError;
     p->lit = 1;
     p->rgb[0] = r; p->rgb[1] = g; p->rgb[2] = b;
     return 0;
@@ -151,6 +153,13 @@ static int frame(Fake *f, C4fTester *t, uint64_t now, uint32_t held, uint32_t re
     return c4fTesterFrame(t, now, remote);
 }
 
+static int tap(Fake *f, C4fTester *t, uint64_t *now, uint32_t button)
+{
+    int active = frame(f, t, *now += 10, button, 0);
+    if (active) frame(f, t, *now += 10, 0, 0);
+    return active;
+}
+
 static void holdTiming(void)
 {
     C4fTesterHold hold = { 0 };
@@ -182,6 +191,8 @@ static void readsUsers(void)
     c4fTesterView(&t, &v);
     assert(v.active && !v.menu && v.selected == 0);
     assert(v.user[0].used && v.user[1].used && !v.user[2].used);
+    assert(v.user[0].id == 1 && v.user[1].id == 2 && v.user[2].id == -1 && v.user[3].id == -1);
+    assert(v.user[v.selected].id == 1);
     assert(!strcmp(v.user[0].name, "Alex") && !strcmp(v.user[1].name, "Sam?"));
     assert(v.user[0].state == C4F_TESTER_READY && v.user[1].state == C4F_TESTER_READY);
     assert(v.buttons == C4F_INPUT_BUTTON_CROSS && v.lx == 12 && v.l2 == 200);
@@ -189,6 +200,10 @@ static void readsUsers(void)
     assert(v.accel[1] == 99 && v.gyro[0] == -123 && v.quat[3] == 500 && v.quat[0] == 0);
     /* The Cross held when reading started is shown, but is not a press. */
     assert(t.readers[0].pressed == 0);
+    t.selected = 1;
+    c4fTesterView(&t, &v);
+    assert(v.selected == 1 && v.user[v.selected].id == 2);
+    t.selected = 0;
     frame(&f, &t, 1010, C4F_INPUT_BUTTON_CROSS | C4F_INPUT_BUTTON_CIRCLE, 0);
     assert(t.readers[0].pressed == C4F_INPUT_BUTTON_CIRCLE && t.active && !t.menu);
 
@@ -197,10 +212,21 @@ static void readsUsers(void)
     frame(&f, &t, 2010, 0, 0);
     c4fTesterView(&t, &v);
     assert(!strcmp(v.user[2].name, "User 3"));
+    assert(v.user[2].id == 3);
     c4fTesterClose(&t);
     assert(!t.active && f.pads[0].closes == 0 && f.pads[1].closes == 1 && f.pads[2].closes == 1);
     c4fTesterView(&t, &v);
     assert(!v.active);
+    for (int s = 0; s < C4F_TESTER_USERS; s++) assert(!v.user[s].used && v.user[s].id == -1);
+
+    setup(&f, &t);
+    f.count = 0;
+    c4fTesterOpen(&t, 0);
+    frame(&f, &t, 0, 0, 0);
+    c4fTesterView(&t, &v);
+    assert(v.active && v.selected == -1);
+    for (int s = 0; s < C4F_TESTER_USERS; s++) assert(!v.user[s].used && v.user[s].id == -1);
+    c4fTesterClose(&t);
     puts("PASS readers for every signed-in user, borrowed handle kept, values in display units");
 }
 
@@ -225,59 +251,48 @@ static void menuActions(void)
     static C4fTester t;
     setup(&f, &t);
     uint64_t now = openMenu(&f, &t);
-    /* Presses while the opening keys are still down count for nothing. */
-    frame(&f, &t, now + 10, STICKS | C4F_INPUT_BUTTON_DOWN, 0);
-    frame(&f, &t, now + 20, STICKS | C4F_INPUT_BUTTON_DOWN | C4F_INPUT_BUTTON_CROSS, 0);
-    assert(t.menu && !t.armed && t.focus == C4F_TESTER_RESUME);
-    frame(&f, &t, now + 30, 0, 0);
+    frame(&f, &t, now += 10, 0, 0);
     assert(t.armed);
-    frame(&f, &t, now + 40, C4F_INPUT_BUTTON_DOWN, 0);
-    frame(&f, &t, now + 50, 0, 0);
-    frame(&f, &t, now + 60, C4F_INPUT_BUTTON_DOWN, 0);
-    frame(&f, &t, now + 70, 0, 0);
+    tap(&f, &t, &now, C4F_INPUT_BUTTON_DOWN);
     assert(t.focus == C4F_TESTER_RUMBLE_LARGE);
-    frame(&f, &t, now + 80, C4F_INPUT_BUTTON_CROSS, 0);
+    tap(&f, &t, &now, C4F_INPUT_BUTTON_CROSS);
     assert(f.pads[0].vibrating && f.pads[0].large == 255 && f.pads[0].small == 0);
     C4fTesterView v;
     c4fTesterView(&t, &v);
     assert(v.rumble == 1 && strstr(v.note, "Large motor"));
-    frame(&f, &t, now + 1079, 0, 0);
+    now = t.rumbleUntil - 1;
+    frame(&f, &t, now, 0, 0);
     assert(f.pads[0].vibrating);
-    frame(&f, &t, now + 1080, 0, 0);
+    frame(&f, &t, ++now, 0, 0);
     assert(!f.pads[0].vibrating && !t.rumble);
 
     /* Small motor, then the light bar and orientation. */
-    frame(&f, &t, now + 1100, C4F_INPUT_BUTTON_DOWN, 0);
-    frame(&f, &t, now + 1105, 0, 0);
-    /* A move and a select arriving together only move. */
-    frame(&f, &t, now + 1110, C4F_INPUT_BUTTON_DOWN | C4F_INPUT_BUTTON_CROSS, 0);
-    assert(t.focus == C4F_TESTER_LIGHT_RED && !f.pads[0].vibrating && !f.pads[0].lit);
-    frame(&f, &t, now + 1115, 0, 0);
-    frame(&f, &t, now + 1120, C4F_INPUT_BUTTON_UP, 0);
-    frame(&f, &t, now + 1125, 0, 0);
+    tap(&f, &t, &now, C4F_INPUT_BUTTON_RIGHT);
     assert(t.focus == C4F_TESTER_RUMBLE_SMALL);
-    frame(&f, &t, now + 1130, C4F_INPUT_BUTTON_CROSS, 0);
-    assert(f.pads[0].vibrating && f.pads[0].small == 255 && f.pads[0].large == 0);
-    frame(&f, &t, now + 1140, C4F_INPUT_BUTTON_DOWN, 0);
-    frame(&f, &t, now + 1150, 0, 0);
-    frame(&f, &t, now + 1160, C4F_INPUT_BUTTON_CROSS, 0);
-    assert(f.pads[0].lit && f.pads[0].rgb[0] == 255 && f.pads[0].rgb[1] == 0);
+    tap(&f, &t, &now, C4F_INPUT_BUTTON_CROSS);
+    assert(f.pads[0].vibrating && f.pads[0].large == 0 && f.pads[0].small == 255);
+    /* A move and a select arriving together only move. */
+    frame(&f, &t, now += 10, C4F_INPUT_BUTTON_DOWN | C4F_INPUT_BUTTON_CROSS, 0);
+    assert(t.active && t.focus == C4F_TESTER_USER && !f.pads[0].lit);
+    frame(&f, &t, now += 10, 0, 0);
+    tap(&f, &t, &now, C4F_INPUT_BUTTON_RIGHT);
+    tap(&f, &t, &now, C4F_INPUT_BUTTON_RIGHT);
+    assert(t.focus == C4F_TESTER_LIGHT_COLOR);
+    tap(&f, &t, &now, C4F_INPUT_BUTTON_CROSS);
+    assert(t.colorMenu && f.pads[0].lit && f.pads[0].rgb[0] == 255 && f.pads[0].rgb[1] == 255);
     c4fTesterView(&t, &v);
     assert(v.lightSet && v.light[0] == 255);
-    for (int i = 0; i < 4; i++) {
-        frame(&f, &t, now + 1170 + i * 20, C4F_INPUT_BUTTON_DOWN, 0);
-        frame(&f, &t, now + 1180 + i * 20, 0, 0);
-    }
+    tap(&f, &t, &now, C4F_INPUT_BUTTON_CIRCLE);
+    tap(&f, &t, &now, C4F_INPUT_BUTTON_LEFT);
     assert(t.focus == C4F_TESTER_ORIENTATION);
-    frame(&f, &t, now + 1300, C4F_INPUT_BUTTON_CROSS, 0);
+    tap(&f, &t, &now, C4F_INPUT_BUTTON_CROSS);
     assert(f.pads[0].orientationResets == 1);
 
     /* Back to the launcher leaves and cleans up. */
-    frame(&f, &t, now + 1310, 0, 0);
-    frame(&f, &t, now + 1320, C4F_INPUT_BUTTON_DOWN, 0);
-    frame(&f, &t, now + 1330, 0, 0);
+    tap(&f, &t, &now, C4F_INPUT_BUTTON_RIGHT);
+    tap(&f, &t, &now, C4F_INPUT_BUTTON_DOWN);
     assert(t.focus == C4F_TESTER_EXIT);
-    assert(!frame(&f, &t, now + 1340, C4F_INPUT_BUTTON_CROSS, 0));
+    assert(!tap(&f, &t, &now, C4F_INPUT_BUTTON_CROSS));
     assert(!t.active);
     assert(f.pads[0].lightResets == 1 && !f.pads[0].lit && !f.pads[0].vibrating);
     assert(f.pads[0].closes == 0 && f.pads[1].closes == 1);
@@ -290,34 +305,285 @@ static void switchUsers(void)
     static C4fTester t;
     setup(&f, &t);
     uint64_t now = openMenu(&f, &t);
-    frame(&f, &t, now + 10, 0, 0);
-    frame(&f, &t, now + 20, C4F_INPUT_BUTTON_DOWN, 0);
-    frame(&f, &t, now + 30, 0, 0);
+    frame(&f, &t, now += 10, 0, 0);
+    tap(&f, &t, &now, C4F_INPUT_BUTTON_RIGHT);
     assert(t.focus == C4F_TESTER_USER);
-    frame(&f, &t, now + 40, C4F_INPUT_BUTTON_RIGHT, 0);
+    tap(&f, &t, &now, C4F_INPUT_BUTTON_CROSS);
     assert(t.selected == 1);
-    frame(&f, &t, now + 50, 0, 0);
-    frame(&f, &t, now + 60, C4F_INPUT_BUTTON_RIGHT, 0);
+    tap(&f, &t, &now, C4F_INPUT_BUTTON_CROSS);
     assert(t.selected == 0);
-    frame(&f, &t, now + 70, 0, 0);
     /* The second user's own controller drives the menu as well. */
-    f.pads[1].sample.buttons = C4F_INPUT_BUTTON_LEFT;
-    frame(&f, &t, now + 80, 0, 0);
+    f.pads[1].sample.buttons = C4F_INPUT_BUTTON_CROSS;
+    frame(&f, &t, now += 10, 0, 0);
     assert(t.selected == 1);
     f.pads[1].sample.buttons = 0;
-    frame(&f, &t, now + 90, 0, 0);
+    frame(&f, &t, now += 10, 0, 0);
     /* Rumble goes to the selected user's controller. */
-    frame(&f, &t, now + 100, C4F_INPUT_BUTTON_DOWN, 0);
-    frame(&f, &t, now + 110, 0, 0);
-    frame(&f, &t, now + 120, C4F_INPUT_BUTTON_CROSS, 0);
+    tap(&f, &t, &now, C4F_INPUT_BUTTON_DOWN);
+    tap(&f, &t, &now, C4F_INPUT_BUTTON_LEFT);
+    tap(&f, &t, &now, C4F_INPUT_BUTTON_CROSS);
     assert(f.pads[1].vibrating && !f.pads[0].vibrating);
     /* Back closes the menu; the test stays open. */
-    frame(&f, &t, now + 130, 0, 0);
-    frame(&f, &t, now + 140, C4F_INPUT_BUTTON_CIRCLE, 0);
+    tap(&f, &t, &now, C4F_INPUT_BUTTON_CIRCLE);
     assert(t.active && !t.menu);
     c4fTesterClose(&t);
     assert(!f.pads[1].vibrating && f.pads[1].closes == 1);
     puts("PASS user choice from either controller, output to the chosen user, Back resumes testing");
+}
+
+static void menuOpeningSafety(void)
+{
+    Fake f;
+    static C4fTester t;
+    setup(&f, &t);
+    /* Another controller held Down before the menu opened. It must neither
+     * scroll by itself nor prevent fresh input on the opening controller. */
+    f.pads[1].sample.buttons = C4F_INPUT_BUTTON_DOWN;
+    uint64_t now = openMenu(&f, &t);
+    frame(&f, &t, now + 10, STICKS | C4F_INPUT_BUTTON_RIGHT, 0);
+    assert(!t.armed && t.focus == C4F_TESTER_USER);
+    frame(&f, &t, now + 20, STICKS | C4F_INPUT_BUTTON_RIGHT | C4F_INPUT_BUTTON_CROSS, 0);
+    assert(t.selected == 0 && t.menu);
+    /* Releasing the opener arms activation even though Cross and another
+     * controller's Down remain held. The old Cross still is not a fresh click. */
+    frame(&f, &t, now + 30, C4F_INPUT_BUTTON_CROSS, 0);
+    assert(t.armed && t.selected == 0);
+    frame(&f, &t, now + 40, C4F_INPUT_BUTTON_CROSS, 0);
+    assert(t.selected == 0);
+    frame(&f, &t, now + 50, 0, 0);
+    frame(&f, &t, now + 60, C4F_INPUT_BUTTON_CROSS, 0);
+    assert(t.selected == 1 && t.focus == C4F_TESTER_USER);
+    frame(&f, &t, now + 1000, C4F_INPUT_BUTTON_CROSS, 0);
+    assert(t.selected == 1 && t.focus == C4F_TESTER_USER);
+    c4fTesterClose(&t);
+
+    setup(&f, &t);
+    now = openMenu(&f, &t);
+    /* No neutral frame is required between the opening gesture and a new
+     * direction: release L3/R3 and press Down in the same sample. */
+    frame(&f, &t, now + 10, C4F_INPUT_BUTTON_DOWN, 0);
+    assert(t.armed && t.focus == C4F_TESTER_RUMBLE_LARGE);
+    frame(&f, &t, now + 20, 0, 0);
+    frame(&f, &t, now + 30, C4F_INPUT_BUTTON_CROSS, 0);
+    assert(f.pads[0].vibrating);
+    c4fTesterClose(&t);
+
+    setup(&f, &t);
+    f.pads[1].sample.buttons = STICKS;
+    now = openMenu(&f, &t);
+    frame(&f, &t, now + 10, C4F_INPUT_BUTTON_RIGHT, 0);
+    assert(t.armed && t.focus == C4F_TESTER_USER); /* unrelated held sticks do not block */
+    frame(&f, &t, now + 20, C4F_INPUT_BUTTON_CROSS, 0);
+    assert(t.selected == 1);
+    c4fTesterClose(&t);
+
+    setup(&f, &t);
+    c4fTesterOpen(&t, 0);
+    frame(&f, &t, 0, 0, 0);
+    frame(&f, &t, 100, STICKS, 0);
+    f.pads[1].sample.buttons = STICKS;
+    frame(&f, &t, 1000, 0, 0);
+    frame(&f, &t, 2100, 0, 0);
+    assert(!t.menu); /* a different reader cannot inherit elapsed hold time */
+    frame(&f, &t, 2999, 0, 0);
+    assert(!t.menu);
+    frame(&f, &t, 3000, 0, 0);
+    assert(t.menu && t.menuOpeners == (1u << 1));
+    c4fTesterClose(&t);
+    puts("PASS menu release gate belongs only to its opener; fresh navigation survives; held activation never replays");
+}
+
+static void gridNavigationAndRepeat(void)
+{
+    Fake f;
+    static C4fTester t;
+    setup(&f, &t);
+    uint64_t now = openMenu(&f, &t);
+    assert(C4F_TESTER_MENU_COLUMNS == 4 && C4F_TESTER_MENU_ROWS == 2);
+    frame(&f, &t, now + 10, 0, 0);
+    frame(&f, &t, now + 20, C4F_INPUT_BUTTON_RIGHT, 0);
+    assert(t.focus == C4F_TESTER_USER);
+    frame(&f, &t, now + 369, C4F_INPUT_BUTTON_RIGHT, 0);
+    assert(t.focus == C4F_TESTER_USER);
+    frame(&f, &t, now + 370, C4F_INPUT_BUTTON_RIGHT, 0);
+    assert(t.focus == C4F_TESTER_ORIENTATION);
+    frame(&f, &t, now + 469, C4F_INPUT_BUTTON_RIGHT, 0);
+    assert(t.focus == C4F_TESTER_ORIENTATION);
+    frame(&f, &t, now + 470, C4F_INPUT_BUTTON_RIGHT, 0);
+    assert(t.focus == C4F_TESTER_LIGHT_COLOR);
+    frame(&f, &t, now + 570, C4F_INPUT_BUTTON_RIGHT, 0);
+    assert(t.focus == C4F_TESTER_RESUME);
+    frame(&f, &t, now + 670, C4F_INPUT_BUTTON_RIGHT, 0);
+    assert(t.focus == C4F_TESTER_USER); /* held Right wraps within its row */
+    frame(&f, &t, now + 680, 0, 0);
+    frame(&f, &t, now + 690, C4F_INPUT_BUTTON_DOWN, 0);
+    assert(t.focus == C4F_TESTER_RUMBLE_SMALL);
+    frame(&f, &t, now + 1040, C4F_INPUT_BUTTON_DOWN, 0);
+    assert(t.focus == C4F_TESTER_USER); /* held Down wraps within its column */
+    frame(&f, &t, now + 1050, C4F_INPUT_BUTTON_LEFT, 0);
+    assert(t.focus == C4F_TESTER_RESUME); /* direction change moves immediately */
+    frame(&f, &t, now + 1060, C4F_INPUT_BUTTON_UP | C4F_INPUT_BUTTON_DOWN, 0);
+    assert(t.focus == C4F_TESTER_RESUME);
+    frame(&f, &t, now + 1070, C4F_INPUT_BUTTON_UP, 0);
+    assert(t.focus == C4F_TESTER_RESUME); /* old held half is not a fresh press */
+    frame(&f, &t, now + 1080, 0, 0);
+    frame(&f, &t, now + 1090, C4F_INPUT_BUTTON_UP, 0);
+    assert(t.focus == C4F_TESTER_RUMBLE_LARGE); /* top wraps to the bottom of its column */
+    frame(&f, &t, now + 1100, 0, 0);
+    frame(&f, &t, now + 1110, C4F_INPUT_BUTTON_UP, 0);
+    assert(t.focus == C4F_TESTER_RESUME);
+    now += 1120;
+    frame(&f, &t, now, 0, 0);
+    for (int i = 0; i < 4; i++) tap(&f, &t, &now, C4F_INPUT_BUTTON_LEFT);
+    assert(t.focus == C4F_TESTER_RESUME);
+    tap(&f, &t, &now, C4F_INPUT_BUTTON_LEFT);
+    assert(t.focus == C4F_TESTER_LIGHT_COLOR); /* first column wraps to last */
+
+    /* Every tile has the same spatial neighbors for a controller tap and a
+     * fresh HDMI-CEC direction. Row ends wrap within the row, never snake. */
+    static const uint32_t directions[] = { C4F_INPUT_BUTTON_UP, C4F_INPUT_BUTTON_DOWN,
+                                          C4F_INPUT_BUTTON_LEFT, C4F_INPUT_BUTTON_RIGHT };
+    static const int neighbors[C4F_TESTER_ITEMS][4] = {
+        { 4, 4, 3, 1 }, { 5, 5, 0, 2 }, { 6, 6, 1, 3 }, { 7, 7, 2, 0 },
+        { 0, 0, 7, 5 }, { 1, 1, 4, 6 }, { 2, 2, 5, 7 }, { 3, 3, 6, 4 }
+    };
+    for (int item = 0; item < C4F_TESTER_ITEMS; item++) {
+        for (int direction = 0; direction < 4; direction++) {
+            t.focus = item;
+            tap(&f, &t, &now, directions[direction]);
+            assert(t.focus == neighbors[item][direction]);
+            t.focus = item;
+            frame(&f, &t, now += 10, 0, directions[direction]);
+            assert(t.focus == neighbors[item][direction]);
+            frame(&f, &t, now += 10, 0, 0);
+            assert(t.focus == neighbors[item][direction]);
+        }
+    }
+    c4fTesterSuspend(&t, now + 1000);
+    assert(!t.menu && !t.menuOpeners);
+    for (int s = 0; s < C4F_TESTER_USERS; s++) assert(!t.readers[s].repeatDirection && !t.readers[s].repeatAt);
+    c4fTesterClose(&t);
+    puts("PASS 4-by-2 spatial wrap for controller/TV remote, immediate taps, 350/100 ms hold repeat and reset on focus loss");
+}
+
+static void colorPicker(void)
+{
+    Fake f;
+    static C4fTester t;
+    setup(&f, &t);
+    uint64_t now = openMenu(&f, &t);
+    frame(&f, &t, now += 10, 0, 0);
+    t.focus = C4F_TESTER_LIGHT_COLOR;
+    frame(&f, &t, now += 10, C4F_INPUT_BUTTON_CROSS, 0);
+    assert(t.colorMenu && !t.colorFine && f.pads[0].lit);
+    assert(f.pads[0].rgb[0] == 255 && f.pads[0].rgb[1] == 255 && f.pads[0].rgb[2] == 255);
+    frame(&f, &t, now += 500, C4F_INPUT_BUTTON_CROSS, 0);
+    assert(!t.colorFine); /* The opening Cross is not also a precision toggle. */
+    frame(&f, &t, now += 10, 0, 0);
+    for (int i = 0; i < 18; i++) frame(&f, &t, now += 10, 0, C4F_INPUT_BUTTON_LEFT);
+    assert(f.pads[0].rgb[0] == 0 && f.pads[0].rgb[1] == 255 && f.pads[0].rgb[2] == 255);
+    frame(&f, &t, now += 10, 0, C4F_INPUT_BUTTON_CROSS);
+    assert(t.colorFine);
+    /* Every exact byte value can be selected by the TV remote, without a mouse. */
+    for (int value = 1; value <= 255; value++) {
+        frame(&f, &t, now += 10, 0, C4F_INPUT_BUTTON_RIGHT);
+        assert(f.pads[0].rgb[0] == value);
+    }
+    frame(&f, &t, now += 10, 0, C4F_INPUT_BUTTON_RIGHT);
+    assert(f.pads[0].rgb[0] == 255); /* clamp, never wrap */
+    frame(&f, &t, now += 10, 0, C4F_INPUT_BUTTON_DOWN);
+    assert(t.colorChannel == 1);
+    for (int i = 0; i < 10; i++) frame(&f, &t, now += 10, 0, C4F_INPUT_BUTTON_LEFT);
+    assert(f.pads[0].rgb[1] == 245 && f.pads[0].rgb[0] == 255);
+    frame(&f, &t, now += 10, 0, C4F_INPUT_BUTTON_DOWN);
+    assert(t.colorChannel == 2);
+    for (int i = 0; i < 255; i++) frame(&f, &t, now += 10, 0, C4F_INPUT_BUTTON_LEFT);
+    assert(f.pads[0].rgb[2] == 0 && !f.pads[1].lit);
+    C4fTesterView v;
+    c4fTesterView(&t, &v);
+    assert(v.colorMenu && v.colorChannel == 2 && v.colorFine && v.lightSet);
+    assert(v.light[0] == 255 && v.light[1] == 245 && v.light[2] == 0);
+    frame(&f, &t, now += 10, 0, C4F_INPUT_BUTTON_CIRCLE);
+    assert(t.menu && !t.colorMenu && f.pads[0].lit);
+    frame(&f, &t, now += 10, 0, C4F_INPUT_BUTTON_CROSS);
+    assert(t.colorMenu && t.colorChannel == 2 && f.pads[0].rgb[1] == 245);
+    /* Hardware refusal never fabricates a successful preview or stored value. */
+    f.pads[0].lightError = -5;
+    frame(&f, &t, now += 10, 0, C4F_INPUT_BUTTON_RIGHT);
+    assert(f.pads[0].rgb[2] == 0 && t.readers[0].light[2] == 0 && strstr(t.note, "refused"));
+    f.pads[0].lightError = 0;
+    frame(&f, &t, now += 10, 0, C4F_INPUT_BUTTON_RIGHT);
+    assert(f.pads[0].rgb[2] == 1 && !t.note[0]);
+    /* Held controller input keeps its normal repeat timing in the picker. */
+    frame(&f, &t, now += 10, C4F_INPUT_BUTTON_RIGHT, 0);
+    assert(f.pads[0].rgb[2] == 2);
+    frame(&f, &t, now += 349, C4F_INPUT_BUTTON_RIGHT, 0);
+    assert(f.pads[0].rgb[2] == 2);
+    frame(&f, &t, ++now, C4F_INPUT_BUTTON_RIGHT, 0);
+    assert(f.pads[0].rgb[2] == 3);
+    frame(&f, &t, now += 10, 0, 0);
+    frame(&f, &t, now += 10, 0, C4F_INPUT_BUTTON_CIRCLE);
+    t.focus = C4F_TESTER_LIGHT_RESET;
+    frame(&f, &t, now += 10, 0, C4F_INPUT_BUTTON_CROSS);
+    assert(!t.readers[0].lightSet && !f.pads[0].lit);
+    t.selected = 1;
+    t.focus = C4F_TESTER_LIGHT_COLOR;
+    frame(&f, &t, now += 10, 0, C4F_INPUT_BUTTON_CROSS);
+    assert(t.colorMenu && f.pads[1].lit && !f.pads[0].lit);
+    f.count = 1;
+    frame(&f, &t, now = t.usersAt, 0, 0);
+    assert(!t.colorMenu && !f.pads[1].lit && t.readers[1].state == C4F_TESTER_SIGNED_OUT);
+    c4fTesterClose(&t);
+
+    setup(&f, &t);
+    now = openMenu(&f, &t);
+    frame(&f, &t, now += 10, 0, 0);
+    t.focus = C4F_TESTER_LIGHT_COLOR;
+    f.pads[0].lightError = -5;
+    tap(&f, &t, &now, C4F_INPUT_BUTTON_CROSS);
+    assert(!t.colorMenu && !t.readers[0].lightSet && !f.pads[0].lit);
+    f.pads[0].lightError = 0;
+    tap(&f, &t, &now, C4F_INPUT_BUTTON_CROSS);
+    f.pads[0].connected = 0;
+    frame(&f, &t, now += 10, 0, 0);
+    assert(!t.colorMenu && !f.pads[0].lit && !t.readers[0].lightSet);
+    c4fTesterClose(&t);
+    puts("PASS RGB picker: all byte strengths, coarse/fine, controller repeat, remote control, selected user, refusal and cleanup");
+}
+
+static void menuAvailability(void)
+{
+    Fake f;
+    static C4fTester t;
+    setup(&f, &t);
+    f.count = 1;
+    c4fTesterOpen(&t, 0);
+    frame(&f, &t, 0, 0, 0);
+    C4fTesterView view;
+    c4fTesterView(&t, &view);
+    assert(c4fTesterItemAvailable(&view, C4F_TESTER_RESUME));
+    assert(c4fTesterItemAvailable(&view, C4F_TESTER_EXIT));
+    assert(!c4fTesterItemAvailable(&view, C4F_TESTER_USER));
+    assert(c4fTesterItemAvailable(&view, C4F_TESTER_ORIENTATION));
+    t.menu = t.armed = 1; t.focus = C4F_TESTER_USER;
+    frame(&f, &t, 10, C4F_INPUT_BUTTON_CROSS, 0);
+    assert(t.selected == 0 && strstr(t.note, "No other user"));
+    frame(&f, &t, 20, 0, 0);
+    f.pads[0].connected = 0;
+    frame(&f, &t, 30, 0, 0);
+    c4fTesterView(&t, &view);
+    assert(!c4fTesterItemAvailable(&view, C4F_TESTER_RUMBLE_LARGE));
+    assert(!c4fTesterItemAvailable(&view, C4F_TESTER_LIGHT_COLOR));
+    assert(c4fTesterItemAvailable(&view, C4F_TESTER_RESUME));
+    assert(c4fTesterItemAvailable(&view, C4F_TESTER_EXIT));
+    /* A signed-out user may stay selected for its status screen. The one
+     * remaining signed-in user must still be available as a switch target. */
+    view.user[0].state = C4F_TESTER_SIGNED_OUT;
+    view.user[1].used = 1;
+    view.user[1].state = C4F_TESTER_READY;
+    assert(c4fTesterItemAvailable(&view, C4F_TESTER_USER));
+    c4fTesterClose(&t);
+    puts("PASS menu availability matches activation: user count, disconnected hardware tools, Resume and Exit");
 }
 
 static void failures(void)
@@ -384,15 +650,20 @@ static void logout(void)
     C4fTesterView v;
     c4fTesterView(&t, &v);
     assert(v.user[1].used && v.user[1].state == C4F_TESTER_SIGNED_OUT);
+    assert(v.user[v.selected].id == 2);
     /* Signs in again: read again. */
     f.count = 3; f.users[1] = 2; f.users[2] = 3;
     frame(&f, &t, 2000, 0, 0);
     frame(&f, &t, 2001, 0, 0);
     assert(t.readers[1].state == C4F_TESTER_READY && f.pads[1].opens == 2);
+    c4fTesterView(&t, &v);
+    assert(v.user[v.selected].id == 2);
     /* A user not on screen signs out: dropped at once. */
     f.count = 2;
     frame(&f, &t, 3000, 0, 0);
     assert(t.readers[2].user < 0 && f.pads[2].closes == 1);
+    c4fTesterView(&t, &v);
+    assert(!v.user[2].used && v.user[2].id == -1);
     /* A failed user list keeps what is known. */
     f.listError = -1;
     frame(&f, &t, 4000, 0, 0);
@@ -413,7 +684,7 @@ static void remoteAndSuspend(void)
     assert(t.menu);
     frame(&f, &t, 20, 0, 0);
     assert(t.armed);
-    frame(&f, &t, 30, 0, C4F_INPUT_BUTTON_DOWN);
+    frame(&f, &t, 30, 0, C4F_INPUT_BUTTON_RIGHT);
     assert(t.focus == C4F_TESTER_USER);
     frame(&f, &t, 40, 0, C4F_INPUT_BUTTON_CIRCLE);
     assert(t.active && !t.menu);
@@ -425,7 +696,7 @@ static void remoteAndSuspend(void)
     t.focus = C4F_TESTER_RUMBLE_LARGE;
     frame(&f, &t, 60, 0, 0);
     frame(&f, &t, 70, C4F_INPUT_BUTTON_CROSS, 0);
-    t.focus = C4F_TESTER_LIGHT_BLUE;
+    t.focus = C4F_TESTER_LIGHT_COLOR;
     frame(&f, &t, 80, 0, 0);
     frame(&f, &t, 90, C4F_INPUT_BUTTON_CROSS, 0);
     assert(f.pads[0].vibrating && f.pads[0].lit && f.pads[0].rgb[2] == 255);
@@ -476,6 +747,10 @@ int main(void)
     readsUsers();
     menuActions();
     switchUsers();
+    menuOpeningSafety();
+    gridNavigationAndRepeat();
+    colorPicker();
+    menuAvailability();
     failures();
     logout();
     remoteAndSuspend();

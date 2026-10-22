@@ -45,8 +45,40 @@ def one_reply(address, reply, check=None):
     return thread
 
 
+def check_latency_status():
+    def probe(body):
+        raw = body if isinstance(body, bytes) else json.dumps(body, separators=(',', ':')).encode()
+        thread = one_reply('127.0.0.1', b'HTTP/1.1 200 OK\r\nContent-Length: %d\r\nConnection: close\r\n\r\n' % len(raw) + raw)
+        result = command('latency')
+        thread.join(timeout=3)
+        assert not thread.is_alive()
+        return result
+
+    assert probe(STATUS).startswith('1 0 '), 'old services must still be recognized'
+    state = dict(json.loads(STATUS), latency=True)
+    for slot, (user, rtt, age) in enumerate(((0x1A2B3C4D, 8, 12), (0x1A2B3C4D, 11, 0),
+                                             (0x7FFFFFFE, -1, -1), (-1, -1, -1))):
+        state.update({f'pad{slot}User': user, f'pad{slot}Rtt': rtt, f'pad{slot}Age': age})
+    answer = probe(state).split()
+    assert answer[:2] == ['1', '1'], answer
+    assert answer[2:] == [f'1:{0x1A2B3C4D}:8:12', f'1:{0x1A2B3C4D}:11:0',
+                          f'1:{0x7FFFFFFE}:-1:-1', '0:0:-1:-1'], answer
+    incomplete = dict(state); del incomplete['pad3Age']
+    assert probe(incomplete).startswith('1 0 '), 'incomplete optional telemetry must not break service control'
+    for key, value in (('pad0User', 4294967296), ('pad0Rtt', -2), ('pad0Rtt', 60001),
+                       ('pad0Rtt', '8'), ('pad0Age', 2147483648), ('latency', 1)):
+        invalid = dict(state); invalid[key] = value
+        assert probe(invalid).startswith('-1 '), (key, value)
+    duplicate = json.dumps(state, separators=(',', ':')).encode()[:-1] + b',"pad0Rtt":9}'
+    assert probe(duplicate).startswith('-1 ')
+    zero = dict(state, pad0Rtt=0, pad0Age=0)
+    assert f'1:{0x1A2B3C4D}:0:0' in probe(zero), 'a measured sub-ms RTT can round to zero'
+    print('PASS launcher connection RTT: optional old API, four slots, identity, unknown values and malformed telemetry', flush=True)
+
+
 def main():
     web.build()
+    subprocess.run([sys.executable, '-B', 'tests/test_launcher_sampling.py'], check=True)
     # The launcher's own input reader and action navigation, with only the
     # native PS4 pad calls replaced. This also exercises a remote-only launch.
     for diagnostic in (False, True):
@@ -123,6 +155,7 @@ def main():
     assert out.startswith('-1 ') and '127.0.0.1 refused; 127.0.0.2 HTTP 403' in out, out
     assert command('probe', C4F_TEST_HOST='127.0.0.2').startswith('0 ')
     print('PASS console-address fallback, with the reason when neither path answers', flush=True)
+    check_latency_status()
 
     received = bytearray()
     child = []
@@ -191,10 +224,16 @@ def main():
     sys.path.insert(0, str(ROOT / 'tools'))
     import package_launcher as package
     package.build_art_tool()
+    # A fresh renderer is the reference for every warm cache transition; no
+    # timing limit here depends on the speed of the CI machine.
+    import test_tester_render
+    test_tester_render.check(test_tester_render.build())
     for state in ('setup', 'running', 'stopped', 'payloader-unavailable', 'outdated', 'mismatch', 'confirm', 'busy', 'locked', 'unknown',
                   'remote-actions-stopped', 'remote-actions-running', 'remote-confirm-cancel',
                   'remote-confirm-stop', 'remote-actions-busy', 'remote-actions-unavailable',
-                  'tester', 'tester-motion', 'tester-menu', 'tester-remote', 'tester-disconnected', 'tester-error'):
+                  'tester', 'tester-motion', 'tester-menu', 'tester-remote', 'tester-disconnected', 'tester-error',
+                  'tester-menu-user', 'tester-menu-unavailable', 'tester-menu-error', 'tester-menu-output', 'tester-menu-no-users',
+                  'tester-color', 'tester-color-green', 'tester-color-fine', 'tester-color-black', 'tester-color-white', 'tester-color-error'):
         png = ROOT / f'build/launcher-preview-{state}.png'
         package.render(['screen', state], png, 1920, 1080)
         assert png.stat().st_size > 50000, png

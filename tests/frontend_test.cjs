@@ -19,6 +19,31 @@ function padStatus(fields) {
 }
 
 (async () => {
+  // Echo timing remains the page's own measurement, with optional telemetry
+  // only for a recognized probe and an advertised supporting service.
+  const sentRtt = [], pingCtx = {
+    conn: { echoes: new Map([[7, 100]]), pending: new Map(), latency: true },
+    now: () => 116.6, pingMs: 0, send: message => sentRtt.push(message), showVersion() {},
+  };
+  vm.createContext(pingCtx);
+  vm.runInContext(extract('    function onMessage(data)', '    function applyStatus('), pingCtx);
+  vm.runInContext('onMessage(JSON.stringify({ method: "e", params: [7, 100] }))', pingCtx);
+  assert.equal(pingCtx.pingMs, 17);
+  assert.deepEqual(JSON.parse(JSON.stringify(sentRtt)), [{ method: 'latency', params: [7, 17] }]);
+  vm.runInContext('onMessage(JSON.stringify({ method: "e", params: [7, 100] }))', pingCtx);
+  assert.equal(sentRtt.length, 1, 'duplicate and unrecognized probes produce no report');
+  pingCtx.conn.latency = false; pingCtx.conn.echoes.set(8, 100);
+  vm.runInContext('onMessage(JSON.stringify({ method: "e", params: [8, 100] }))', pingCtx);
+  assert.equal(sentRtt.length, 1, 'older services get no new method');
+  const routed = [], routeCtx = { conn: { state: 'open',
+    input: { readyState: 'open', bufferedAmount: 0, send: data => routed.push(['input', JSON.parse(data)]) },
+    control: { readyState: 'open', bufferedAmount: 0, send: data => routed.push(['control', JSON.parse(data)]) } } };
+  vm.createContext(routeCtx);
+  vm.runInContext(extract('    function send(obj)', '    function call('), routeCtx);
+  vm.runInContext('send({ method: "latency", params: [7, 17] })', routeCtx);
+  assert.equal(routed[0][0], 'input');
+  console.log('PASS exact input-channel RTT telemetry, optional capability and duplicate suppression');
+
   // A claim is answered as a whole. One controller taken on another device must
   // not disconnect the gamepad that was playing as a different one.
   const claims = [];

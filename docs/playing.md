@@ -15,6 +15,10 @@ Signing out of that user on the PS4 disconnects their virtual controllers. The p
 returns to the home screen, and switches gamepads assigned to those controllers to **Off**. Pick a
 controller again to reconnect. Other signed-in players keep playing.
 
+After a brief network interruption, leave the page open: it reconnects and tries to reclaim its
+controllers while the service still retains them. If they have been removed or another device owns them,
+pick a free controller again. Rest mode signs users out, so it also requires a new selection.
+
 The home screen shows all four controllers live:
 
 | State | Meaning |
@@ -23,7 +27,7 @@ The home screen shows all four controllers live:
 | **Connecting** | The PS4 is setting it up. Takes a moment. |
 | **Choose user on PS4** | Waiting for someone to pick a user on the PS4's screen. |
 | **Connected** | Signed in and ready. The tile shows the user's name. |
-| **Paused** | Its phone stopped sending input, for example because the screen locked. |
+| **Paused** | Its phone or PC stopped sending input, for example because the screen locked. |
 | **This device** / **+1 device** | Who's driving it: this browser, or other ones. |
 
 ## Inviting someone
@@ -78,8 +82,9 @@ appears under **Gamepads on this device**:
 
 Keep the page's window in front: browsers only read gamepads for the active window.
 
-A DualShock 4's or DualSense's touchpad clicks, but browsers don't pass on where the fingers are. Link it
-under [Experimental features](#experimental-features) and its touches work too.
+Without a direct link, a DualShock 4 or DualSense provides its touchpad click through the browser's
+gamepad input. Link it under [Experimental features](#experimental-features) to send the positions of
+up to two fingers as well.
 
 With several Xbox controllers on Chrome or Edge for Windows, check that each Xbox button appears on its
 own gamepad in **Gamepad Controls**. Some browser backends combine those presses; see the
@@ -89,6 +94,10 @@ own gamepad in **Gamepad Controls**. Some browser backends combine those presses
 pages, and the console's page is plain `http`. Save the page to the device (**Save page as** on a computer),
 open the saved file, and enter the console's address in its connection box. Touch and the keyboard work either
 way.
+
+After updating Control4Free, load the page from the updated service before saving it again. A saved page
+keeps its old connection code until you replace it. If the browser asks for
+local-network access, allow it for the controller page so it can reach your PS4.
 
 ## Settings
 
@@ -105,8 +114,8 @@ extras that stay off until you turn them on: see [Experimental features](#experi
 | **Double-tap a stick for L3 / R3** | Off: L3 and R3 get their own buttons. |
 | **Show keyboard keys** | Labels the buttons with their keyboard keys. |
 
-The bottom of the home screen shows the version, and the round trip to the console in milliseconds: a quick
-way to see whether your Wi-Fi is the slow part.
+The bottom of the home screen shows the version and the round trip to the console in milliseconds. It
+helps spot network delays, but it does not measure the full delay from a button press to a game's response.
 
 ## On your phone's home screen
 
@@ -143,15 +152,44 @@ whatever colour the game sets. Until one is set, a controller shows its own colo
 **☰ → All settings → Experimental** has three switches. Each stays off until you turn it on, and is saved in
 this browser only. With all three off, the page works exactly as it does without them.
 
+![Experimental settings in Chrome](images/experimental.png)
+
 | Switch | What it does | Where it works |
 |---|---|---|
-| **Lights and rumble on Sony controllers** | A DualShock 4 or DualSense connected to a computer lights up in its PS4 controller's colour and rumbles directly, a DualSense included. Its touchpad passes on fingers, not only clicks: browsers' gamepads leave touches out. While linked, its buttons and sticks come straight from the controller, as on a PS4, so its **Mapping** doesn't apply. Press **Link** next to the controller and choose it in the browser's list. | Chrome or Edge on a computer |
-| **Trigger rumble** | Xbox controllers and a linked DualSense vibrate the trigger you're pulling, following the game's rumble. With both pulled, the one you pulled last vibrates: aim with L2, fire with R2, and R2 feels the shot. PS4 games don't ask for this: Control4Free makes it up from the rumble. | Xbox controllers in Chrome or Edge on Windows; a linked DualSense |
+| **Lights and rumble on Sony controllers** | Link a DualShock 4 or DualSense for its light bar, direct rumble and up to two touchpad fingers. While linked, its buttons, sticks and analog triggers come directly from the controller; its **Mapping** is bypassed. | Chrome or Edge on a computer |
+| **Trigger rumble** | Adds an effect to the trigger you're pulling, derived from the game's normal rumble. See [Trigger rumble](#trigger-rumble) below for setup and behavior. | Xbox controllers with browser trigger-rumble support; a linked DualSense |
 | **Motion controls** | Tilting the phone, or a linked DualShock 4 or DualSense, moves the PS4 controller's motion sensors. Hold the phone sideways with the screen towards you, like a controller. **Recenter** makes the way you hold it now the resting position. | Chrome on Android; a linked controller on a computer |
 
-Linking and motion use features browsers only give secure pages, and the console's page is plain `http`.
-[Experimental features](troubleshooting.md#experimental-features) in the troubleshooting guide explains how to
-let Chrome or Edge treat it as secure.
+For **Lights and rumble** or **Motion controls**, first follow the short
+[Chrome/Edge flag setup](troubleshooting.md#experimental-features). Then turn the switch on. For a Sony
+controller, press **Link**, select it in the browser's device list, and allow access. For phone motion,
+allow the sensor prompt if shown and press **Recenter** while holding the phone still. A linked Sony
+controller can provide motion too.
+
+### Trigger rumble
+
+Turn on **Trigger rumble** and assign the gamepad to the controller you are playing as. An Xbox
+controller uses the browser's trigger-rumble support; it does not need the Sony **Link** button.
+For a DualSense, also turn on **Lights and rumble on Sony controllers** and **Link** it.
+
+The effect follows normal rumble from the PS4 game and the physical trigger you are pulling:
+
+- Pull only L2 or R2 and that trigger receives the effect. With both held, the one pulled last receives
+  it. Release that trigger while keeping the other pulled and the effect moves to the other one.
+- With neither trigger pulled, neither receives an effect. The game must be rumbling for there to be
+  anything to feel.
+- Stronger game rumble produces stronger trigger vibration. A linked DualSense pulses more slowly for
+  heavy rumble and faster for light rumble.
+- Selection follows the gamepad's physical triggers, before any mapping. Remapping an unrelated button
+  to L2 does not make that button select a trigger effect.
+
+On a DualSense this uses a vibration effect in its adaptive triggers. Control4Free generates it from
+ordinary PS4 rumble; it does not reproduce a game's authored adaptive resistance or PS5 haptics.
+It changes the feedback you feel, not the analog L2/R2 pressure sent to the game. A DualShock 4 keeps
+its normal rumble and has no separate trigger effect.
+
+For a quick check, use a game that rumbles while you pull a trigger, or select the same user in the PS4
+app's **Test controllers** and run **Large motor** or **Small motor** while holding a trigger.
 
 ## Testing controllers on the PS4
 
@@ -162,15 +200,34 @@ The app on the PS4 shows what each signed-in user's controller sends, read the w
   pulled, and shows each finger on the touchpad. The panel beside it has the numbers, motion included.
 - **PS** and **Share** go to the PS4 itself, so the test doesn't show them.
 - Hold **L3 + R3** for two seconds for its menu: choose another signed-in user, rumble the large or the small
-  motor, set the light bar red, green or blue, reset it, reset the orientation, or go back. The light bar
+  motor, choose a light-bar colour, reset it, reset the orientation, or go back. The light bar
   goes back to normal when you leave.
+- The eight tools are arranged in a four-column, two-row grid. Move with the D-pad or TV remote arrows and choose with **Cross / OK**;
+  **Circle / Back** returns to the live readings. Arrows wrap at the grid edges, and holding a
+  controller's D-pad repeats navigation.
+  Choose **Switch user** to cycle through signed-in users. Unavailable tools are dimmed and explain why
+  they cannot run. Release the stick buttons that opened the menu before activating a tool.
+- **Light bar** opens RGB sliders with a colour preview. **Up / Down** chooses red, green or blue;
+  **Left / Right** adjusts that channel from 0 to 255 and previews it on the selected controller.
+  **Cross / OK** switches between fast adjustments of 16 and precise adjustments of 1. **Circle / Back**
+  returns to the tools, keeping the test colour active. **Reset light** restores the PS4's normal colour;
+  leaving the tester or suspending the app also restores it.
+
+  ![RGB light-bar selector on the PS4](images/tester-color.png)
+- The tools view replaces the live picture while open. **Resume** returns to live buttons, sticks, touch
+  and motion. Controller sampling continues independently of the screen drawing.
 - A controller from the page shows up under the user signed in on it, so the test also checks the page, a
   gamepad or a keyboard from the PS4's side.
+- **Controller page RTT** shows the connection round trip measured by that page, in milliseconds, in
+  both the live view and tools. Controller numbers identify each virtual controller for the selected
+  user. It needs the updated service and a freshly loaded or saved controller page. Missing readings
+  show as measuring or unavailable; old values expire. A local physical controller has no controller-page
+  connection to measure. RTT does not include the full controller, game and TV delay.
 
 ## Leaving
 
 - **☰ → Disconnect controller** removes it from the PS4 straight away.
-- **Closing the page or locking the phone** releases its buttons at once. After 3 seconds without input the
+- **Closing the page or locking the phone** normally releases its buttons. After 3 seconds without input the
   controller goes idle, and after 15 seconds it's removed. Pick it again within those 15 seconds and you keep
   it, still signed in.
 - **☰ → Stop Control4Free** stops the service and disconnects everyone. It's refused while someone else is

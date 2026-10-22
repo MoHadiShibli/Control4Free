@@ -3,6 +3,8 @@
 
 #include <stddef.h>
 #include <stdint.h>
+#include "c4f_conn.h"
+#include "c4f_rtc.h"
 
 #define C4F_NET_CLIENTS 8
 #define C4F_NET_WEBSOCKETS 6
@@ -14,7 +16,8 @@
 #endif
 #define C4F_NET_MESSAGE 4096
 typedef struct C4fNetClient {
-    int fd, websocket, closing, fragmented;
+    C4fConn conn;          /* first: a WebSocket is one of the service's connections */
+    int fd, websocket, closing, fragmented, savedOrigin;
     uint64_t openedMs, pingAt, pongDeadline, pingToken;
     unsigned char rx[8192], tx[8192];
     size_t rxUsed, txUsed, txSent, messageUsed;
@@ -27,25 +30,27 @@ typedef struct C4fNetClient {
 #endif
 } C4fNetClient;
 
-enum { C4F_NET_OPEN, C4F_NET_MESSAGE_EVENT, C4F_NET_CLOSE,
-       C4F_NET_HTTP_STATUS, C4F_NET_HTTP_STOP };
-typedef void (*C4fNetHandler)(C4fNetClient *, int, const char *, size_t, void *);
 typedef struct {
     int fd;
     uint64_t checkedMs;
     C4fNetClient clients[C4F_NET_CLIENTS];
     C4fNetHandler handler;
     void *context;
+    C4fRtc rtc;            /* the pages' WebRTC peers, on the same port number over UDP */
 } C4fNet;
 
-uint64_t c4fTimeMs(void);
+/* Opens the HTTP listener and the WebRTC port. A certificate made by an
+ * earlier open is kept. */
 int c4fNetOpen(C4fNet *, int port, C4fNetHandler, void *);
 /* -1: listener/select failure; -2: long pause inside select. Reopen transport. */
 int c4fNetPoll(C4fNet *, int timeoutMs);
 void c4fNetClose(C4fNet *);
+#ifdef C4F_TEST_WEBSOCKET
 int c4fNetText(C4fNetClient *, const char *);
-void c4fNetHttpJson(C4fNetClient *, const char *);
 void c4fWebSocketAccept(const char *key, char out[29]);
+#endif
+/* The JSON answer to a launcher request (a C4F_NET_HTTP_* event). */
+void c4fNetHttpJson(C4fConn *, const char *);
 
 extern const unsigned char c4fPage[];
 extern const size_t c4fPageSize;

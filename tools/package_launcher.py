@@ -140,6 +140,7 @@ def main():
     shutil.copyfile(ROOT / 'THIRD_PARTY.md', licenses / 'THIRD_PARTY.txt')
     shutil.copyfile(ROOT / 'vendor/jsmn/LICENSE', licenses / 'jsmn-MIT.txt')
     shutil.copyfile(ROOT / 'vendor/roboto/LICENSE', licenses / 'Roboto-Apache-2.0.txt')
+    shutil.copyfile(ROOT / 'vendor/mbedtls/LICENSE', licenses / 'Mbed-TLS-LICENSE.txt')
     qrcodegen = (ROOT / 'vendor/qrcodegen/qrcodegen.h').read_text()
     (licenses / 'qrcodegen-MIT.txt').write_text(qrcodegen.split('*/', 1)[0] + '*/\n')
     stb = (ROOT / 'vendor/stb/stb_truetype.h').read_text()

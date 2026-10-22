@@ -7,7 +7,19 @@ extern "C" {
 #endif
 
 enum { C4F_SERVICE_UNKNOWN = -1, C4F_SERVICE_DOWN = 0, C4F_SERVICE_RUNNING = 1 };
-typedef struct { int controllers, stopping; char version[24]; } C4fServiceStatus;
+#define C4F_SERVICE_PADS 4
+#define C4F_SERVICE_LATENCY_STALE_MS 6000
+typedef struct {
+    int userKnown;
+    uint32_t userId;
+    int rttMs, ageMs;
+} C4fServiceLatency;
+typedef struct {
+    int controllers, stopping;
+    char version[24];
+    int latencyAvailable;
+    C4fServiceLatency latency[C4F_SERVICE_PADS];
+} C4fServiceStatus;
 uint64_t c4fLauncherTimeMs(void);
 /* The console's own IPv4 address, when known. The app's sandbox may not reach
  * 127.0.0.1, so it is the second way to reach Control4Free and PayLoader. */

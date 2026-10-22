@@ -678,6 +678,9 @@ int c4fScreenInit(void)
         c4fBlurUnder(&c, C4F_LEFT, C4F_ROW_TOP, C4F_MAIN_WIDTH, C4F_ROW_HEIGHT, 6 * C4F_S, 6 * C4F_S);
         c4fBlurUnder(&c, C4F_QR_LEFT, C4F_ROW_TOP, C4F_QR_WIDTH, C4F_ROW_HEIGHT, 6 * C4F_S, 6 * C4F_S);
         c4fBlurUnder(&c, C4F_LEFT, C4F_PANEL_TOP, C4F_RIGHT - C4F_LEFT, C4F_PANEL_HEIGHT, 6 * C4F_S, 10 * C4F_S);
+#ifndef C4F_DIAG
+        c4fDrawSolidarityBadge(&c, C4F_SCREEN_WIDTH - 64, 40);
+#endif
     }
     return 0;
 }

@@ -617,7 +617,9 @@ void c4fDrawDiag(uint32_t *pixels, const C4fLauncherScreen *s)
     }
     int visible = (C4F_D_BOTTOM - C4F_D_TOP) / C4F_D_ROW;
     int maxScroll = count > visible ? count - visible : 0;
+    pthread_mutex_lock(&c4fLock);
     c4fMaxScroll[page] = maxScroll;
+    pthread_mutex_unlock(&c4fLock);
     int first = s->diagScroll[page] >= C4F_DIAG_END ? maxScroll : s->diagScroll[page];
     if (first > maxScroll) first = maxScroll;
     if (first < 0) first = 0;
@@ -638,5 +640,8 @@ void c4fDrawDiag(uint32_t *pixels, const C4fLauncherScreen *s)
 
 int c4fDiagMaxScroll(int page)
 {
-    return page >= 0 && page < C4F_DIAG_PAGES ? c4fMaxScroll[page] : 0;
+    pthread_mutex_lock(&c4fLock);
+    int maximum = page >= 0 && page < C4F_DIAG_PAGES ? c4fMaxScroll[page] : 0;
+    pthread_mutex_unlock(&c4fLock);
+    return maximum;
 }

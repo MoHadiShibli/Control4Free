@@ -37,6 +37,7 @@
       --glow: 0 0 0 2px #fff, 0 0 22px rgba(255, 255, 255, .5);
       --font: "SST", "SST W55 Regular", "SST Light", "Helvetica Neue", "Segoe UI", Roboto, Arial, sans-serif;
       --ease: cubic-bezier(.2, .8, .2, 1);
+      --solidarity-space: 0px;
     }
 
     * { box-sizing: border-box; }
@@ -55,6 +56,32 @@
     button { cursor: pointer; }
     [hidden] { display: none !important; }
     :focus-visible { outline: none; box-shadow: var(--glow); }
+
+    body:has(#home:not([hidden]), #settingsView:not([hidden])):not(.menu-open) {
+      --solidarity-space: 24px;
+      --solidarity-display: flex;
+    }
+
+    .solidarity {
+      position: fixed;
+      top: calc(env(safe-area-inset-top) + 5px);
+      right: max(12px, env(safe-area-inset-right));
+      z-index: 30;
+      display: var(--solidarity-display, none);
+      align-items: center;
+      gap: 8px;
+      color: var(--text);
+      font-size: 11.5px;
+      font-weight: 500;
+      line-height: 14px;
+      white-space: nowrap;
+      pointer-events: none;
+      user-select: none;
+      -webkit-user-select: none;
+    }
+
+    .solidarity-flags { display: flex; align-items: center; gap: 5px; }
+    .solidarity svg { display: block; width: 21px; height: 14px; box-shadow: 0 0 0 1px rgba(255, 255, 255, .18); }
 
     /* ---------- Backdrop: deep blue with drifting light waves ---------- */
 
@@ -128,6 +155,10 @@
     }
 
     .app-mark svg { width: 36px; height: 23px; }
+    a.app-mark { color: inherit; text-decoration: none; border-radius: 4px; }
+    a.app-mark:hover .brand-name { text-decoration: underline; text-underline-offset: 3px; }
+    .brand-name { display: flex; flex-direction: column; gap: 2px; line-height: 1.15; }
+    .brand-name small { color: var(--muted); font-size: 10px; font-weight: 400; letter-spacing: .01em; }
 
     .clock {
       font-size: 17px;
@@ -184,6 +215,7 @@
       min-height: 100dvh;
       display: flex;
       flex-direction: column;
+      padding-top: var(--solidarity-space);
     }
 
     .home-main {
@@ -429,7 +461,7 @@
 
     .pad-view {
       position: fixed;
-      inset: 0;
+      inset: var(--solidarity-space) 0 0;
       z-index: 1;
       background:
         radial-gradient(75% 95% at 10% -15%, color-mix(in srgb, var(--accent) 14%, transparent), transparent 62%),
@@ -792,7 +824,7 @@
     .lb-btn.icon { width: 32px; padding: 0; display: grid; place-items: center; }
     .lb-btn svg { width: 16px; height: 16px; }
 
-    .rotate { position: fixed; inset: 0; z-index: 5; display: none; place-content: center; justify-items: center; gap: 14px; padding: 24px; text-align: center; background: rgba(11, 14, 20, .96); }
+    .rotate { position: fixed; inset: var(--solidarity-space) 0 0; z-index: 5; display: none; place-content: center; justify-items: center; gap: 14px; padding: 24px; text-align: center; background: rgba(11, 14, 20, .96); }
     .rotate svg { width: 56px; height: 56px; color: #fff; animation: tilt 2.4s var(--ease) infinite; }
     .rotate strong { font-size: 20px; font-weight: 300; }
     .rotate p { margin: 0; color: var(--muted); font-size: 14px; font-weight: 300; max-width: 30ch; line-height: 1.5; }
@@ -801,7 +833,7 @@
 
     /* ---------- Settings ---------- */
 
-    .settings-view { position: fixed; inset: 0; z-index: 3; display: grid; grid-template-rows: auto 1fr; }
+    .settings-view { position: fixed; inset: var(--solidarity-space) 0 0; z-index: 3; display: grid; grid-template-rows: auto 1fr; }
     .settings-view .backdrop { z-index: -1; }
 
     .settings-body {
@@ -923,7 +955,7 @@
     .key-btn.listening { background: #fff; color: #06215a; animation: pulse 1s ease-in-out infinite; }
     /* ---------- Mapping: a DualShock 4 to map a gamepad or the keyboard onto ---------- */
 
-    .map-view { position: fixed; inset: 0; z-index: 4; display: flex; flex-direction: column; overflow-y: auto; overscroll-behavior: contain; }
+    .map-view { position: fixed; inset: var(--solidarity-space) 0 0; z-index: 4; display: flex; flex-direction: column; overflow-y: auto; overscroll-behavior: contain; }
     .map-view .backdrop { z-index: -1; position: fixed; }
 
     .map-top {
@@ -1152,13 +1184,13 @@
 
     /* ---------- Options menu (controller) ---------- */
 
-    .scrim { position: fixed; inset: 0; z-index: 10; background: rgba(1, 6, 18, .5); opacity: 0; pointer-events: none; transition: opacity .25s; }
+    .scrim { position: fixed; inset: var(--solidarity-space) 0 0; z-index: 10; background: rgba(1, 6, 18, .5); opacity: 0; pointer-events: none; transition: opacity .25s; }
     .menu-open .scrim { opacity: 1; pointer-events: auto; }
 
     .options-menu {
       position: fixed;
       z-index: 11;
-      top: 0;
+      top: var(--solidarity-space);
       right: 0;
       bottom: 0;
       width: min(380px, 92vw);
@@ -1194,7 +1226,7 @@
     .toast {
       position: fixed;
       z-index: 20;
-      top: max(14px, env(safe-area-inset-top));
+      top: calc(var(--solidarity-space) + max(14px, env(safe-area-inset-top)));
       left: max(14px, env(safe-area-inset-left));
       display: flex;
       align-items: center;
@@ -1222,6 +1254,18 @@
   </style>
 </head>
 <body>
+  <aside class="solidarity" id="solidarity" aria-label="Free Palestine">
+    <span>Free Palestine</span>
+    <span class="solidarity-flags">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 600 300" preserveAspectRatio="none" role="img" aria-label="Palestinian flag">
+        <path fill="#000" d="M0 0h600v100H0z"/><path fill="#fff" d="M0 100h600v100H0z"/><path fill="#009736" d="M0 200h600v100H0z"/><path fill="#ed2e38" d="m0 0 300 150L0 300z"/>
+      </svg>
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 600" role="img" aria-label="Syrian flag">
+        <path fill="#007a3d" d="M0 0h900v200H0z"/><path fill="#fff" d="M0 200h900v200H0z"/><path fill="#000" d="M0 400h900v200H0z"/>
+        <g fill="#ce1126"><path d="m225 236 14.4 44.2h46.5l-37.6 27.3 14.3 44.3-37.6-27.4-37.6 27.4 14.3-44.3-37.6-27.3h46.5z"/><path d="m450 236 14.4 44.2h46.5l-37.6 27.3 14.3 44.3-37.6-27.4-37.6 27.4 14.3-44.3-37.6-27.3h46.5z"/><path d="m675 236 14.4 44.2h46.5l-37.6 27.3 14.3 44.3-37.6-27.4-37.6 27.4 14.3-44.3-37.6-27.3h46.5z"/></g>
+      </svg>
+    </span>
+  </aside>
   <div class="backdrop" aria-hidden="true">
     <svg class="waves slow" viewBox="0 0 3200 400" preserveAspectRatio="none">
       <defs>
@@ -1245,10 +1289,10 @@
   <div class="home" id="home">
     <header class="topbar">
       <div class="tb-group">
-        <div class="app-mark">
+        <a class="app-mark" href="https://github.com/MoHadiShibli/Control4Free" target="_blank" rel="noopener noreferrer" aria-label="Control4Free by MoHadiShibli on GitHub">
           <svg viewBox="56 38 888 566" aria-hidden="true"><path fill="#fff" d="M500 78C410 78 330 74 262 62C232 46 188 42 146 62C108 80 86 120 78 170C70 230 58 320 60 400C62 470 80 535 118 568C152 598 196 592 222 560C250 525 272 470 300 430C360 418 430 440 500 440C570 440 640 418 700 430C728 470 750 525 778 560C804 592 848 598 882 568C920 535 938 470 940 400C942 320 930 230 922 170C914 120 892 80 854 62C812 42 768 46 738 62C670 74 590 78 500 78ZM366 98L634 98C648.359 98 660 109.641 660 124L660 226C660 240.359 648.359 252 634 252L366 252C351.641 252 340 240.359 340 226L340 124C340 109.641 351.641 98 366 98ZM173 148L219 148L219 189L260 189L260 235L219 235L219 276L173 276L173 235L132 235L132 189L173 189L173 148ZM804 121C818.912 121 831 133.088 831 148C831 162.912 818.912 175 804 175C789.088 175 777 162.912 777 148C777 133.088 789.088 121 804 121ZM804 249C818.912 249 831 261.088 831 276C831 290.912 818.912 303 804 303C789.088 303 777 290.912 777 276C777 261.088 789.088 249 804 249ZM740 185C754.912 185 767 197.088 767 212C767 226.912 754.912 239 740 239C725.088 239 713 226.912 713 212C713 197.088 725.088 185 740 185ZM868 185C882.912 185 895 197.088 895 212C895 226.912 882.912 239 868 239C853.088 239 841 226.912 841 212C841 197.088 853.088 185 868 185ZM338 276C374.451 276 404 305.549 404 342C404 378.451 374.451 408 338 408C301.549 408 272 378.451 272 342C272 305.549 301.549 276 338 276ZM338 298C313.699 298 294 317.699 294 342C294 366.301 313.699 386 338 386C362.301 386 382 366.301 382 342C382 317.699 362.301 298 338 298ZM662 276C698.451 276 728 305.549 728 342C728 378.451 698.451 408 662 408C625.549 408 596 378.451 596 342C596 305.549 625.549 276 662 276ZM662 298C637.699 298 618 317.699 618 342C618 366.301 637.699 386 662 386C686.301 386 706 366.301 706 342C706 317.699 686.301 298 662 298ZM500 319C509.389 319 517 326.611 517 336C517 345.389 509.389 353 500 353C490.611 353 483 345.389 483 336C483 326.611 490.611 319 500 319Z"/></svg>
-          <span>Control4Free</span>
-        </div>
+          <span class="brand-name">Control4Free<small>by MoHadiShibli</small></span>
+        </a>
         <span class="conn" id="conn" data-conn="connecting" role="status" aria-live="polite"><span class="dot"></span><span id="connText">Connecting</span><span class="conn-detail" id="connDetail"></span></span>
       </div>
       <div class="tb-group">
@@ -1287,7 +1331,7 @@
     </main>
 
     <footer class="home-foot">
-      <span id="version">Control4Free</span>
+      <a id="version" href="https://github.com/MoHadiShibli/Control4Free" target="_blank" rel="noopener noreferrer">Control4Free</a>
       <button class="link-btn" type="button" id="keysLink">Keyboard keys</button>
     </footer>
   </div>
@@ -1583,9 +1627,12 @@
     // ---------------------------------------------------------------- connection
 
     const conn = {
-      ws: null, state: 'connecting', address: '', version: '', nextId: 1,
+      pc: null, control: null, input: null, abort: null, openTimer: 0, disconnectTimer: 0,
+      state: 'connecting', address: '', version: '', nextId: 1,
       pending: new Map(), retry: 0, retryTimer: 0, everOpened: false,
       motion: false, // the service takes 'm' (its info says so)
+      latency: false, // optional RTT telemetry for the native controller test
+      echoes: new Map(), echoSeq: 0,
     };
 
     const status = Array.from({ length: PADS }, (_, i) => ({
@@ -1616,17 +1663,30 @@
       renderPadLabel();
     }
 
+    function closeTransport() {
+      const pc = conn.pc;
+      conn.pc = conn.control = conn.input = null;
+      if (conn.abort) conn.abort.abort();
+      conn.abort = null;
+      clearTimeout(conn.openTimer); clearTimeout(conn.disconnectTimer);
+      if (pc) pc.close();
+      conn.motion = false;
+      conn.latency = false;
+      conn.echoes.clear();
+      pingMs = 0;
+      resetClaims();
+      for (const [, p] of conn.pending) p.reject(new Error('Connection changed'));
+      conn.pending.clear();
+      // Keep the selected controllers, but never replay held input after a
+      // reconnect. The new peer must claim them before it sends input again.
+      resetConnectionInput();
+      for (const st of status) { st.mine = false; st.known = false; st.connected = false; }
+    }
+
     function connect(address) {
       clearTimeout(conn.retryTimer);
-      if (conn.ws) {
-        conn.ws.onclose = null;
-        conn.ws.close();
-        resetClaims();
-        forgetSelections();
-        for (const [, p] of conn.pending) p.reject(new Error('Connection changed'));
-        conn.pending.clear();
-      }
-      conn.address = address.trim().replace(/^(?:https?|wss?):\/\//i, '').replace(/[/?#].*$/, '');
+      closeTransport();
+      conn.address = address.trim().replace(/^https?:\/\//i, '').replace(/[/?#].*$/, '');
       if (!conn.address.includes(':') && conn.address) conn.address += ':4264';
       if (!conn.address) {
         setConnState('closed', 'Not connected');
@@ -1636,43 +1696,22 @@
       if (!servedByConsole) store.set('address', conn.address);
       if (conn.everOpened) setConnState('connecting', 'Waiting for Control4Free on the PS4');
       else setConnState('connecting', 'Connecting', ' to ' + conn.address);
-      let ws;
+      if (typeof RTCPeerConnection !== 'function') {
+        setConnState('closed', 'This browser cannot connect with WebRTC');
+        return;
+      }
+      let pc;
       try {
-        ws = new WebSocket('ws://' + conn.address);
+        pc = new RTCPeerConnection({ iceServers: [] });
       } catch (e) {
-        setConnState('closed', 'Invalid address');
+        setConnState('closed', 'Could not open the connection');
         $('#addressForm').hidden = !openedFromFile;
         return;
       }
-      conn.ws = ws;
-      ws.onopen = () => {
-        if (conn.ws !== ws) return;
-        conn.retry = 0;
-        conn.everOpened = true;
-        setConnState('open', 'Connected', ' to ' + conn.address);
-        $('#addressForm').hidden = true;
-        $('#addressHint').classList.remove('error');
-        call('info', []).then(info => {
-          conn.version = info.version || '';
-          conn.motion = info.motion === true;
-          showVersion();
-          sendClaim(true);
-        }).catch(() => {});
-        resendAll();
-      };
-      ws.onmessage = ev => { if (conn.ws === ws) onMessage(ev.data); };
-      ws.onclose = () => {
-        if (conn.ws !== ws) return;
-        conn.ws = null;
-        conn.motion = false;
-        motionLive.fill(false);
-        // Reconnecting the page must not silently recreate a controller or
-        // replay held buttons. The user selects a controller again.
-        resetClaims();
-        forgetSelections();
-        for (const [, p] of conn.pending) p.reject(new Error('closed'));
-        conn.pending.clear();
-        stopAllRumble();
+      conn.pc = pc;
+      const failed = () => {
+        if (conn.pc !== pc) return;
+        closeTransport();
         const wait = Math.min(5000, 800 * Math.pow(1.6, conn.retry++));
         if (!conn.everOpened && openedFromFile) {
           setConnState('closed', 'Can\'t reach', ' ' + conn.address);
@@ -1684,12 +1723,65 @@
         }
         conn.retryTimer = setTimeout(() => connect(conn.address), wait);
       };
+      try {
+        conn.control = pc.createDataChannel('control', { negotiated: true, id: 0, ordered: true });
+        conn.input = pc.createDataChannel('input', { negotiated: true, id: 1, ordered: false, maxRetransmits: 0 });
+        const opened = () => {
+          if (conn.pc !== pc || conn.state === 'open' || conn.control.readyState !== 'open' || conn.input.readyState !== 'open') return;
+          clearTimeout(conn.openTimer);
+          resetConnectionInput();
+          conn.everOpened = true;
+          setConnState('open', 'Connected', ' to ' + conn.address);
+          $('#addressForm').hidden = true;
+          $('#addressHint').classList.remove('error');
+          call('info', []).then(info => {
+            if (conn.pc !== pc) return;
+            if (info.protocol !== 3 || info.input !== true) throw new Error('Unsupported controller protocol');
+            conn.retry = 0;
+            conn.version = info.version || '';
+            conn.motion = info.motion === true;
+            conn.latency = info.latency === true;
+            showVersion();
+            sendClaim(true);
+          }).catch(failed);
+        };
+        for (const channel of [conn.control, conn.input]) {
+          channel.onopen = opened;
+          channel.onmessage = ev => { if (conn.pc === pc) onMessage(ev.data); };
+          channel.onclose = failed;
+          channel.onerror = failed;
+        }
+        pc.onconnectionstatechange = () => {
+          if (conn.pc !== pc) return;
+          clearTimeout(conn.disconnectTimer);
+          if (pc.connectionState === 'failed' || pc.connectionState === 'closed') failed();
+          else if (pc.connectionState === 'disconnected') {
+            conn.disconnectTimer = setTimeout(() => { if (pc.connectionState === 'disconnected') failed(); }, 5000);
+          }
+        };
+        conn.abort = new AbortController();
+        conn.openTimer = setTimeout(failed, 12000);
+        const signal = conn.abort.signal;
+        (async () => {
+          await pc.setLocalDescription(await pc.createOffer());
+          if (conn.pc !== pc) return;
+          const scheme = location.protocol === 'https:' ? 'https://' : 'http://';
+          const reply = await fetch(scheme + conn.address + '/rtc', {
+            method: 'POST', headers: { 'Content-Type': 'text/plain' }, body: pc.localDescription.sdp, signal,
+          });
+          if (!reply.ok) throw new Error('Connection refused');
+          const sdp = await reply.text();
+          if (conn.pc === pc) await pc.setRemoteDescription({ type: 'answer', sdp });
+        })().catch(failed);
+      } catch (e) { failed(); }
     }
 
     function send(obj) {
-      if (conn.ws && conn.ws.readyState === WebSocket.OPEN) {
-        conn.ws.send(JSON.stringify(obj));
-        return true;
+      const input = obj.method === 'i' || obj.method === 'm' || obj.method === 'e' || obj.method === 'latency';
+      const channel = input ? conn.input : conn.control;
+      if (channel && channel.readyState === 'open') {
+        try { channel.send(JSON.stringify(obj)); return true; }
+        catch (e) { /* A closing or full channel is retried by the next update. */ }
       }
       return false;
     }
@@ -1722,6 +1814,14 @@
       }
       const params = msg.params;
       switch (msg.method) {
+        case 'e':
+          if (Array.isArray(params) && conn.echoes.has(params[0])) {
+            pingMs = Math.round(now() - conn.echoes.get(params[0]));
+            conn.echoes.delete(params[0]); showVersion();
+            if (conn.latency && pingMs >= 0 && pingMs <= 60000)
+              send({ method: 'latency', params: [params[0], pingMs] });
+          }
+          break;
         case 's': applyStatus(params); break;
         case 'error': toast(params.message || 'Controller error'); break;
         case 'v': onRumble(params[0], params[1], params[2]); break;
@@ -1782,17 +1882,25 @@
     function allSources() {
       return [screenSource, keySource, ...gamepadSources.values()];
     }
-    function forgetSelections() {
+    function resetConnectionInput() {
       stopAllRumble();
       mapper.cancelCapture(); releaseScreen(); heldKeys.clear();
-      for (const src of gamepadSources.values()) { src.pad = -1; clearDevice(src); }
-      primaryPad = -1;
-      Object.assign(screenSource, blankSource(-1)); Object.assign(keySource, blankSource(-1));
-      padView.hidden = true;
-      if (mapView.hidden && $('#settingsView').hidden) $('#home').hidden = false;
-      document.body.classList.remove('in-pad');
-      document.title = 'Control4Free';
-      history.replaceState(null, '', updateQuery('pad', null));
+      for (const timer of holdTimers.values()) clearTimeout(timer);
+      holdTimers.clear();
+      Object.assign(screenSource, blankSource(screenSource.pad)); Object.assign(keySource, blankSource(keySource.pad));
+      for (const src of gamepadSources.values()) {
+        clearDevice(src); src.hidState = null; src.hidAt = 0;
+        src.hidHold = VALID_BUTTONS; src.hidHoldL2 = src.hidHoldR2 = true;
+      }
+      motionLive.fill(false); motionSentAt.fill(0); motionSeq.fill(0);
+      phoneMotion.at = 0; phoneMotion.fresh = false;
+      for (const link of hidLinks.values()) {
+        if (link.motion) { link.motion.at = 0; link.motion.fresh = false; }
+        hidUpdate(link);
+      }
+      inputSeq.fill(0); inputButtons.fill(0);
+      for (const edges of inputHistory) edges.length = 0;
+      resendAll();
       renderGamepads();
     }
 
@@ -1867,11 +1975,11 @@
     function measurePing(t) {
       if (conn.state !== 'open' || t - pingAt < 2000) return;
       pingAt = t;
-      const started = now();
-      call('ping', []).then(() => {
-        pingMs = Math.round(now() - started);
-        showVersion();
-      }).catch(() => {});
+      const seq = ++conn.echoSeq, started = now();
+      // Use the input channel, so the displayed round trip follows gameplay.
+      // Lost probes need no retry, and never build up an unbounded history.
+      conn.echoes.clear();
+      if (send({ method: 'e', params: [seq, Math.round(started)] })) conn.echoes.set(seq, started);
     }
 
     function showVersion() {
@@ -1881,6 +1989,9 @@
 
     const lastSent = Array(PADS).fill('');
     const lastSentAt = Array(PADS).fill(0);
+    const inputSeq = Array(PADS).fill(0);
+    const inputButtons = Array(PADS).fill(0);
+    const inputHistory = Array.from({ length: PADS }, () => []);
 
     function packState(pad, s) {
       const params = [pad, s.buttons & VALID_BUTTONS, s.lx, s.ly, s.rx, s.ry, s.l2, s.r2, s.touches.length];
@@ -1890,17 +2001,29 @@
 
     function flush(t) {
       for (const pad of claimedPads()) {
+        if (!status[pad].mine) continue;
         const params = packState(pad, mergedState(pad));
         const key = params.join(',');
         // Send on change, and once a second anyway so the console knows this device is still here
         if (key !== lastSent[pad] || t - lastSentAt[pad] > KEEPALIVE_MS) {
-          if (send({ method: 'u', params })) {
+          if (sendInput(params)) {
             if (key !== lastSent[pad]) pulseActivity(pad);
             lastSent[pad] = key;
             lastSentAt[pad] = t;
           }
         }
       }
+    }
+
+    function sendInput(params) {
+      const pad = params[0], seq = inputSeq[pad] + 1, buttons = params[1];
+      const edges = inputHistory[pad].slice();
+      const message = [pad, seq, ...params.slice(1), edges.length, ...edges.flat()];
+      if (!send({ method: 'i', params: message })) return false;
+      if (buttons !== inputButtons[pad]) edges.push([seq, buttons]);
+      while (edges.length > 4) edges.shift();
+      inputSeq[pad] = seq; inputButtons[pad] = buttons; inputHistory[pad] = edges;
+      return true;
     }
 
     function resendAll() {
@@ -2153,10 +2276,10 @@
         const view = padView.getBoundingClientRect();
         const r = ctlNode(this.selected).getBoundingClientRect();
         const pw = panel.offsetWidth, ph = panel.offsetHeight, gap = 10;
-        let top = r.bottom + gap;
-        if (top + ph > view.height - 4) top = r.top - gap - ph;
+        let top = r.bottom - view.top + gap;
+        if (top + ph > view.height - 4) top = r.top - view.top - gap - ph;
         top = clamp(top, 4, view.height - ph - 4);
-        panel.style.left = clamp(r.left + r.width / 2 - pw / 2, 4, view.width - pw - 4) + 'px';
+        panel.style.left = clamp(r.left - view.left + r.width / 2 - pw / 2, 4, view.width - pw - 4) + 'px';
         panel.style.top = top + 'px';
       },
 
@@ -2170,8 +2293,8 @@
         pointers.set(e.pointerId, {
           move(ev) {
             bar.classList.add('moved');
-            bar.style.left = clamp(ev.clientX - dx, 4, view.width - r.width - 4) + 'px';
-            bar.style.top = clamp(ev.clientY - dy, 4, view.height - r.height - 4) + 'px';
+            bar.style.left = clamp(ev.clientX - view.left - dx, 4, view.width - r.width - 4) + 'px';
+            bar.style.top = clamp(ev.clientY - view.top - dy, 4, view.height - r.height - 4) + 'px';
           },
           up() {},
         });
@@ -2609,9 +2732,12 @@
         }
         return s;
       }
-      function fromSource(src) {
+      function fromSource(src, analogTriggers = false) {
         const out = empty(); out.buttons = src.buttons;
-        out.l2 = src.buttons & B.L2 ? 1 : src.l2 / 255; out.r2 = src.buttons & B.R2 ? 1 : src.r2 / 255;
+        // Touch and keyboard trigger buttons synthesize full pressure. HID has
+        // independent pressure bytes, even when its digital trigger flags are on.
+        const digital = analogTriggers ? 0 : src.buttons;
+        out.l2 = digital & B.L2 ? 1 : src.l2 / 255; out.r2 = digital & B.R2 ? 1 : src.r2 / 255;
         for (const axis of axes) out.analog[axis].push(src[axis] === 128 ? 0 : src[axis] / 255 * 2 - 1);
         return out;
       }
@@ -3934,10 +4060,20 @@
         if (viaHid) src.hold = {};
         if (!src.hold) src.hold = ControllerMapping.holdBack(profile);
         ControllerMapping.letGo(src.snapshot, profile, src.hold);
-        const waiting = Object.keys(src.hold).length > 0;
+        const waiting = Object.keys(src.hold).length > 0 || !!(viaHid &&
+          ((src.hidHold || 0) & src.hidState.buttons || src.hidHoldL2 && src.hidState.l2 > 20 || src.hidHoldR2 && src.hidState.r2 > 20));
         if (waiting !== src.waitNeutral) { src.waitNeutral = waiting; renderGamepads(); }
         if (mapper.index === gp.index || ControllerMapping.unresolved(profile, signature)) src.mapped = ControllerMapping.empty();
-        else if (viaHid) src.mapped = ControllerMapping.fromSource(Object.assign(src, src.hidState));
+        else if (viaHid) {
+          // A held control must be released before it can play after reconnect,
+          // including when Bluetooth input comes only through WebHID.
+          src.hidHold = (src.hidHold || 0) & src.hidState.buttons;
+          if (src.hidState.l2 <= 20) src.hidHoldL2 = false;
+          if (src.hidState.r2 <= 20) src.hidHoldR2 = false;
+          const state = { ...src.hidState, buttons: src.hidState.buttons & ~src.hidHold,
+            l2: src.hidHoldL2 ? 0 : src.hidState.l2, r2: src.hidHoldR2 ? 0 : src.hidState.r2 };
+          src.mapped = ControllerMapping.fromSource(Object.assign(src, state), true);
+        }
         else src.mapped = ControllerMapping.evaluate(src.snapshot, profile, src.transient, src.hold);
         Object.assign(src, ControllerMapping.toSource(src.mapped));
         if (experiments.triggers) pulledTrigger(src, viaHid);
@@ -3988,19 +4124,29 @@
 
     // ---------------------------------------------------------------- rumble and lightbar
 
-    const rumble = Array.from({ length: PADS }, () => ({ large: 0, small: 0, lastKick: 0 }));
+    const rumble = Array.from({ length: PADS }, () => ({ large: 0, small: 0, lastKick: 0, timer: 0 }));
 
     function onRumble(pad, large, small) {
       if (!rumble[pad]) return;
       rumble[pad].large = large;
       rumble[pad].small = small;
       rumble[pad].lastKick = 0;
+      clearTimeout(rumble[pad].timer);
+      // The service renews active rumble every 200 ms. Expire it locally if
+      // the final stop (or the connection) is lost, including WebHID motors.
+      if (large || small) rumble[pad].timer = setTimeout(() => {
+        rumble[pad].large = rumble[pad].small = 0;
+        stopRumble(pad);
+      }, 650);
       if (!large && !small) stopRumble(pad);
     }
 
     function stopRumble(pad) {
       for (const [index, src] of gamepadSources) {
-        if (hidLinks.has(index)) continue; /* a linked controller is told directly */
+        if (hidLinks.has(index)) {
+          if (src.pad === pad) hidUpdate(hidLinks.get(index));
+          continue;
+        }
         if (src.pad === pad && src.gp && src.gp.vibrationActuator && src.gp.vibrationActuator.reset) {
           try { src.gp.vibrationActuator.reset(); } catch (e) { /* ignore */ }
         }
@@ -4010,8 +4156,7 @@
 
     function stopAllRumble() {
       for (let i = 0; i < PADS; i++) {
-        rumble[i].large = rumble[i].small = 0;
-        stopRumble(i);
+        onRumble(i, 0, 0);
       }
     }
 
@@ -4922,6 +5067,7 @@
     const phoneMotion = newMotion();
     const motionSentAt = Array(PADS).fill(0);
     const motionLive = Array(PADS).fill(false);
+    const motionSeq = Array(PADS).fill(0);
 
     // Mahony's filter: the gyro turns the orientation, gravity keeps up up.
     function motionSample(m, gyro, accel, t) {
@@ -4980,18 +5126,25 @@
       m.at = 0;
       if (motionLive[pad]) {
         motionLive[pad] = false;
-        if (conn.motion) send({ method: 'm', params: [pad, 0, 0, 0, 10000, 0, 0, 0, 0, 0, 0] });
+        if (conn.motion) sendMotion([pad, 0, 0, 0, 10000, 0, 0, 0, 0, 0, 0]);
       }
     }
 
     function motionSend(pad, m, t) {
-      if (t - motionSentAt[pad] < 16 || !m.fresh) return;
+      if (!status[pad].mine || t - motionSentAt[pad] < 16 || !m.fresh) return;
       m.fresh = false;
       const q = [m.q[1], m.q[2], m.q[3], m.q[0]];
       const params = [pad, ...q.map(v => Math.round(clamp(v, -1, 1) * 10000)),
                       ...m.accel.map(v => Math.round(clamp(v, -16, 16) * 1000)),
                       ...m.gyro.map(v => Math.round(clamp(v, -35, 35) * 1000))];
-      if (send({ method: 'm', params })) { motionSentAt[pad] = t; motionLive[pad] = true; }
+      if (sendMotion(params)) { motionSentAt[pad] = t; motionLive[pad] = true; }
+    }
+
+    function sendMotion(params) {
+      const pad = params[0], seq = motionSeq[pad] + 1;
+      if (!send({ method: 'm', params: [pad, seq, ...params.slice(1)] })) return false;
+      motionSeq[pad] = seq;
+      return true;
     }
 
     // Each frame: linked controllers' rumble and colour, and motion for the controllers that have it.
@@ -5070,12 +5223,17 @@
         releaseScreen();
         heldKeys.clear();
         Object.assign(keySource, blankSource(keySource.pad));
+        motionLeave(phoneMotion);
+        for (const link of hidLinks.values()) motionLeave(link.motion);
         for (const pad of claimedPads()) {
-          send({ method: 'u', params: [pad, 0, 128, 128, 128, 128, 0, 0, 0] });
+          if (status[pad].mine) sendInput([pad, 0, 128, 128, 128, 128, 0, 0, 0]);
           lastSent[pad] = '';
         }
         stopAllRumble();
-        for (const src of gamepadSources.values()) clearDevice(src);
+        for (const src of gamepadSources.values()) {
+          clearDevice(src); src.hidState = null; src.hidAt = 0;
+          src.hidHold = VALID_BUTTONS; src.hidHoldL2 = src.hidHoldR2 = true;
+        }
         keepAwake.off();
       } else {
         resendAll();

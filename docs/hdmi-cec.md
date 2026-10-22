@@ -19,7 +19,7 @@ after a restart without the server; see [Installation](installation.md).
 
 1. Press **OK** to open **Actions**. A Menu key can also open it if exposed by the PS4.
 2. Use the arrows to choose an action, then press **OK** again. The menu includes setup/start,
-   auto-start, Stop and Close when those actions are available.
+   auto-start, **Test controllers**, Stop and Close when those actions are available.
 3. **Stop** opens a separate confirmation with **Cancel** selected. Choose **Stop**, release
    OK, then press it again to confirm. Stopping disconnects every virtual controller.
 4. **Back**, when the PS4 exposes it, returns from the menu or cancels confirmation. **Resume**
@@ -28,6 +28,17 @@ after a restart without the server; see [Installation](installation.md).
 Existing DualShock 4 shortcuts work outside the menu. Its D-pad can also open and navigate
 Actions in the normal app. Service operations finish before another operation or Close is
 available. Release held buttons after opening the app, reconnecting or returning to it.
+
+## Controller test
+
+Choose **Actions → Test controllers**. The live picture and values show input received for the selected
+PS4 user. Press **OK** for the controller-tools grid. Arrows move between its icons and wrap at the
+edges; **OK** runs the selected tool. **Switch user** cycles through signed-in users. Tools include
+rumble, light-bar colors and orientation reset; unavailable ones are dimmed and explain why.
+
+**Resume** or **Back** returns to live input. **Leave test** returns to the launcher; Back from the live
+test does the same. **Controller page RTT** shows the connection reading for that user's virtual
+controllers when available. See [Testing controllers](playing.md#testing-controllers-on-the-ps4).
 
 ## Diagnostic app
 

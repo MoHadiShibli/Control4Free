@@ -6,6 +6,18 @@
   Zaitsev, under the MIT license included in `vendor/jsmn/LICENSE`.
   Retrieved 2026-10-04; SHA-256:
   `c04533e9181e1e33baceb0f55ac449b05145bb936e8c68cc77dfe0d8277514fb`.
+- `vendor/mbedtls/` contains the Mbed TLS headers and library sources used for
+  WebRTC's DTLS encryption. The included version header identifies Mbed TLS 3.6.7;
+  upstream reference: [tag `mbedtls-3.6.7`](https://github.com/Mbed-TLS/mbedtls/tree/mbedtls-3.6.7).
+  Its dual Apache-2.0 OR GPL-2.0-or-later license is retained in
+  `vendor/mbedtls/LICENSE`; Control4Free uses the Apache-2.0 option.
+  The SHA-256 of the vendored 126-file source manifest is
+  `cdc9b4a0025cb796015477377dbd3b2c2c4b13118670cd930dfff60ec9ce4daa`.
+  To reproduce this content fingerprint, sort all file paths relative to
+  `vendor/mbedtls/` by ordinal order, with `/` separators. For each file, append
+  its lowercase SHA-256, two spaces, its relative path and a line feed. Hash that
+  UTF-8 manifest without a byte-order mark. This identifies the included subset,
+  rather than an upstream download archive.
 - The toolchain uses https://github.com/ps4-payload-dev/sdk; its version is pinned
   in `docker/Dockerfile` and it retains its own licensing.
 - The native launcher uses the OpenOrbis PS4 Toolchain and its software-display
@@ -44,4 +56,5 @@
 
 These license notices are also included inside the package.
 
-The HTTP/WebSocket transport in `src/net.c` is a new implementation.
+The HTTP, ICE/STUN and SCTP transport code is implemented in this project;
+the WebRTC DTLS layer uses Mbed TLS as credited above.

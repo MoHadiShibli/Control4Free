@@ -18,6 +18,13 @@ typedef enum {
     C4F_ACTION_CAPTURE,
     C4F_ACTION_TESTER
 } C4fLauncherAction;
+/* Connection round trips for the selected user's virtual-controller slots.
+ * A negative RTT means that no fresh measurement is available yet. */
+typedef struct {
+    int available;
+    unsigned pads;
+    int rttMs[4];
+} C4fTesterConnection;
 typedef struct {
     int running, busy, controllers, confirmStop, locked;
     int actionMenu, actionFocus;
@@ -25,6 +32,7 @@ typedef struct {
     int autorun; /* C4F_AUTORUN_* from autorun.h */
     char address[64], message[160], autorunNote[96], runningVersion[32], inputNote[160];
     C4fTesterView tester; /* the controller test, when active */
+    C4fTesterConnection connection;
 #ifdef C4F_DIAG
     unsigned diagGeneration; /* bumped when a diagnostic page changes */
     int diagPage, diagScroll[8];

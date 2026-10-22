@@ -192,17 +192,35 @@ static int c4fEquals(const char *json, const jsmntok_t *token, const char *value
     return token->end - token->start == (int)strlen(value) && !memcmp(json + token->start, value, strlen(value));
 }
 
+static int c4fStatusInteger(const char *json, const jsmntok_t *token, int64_t maximum, int64_t *out)
+{
+    if (token->type != JSMN_PRIMITIVE) return -1;
+    if (c4fEquals(json, token, "-1")) { *out = -1; return 0; }
+    int length = token->end - token->start;
+    if (length < 1 || length > 10 || (length > 1 && json[token->start] == '0')) return -1;
+    int64_t value = 0;
+    for (int i = token->start; i < token->end; i++) {
+        if (json[i] < '0' || json[i] > '9') return -1;
+        value = value * 10 + json[i] - '0';
+    }
+    if (value > maximum) return -1;
+    *out = value;
+    return 0;
+}
+
 int c4fLauncherProbe(C4fServiceStatus *status)
 {
-    char body[512]; jsmntok_t tokens[24]; jsmn_parser parser;
+    char body[1024]; jsmntok_t tokens[64]; jsmn_parser parser;
     memset(status, 0, sizeof(*status));
+    for (int i = 0; i < C4F_SERVICE_PADS; i++) status->latency[i].rttMs = status->latency[i].ageMs = -1;
     int result = c4fHttp("GET", "/api/status", body, sizeof(body));
     if (result <= 0) return result;
     jsmn_init(&parser);
-    int count = jsmn_parse(&parser, body, strlen(body), tokens, 24);
+    int count = jsmn_parse(&parser, body, strlen(body), tokens, 64);
     snprintf(c4fProblem, sizeof(c4fProblem), "the status reply is not from Control4Free");
     if (count < 1 || tokens[0].type != JSMN_OBJECT || tokens[0].end != (int)strlen(body)) return -1;
     int app = 0, api = 0, controllers = 0, stopping = 0;
+    unsigned latencyFields[C4F_SERVICE_PADS] = { 0 };
     for (int i = 1; i + 1 < count; i += 2) {
         jsmntok_t *key = &tokens[i], *value = &tokens[i+1];
         if (key->type != JSMN_STRING || (value->type != JSMN_STRING && value->type != JSMN_PRIMITIVE)) return -1;
@@ -218,9 +236,28 @@ int c4fLauncherProbe(C4fServiceStatus *status)
             int size = value->end - value->start;
             if (value->type != JSMN_STRING || size >= (int)sizeof(status->version)) return -1;
             memcpy(status->version, body + value->start, (size_t)size);
+        } else if (c4fEquals(body, key, "latency")) {
+            if (value->type != JSMN_PRIMITIVE || (!c4fEquals(body, value, "true") && !c4fEquals(body, value, "false"))) return -1;
+            status->latencyAvailable = c4fEquals(body, value, "true");
+        } else {
+            static const char *const fields[] = { "User", "Rtt", "Age" };
+            for (int p = 0; p < C4F_SERVICE_PADS; p++) for (int f = 0; f < 3; f++) {
+                char name[16];
+                snprintf(name, sizeof(name), "pad%d%s", p, fields[f]);
+                if (!c4fEquals(body, key, name)) continue;
+                int64_t number;
+                if ((latencyFields[p] & (1U << f)) ||
+                    c4fStatusInteger(body, value, f == 0 ? UINT32_MAX : f == 1 ? 60000 : INT32_MAX, &number)) return -1;
+                latencyFields[p] |= 1U << f;
+                C4fServiceLatency *link = &status->latency[p];
+                if (f == 0) { link->userKnown = number >= 0; link->userId = number >= 0 ? (uint32_t)number : 0; }
+                else if (f == 1) link->rttMs = (int)number;
+                else link->ageMs = (int)number;
+            }
         }
     }
     if (!(app && api && controllers && stopping)) return -1;
+    for (int p = 0; p < C4F_SERVICE_PADS; p++) if (latencyFields[p] != 7) status->latencyAvailable = 0;
     c4fProblem[0] = 0;
     return 1;
 }

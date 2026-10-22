@@ -10,6 +10,9 @@
 #define C4F_TESTER_RUMBLE_MS 1000
 #define C4F_TESTER_RETRY_MS 1000
 #define C4F_TESTER_NAME 24
+#define C4F_TESTER_MENU_COLUMNS 4
+#define C4F_TESTER_REPEAT_DELAY_MS 350
+#define C4F_TESTER_REPEAT_MS 100
 
 /* One sample as the read side reports it. */
 typedef struct {
@@ -48,10 +51,11 @@ enum { C4F_TESTER_OPENING, C4F_TESTER_READY, C4F_TESTER_NO_CONTROLLER, C4F_TESTE
 
 /* The menu, in order. */
 typedef enum {
-    C4F_TESTER_RESUME, C4F_TESTER_USER, C4F_TESTER_RUMBLE_LARGE, C4F_TESTER_RUMBLE_SMALL,
-    C4F_TESTER_LIGHT_RED, C4F_TESTER_LIGHT_GREEN, C4F_TESTER_LIGHT_BLUE, C4F_TESTER_LIGHT_RESET,
-    C4F_TESTER_ORIENTATION, C4F_TESTER_EXIT, C4F_TESTER_ITEMS
+    C4F_TESTER_RESUME, C4F_TESTER_USER, C4F_TESTER_ORIENTATION, C4F_TESTER_LIGHT_COLOR,
+    C4F_TESTER_RUMBLE_LARGE, C4F_TESTER_RUMBLE_SMALL, C4F_TESTER_LIGHT_RESET,
+    C4F_TESTER_EXIT, C4F_TESTER_ITEMS
 } C4fTesterItem;
+#define C4F_TESTER_MENU_ROWS ((C4F_TESTER_ITEMS + C4F_TESTER_MENU_COLUMNS - 1) / C4F_TESTER_MENU_COLUMNS)
 
 /* L3 and R3 held together for C4F_TESTER_HOLD_MS. */
 typedef struct {
@@ -62,8 +66,9 @@ typedef struct {
 typedef struct {
     int32_t user; /* -1: empty slot */
     int handle, owned, state, lightSet, seen;
-    uint32_t error, previous, pressed;
-    uint64_t retryAt;
+    uint32_t error, previous, pressed, menuBlocked, repeatDirection;
+    uint64_t retryAt, repeatAt;
+    C4fTesterHold hold;
     uint8_t light[3];
     char name[C4F_TESTER_NAME];
     C4fTesterSample sample;
@@ -72,8 +77,9 @@ typedef struct {
 typedef struct {
     C4fTesterOps ops;
     int active, menu, focus, armed, selected, rumble, rumbleReader;
+    int colorMenu, colorChannel, colorFine;
+    unsigned menuOpeners;
     uint64_t usersAt, rumbleUntil;
-    C4fTesterHold hold;
     C4fTesterReader readers[C4F_TESTER_USERS];
     char note[96];
 } C4fTester;
@@ -82,8 +88,9 @@ typedef struct {
  * compares equal and causes no redraw. */
 typedef struct {
     int active, menu, focus, selected, rumble, lightSet;
+    int colorMenu, colorChannel, colorFine;
     uint8_t light[3];
-    struct { char name[C4F_TESTER_NAME]; int state, used; uint32_t error; } user[C4F_TESTER_USERS];
+    struct { int32_t id; char name[C4F_TESTER_NAME]; int state, used; uint32_t error; } user[C4F_TESTER_USERS];
     uint32_t buttons;
     uint8_t lx, ly, rx, ry, l2, r2, touches;
     uint16_t touchX[2], touchY[2];
@@ -109,6 +116,8 @@ void c4fTesterSuspend(C4fTester *tester, uint64_t now);
 void c4fTesterClose(C4fTester *tester);
 void c4fTesterView(const C4fTester *tester, C4fTesterView *view);
 const char *c4fTesterItemLabel(int item);
+/* Shared by menu drawing and activation. Unavailable tiles may take focus. */
+int c4fTesterItemAvailable(const C4fTesterView *view, int item);
 #ifdef __cplusplus
 }
 #endif

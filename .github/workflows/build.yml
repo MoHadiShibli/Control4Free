@@ -49,11 +49,19 @@ jobs:
           docker run --rm -v "$PWD:/src" -w /src mcr.microsoft.com/playwright:v1.63.0-noble \
             bash -lc 'mkdir -p /tmp/c4f-browser; cd /tmp/c4f-browser; npm init -y >/dev/null; npm install playwright@1.63.0; cd /src; NODE_PATH=/tmp/c4f-browser/node_modules node tests/experimental_test.cjs'
 
+      - name: WebRTC browser and input recovery checks
+        run: |
+          docker run --rm -v "$PWD:/src" -w /src mcr.microsoft.com/playwright:v1.63.0-noble \
+            bash -lc 'mkdir -p /tmp/c4f-browser; cd /tmp/c4f-browser; npm init -y >/dev/null; npm install playwright@1.63.0; cd /src; NODE_PATH=/tmp/c4f-browser/node_modules node tests/rtc_e2e.cjs && NODE_PATH=/tmp/c4f-browser/node_modules node tests/rtc_input_e2e.cjs'
+
       - name: Collect what was built
         run: |
           version=$(cat VERSION)
           mkdir -p artifacts
-          cp build/control4free.elf "build/Control4Free-$version.pkg" "build/Control4Free-$version-diag.pkg" artifacts/
+          cp build/control4free.elf "build/Control4Free-$version.pkg" artifacts/
+          # GitHub sorts assets by name. Keep the diagnostic download below the
+          # normal installer, payload and checksums, with its purpose in the name.
+          cp "build/Control4Free-$version-diag.pkg" "artifacts/troubleshooting-Control4Free-$version-diag.pkg"
           cd artifacts && sha256sum * > SHA256SUMS && cat SHA256SUMS
 
       - uses: actions/upload-artifact@v4
@@ -77,4 +85,9 @@ jobs:
           version=$(cat VERSION)
           python3 tools/release_notes.py CHANGELOG.md "$version" "$GITHUB_REPOSITORY" > notes.md
           test -s notes.md || { echo "CHANGELOG.md has no section for $version"; exit 1; }
-          gh release create "${GITHUB_REF#refs/tags/}" artifacts/* --verify-tag --title "Control4Free $version" --notes-file notes.md
+          gh release create "${GITHUB_REF#refs/tags/}" \
+            "artifacts/Control4Free-$version.pkg#Normal package (recommended)" \
+            'artifacts/control4free.elf#Payload for manual loading' \
+            'artifacts/SHA256SUMS#Download checksums' \
+            "artifacts/troubleshooting-Control4Free-$version-diag.pkg#Troubleshooting only - diagnostic package" \
+            --verify-tag --title "Control4Free $version" --notes-file notes.md

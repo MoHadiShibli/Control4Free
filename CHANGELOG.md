@@ -1,31 +1,31 @@
 # Changelog
 
-Versions follow [Semantic Versioning](https://semver.org): PATCH for fixes, MINOR for features that break
-nothing, MAJOR for anything people rely on that changes.
-
 ## 1.3.0 — Unreleased
 
-A controller test on the PS4, and experimental extras on the page.
+WebRTC connections, controller testing on the PS4, and new experimental controller features.
 
-- **Test controllers** in the PS4 app shows what each signed-in user's controller sends, read the way a game
-  reads it: buttons, sticks, triggers, touchpad and motion sensors, on the page's controller picture. Press
-  **Options** in the app, or choose it under **Actions**. Hold **L3 + R3** for two seconds for its menu:
-  change user, rumble each motor, set the light bar, reset orientation, or go back. PS and Share go to the
-  PS4 itself and aren't shown. See [Testing controllers](docs/playing.md#testing-controllers-on-the-ps4).
-- **Settings → Experimental** on the page. Every switch stays off until you turn it on:
-  - **Lights and rumble on Sony controllers**: a DualShock 4 or DualSense connected to a computer lights up
-    in its PS4 controller's colour, rumbles directly (a DualSense included), and passes on its touchpad's
-    fingers, which browsers' gamepads leave out. Chrome or Edge on a computer.
-  - **Trigger rumble**: Xbox controllers and a linked DualSense vibrate the trigger you're pulling (the last
-    one pulled, when both are), following the game's rumble.
-  - **Motion controls**: tilting a phone, or a linked DualShock 4 or DualSense, moves the controller's
-    motion sensors.
+- **Rebuilt controller connections around WebRTC.** The old WebSocket connection delivered everything
+  in order, so recovering a lost packet could hold up newer input. Input now uses an unordered channel
+  without retransmissions, while controller selection and status use a separate reliable channel.
+  This reduces delayed and bunched-up inputs during packet loss. After a brief disconnection, the page
+  reconnects and restores its controller selection.
+- **Controller tester in the PS4 app:** see buttons, sticks, analog triggers, touchpad, motion and
+  connection latency; test rumble, choose light-bar colours with RGB sliders and reset orientation.
+  Supports controllers and HDMI-CEC remotes. See [Testing controllers](docs/playing.md#testing-controllers-on-the-ps4).
+- **DualShock 4 and DualSense touchpads now work when linked:** both finger positions and the click.
+  Experimental Sony controller support also adds direct rumble and PS4 light-bar colours.
+- **Experimental motion controls** use a phone's sensors or a linked DualShock 4 / DualSense.
+- **Experimental trigger rumble** adds vibration to the trigger you're pulling on supported Xbox
+  controllers and a linked DualSense. It follows the game's rumble; when both triggers are held, the
+  last one pulled vibrates. See [Experimental features](docs/playing.md#experimental-features) for setup
+  and how it works.
+- Corrected the large and small rumble motors being swapped on connected gamepads.
 
-  Linking and motion need the page treated as secure: see
-  [Experimental features](docs/troubleshooting.md#experimental-features).
-- The control protocol has a motion message, `m`. See [Protocol](docs/protocol.md).
-- Fixed: a game's rumble reached gamepads on the controller page with the large and small motors
-  swapped, so heavy rumble buzzed lightly and light rumble shook hard.
+Experimental features are off by default. Sony linking and motion need the
+[Chrome / Edge setup](docs/troubleshooting.md#experimental-features).
+
+**Updating:** update the PS4 service, then reload the controller page. Replace any saved copy with a
+fresh one from the updated service.
 
 ## 1.2.1 — 2026-10-11
 

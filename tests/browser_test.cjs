@@ -2,9 +2,10 @@
 // Test instrumentation is inserted into the page in memory, never shipped.
 const { chromium } = require('playwright');
 const fs = require('node:fs'), assert = require('node:assert/strict'), { spawn } = require('node:child_process');
-const hook = '\nwindow.c4fTest = { ControllerMapping, mapper, profileStore, gamepadSources, pollGamepads, setGamepadPad, mergedState, renderGamepads, renderPads, openSettings, closeSettings, openPad, profileFor, loadProfiles, persistProfiles, clearDevice, applyStatus, status, getKeys: () => keymap };\n';
+const { relayOffer, recordRtcMessages, copyService } = require('./rtc_browser_helpers.cjs');
+const hook = '\nwindow.c4fTest = { ControllerMapping, mapper, profileStore, gamepadSources, pollGamepads, setGamepadPad, mergedState, renderGamepads, renderPads, openSettings, closeSettings, openPad, profileFor, loadProfiles, persistProfiles, clearDevice, applyStatus, status, conn, sendInput, sendMotion, getKeys: () => keymap };\n';
 const html = fs.readFileSync('/src/client/index.html', 'utf8').replace('\n  })();', hook + '  })();');
-fs.copyFileSync('/src/build/web-host-test', '/tmp/c4f-browser-service');
+copyService('/tmp/c4f-browser-service');
 const server = spawn('/tmp/c4f-browser-service', [], { env: { ...process.env, C4F_TEST_KLOG_FD: '0' }, stdio: ['pipe', 'pipe', 'pipe'] });
 server.on('error', error => console.error('Service harness:', error));
 server.stderr.on('data', data => console.error(data.toString()));
@@ -16,33 +17,117 @@ const listening = page => page.waitForFunction(() => c4fTest.mapper.capture?.rea
 const heard = page => page.waitForFunction(() => !c4fTest.mapper.capture);
 const bindings = (page, output) => page.evaluate(o => c4fTest.mapper.draft.bindings.filter(b => b.output === o).map(b => ({ ...b.input, invert: b.invert })), output);
 
+// Focused connection failures need deterministic peers, independently of the
+// real RTC/service integration below. No console or other network destination.
+async function checkConnectionLifecycle(browser) {
+  const context = await browser.newContext();
+  await context.addInitScript(() => {
+    window.mockPeers = []; window.mockSends = [];
+    window.mockPad = { index: 0, id: 'Synthetic standard controller', mapping: 'standard', connected: true,
+      buttons: Array.from({ length: 17 }, () => ({ value: 0, pressed: false })), axes: [0, 0, 0, 0] };
+    Object.defineProperty(navigator, 'getGamepads', { value: () => [mockPad] });
+    window.WebSocket = class { constructor() { throw Error('The controller must use RTC only'); } };
+    class Channel {
+      constructor(peer, label, options) { Object.assign(this, options, { peer, label, readyState: 'connecting' }); }
+      send(data) {
+        if (this.readyState !== 'open') throw Error('closed');
+        const message = JSON.parse(data);
+        mockSends.push({ peer: this.peer.index, channel: this.id, message });
+        if (!message.id) return;
+        let result = {};
+        if (message.method === 'info') result = { protocol: 3, input: true, motion: true };
+        if (message.method === 'claim' || message.method === 'status') result = { pads: Array.from({ length: 4 }, (_, pad) => ({
+          pad, mine: message.params.includes(pad), open: message.params.includes(pad), connected: message.params.includes(pad),
+          clients: message.params.includes(pad) ? 1 : 0, state: message.params.includes(pad) ? 'ready' : 'free',
+          color: [32, 96, 255], name: 'Controller ' + (pad + 1),
+        })) };
+        queueMicrotask(() => this.onmessage?.({ data: JSON.stringify({ id: message.id, result }) }));
+      }
+    }
+    window.RTCPeerConnection = class {
+      constructor(options) { this.options = options; this.channels = []; this.index = mockPeers.length; this.connectionState = 'new'; mockPeers.push(this); }
+      createDataChannel(label, options) { const ch = new Channel(this, label, options); this.channels.push(ch); return ch; }
+      async createOffer() { return { type: 'offer', sdp: 'local test offer' }; }
+      async setLocalDescription(offer) { this.localDescription = offer; }
+      async setRemoteDescription(answer) {
+        if (answer.type !== 'answer') throw Error('answer required');
+        this.connectionState = 'connected';
+        for (const ch of this.channels) { ch.readyState = 'open'; ch.onopen?.(); }
+        this.onconnectionstatechange?.();
+      }
+      close() {
+        this.connectionState = 'closed';
+        for (const ch of this.channels) { ch.readyState = 'closed'; ch.onclose?.(); }
+        this.onconnectionstatechange?.();
+      }
+    };
+    window.fetch = async (url, options) => {
+      if (url !== 'http://127.0.0.1:4279/rtc' || options.method !== 'POST' || options.body !== 'local test offer') throw Error('Unexpected signaling request');
+      return { ok: true, text: async () => 'local test answer' };
+    };
+  });
+  const page = await context.newPage(), errors = [];
+  page.on('pageerror', e => errors.push(e.message));
+  await page.route('http://127.0.0.1:4279/', r => r.fulfill({ contentType: 'text/html', body: html }));
+  try {
+    await page.goto('http://127.0.0.1:4279/');
+    await page.waitForFunction(() => window.c4fTest?.conn.state === 'open' && c4fTest.gamepadSources.size === 1);
+    assert.deepEqual(await page.evaluate(() => mockPeers[0].channels.map(ch => ({ id: ch.id, ordered: ch.ordered, maxRetransmits: ch.maxRetransmits ?? null }))),
+      [{ id: 0, ordered: true, maxRetransmits: null }, { id: 1, ordered: false, maxRetransmits: 0 }]);
+    await page.evaluate(() => { c4fTest.setGamepadPad(0, 0); c4fTest.openPad(0); });
+    await page.waitForFunction(() => c4fTest.status[0].mine && !c4fTest.gamepadSources.get(0).waitNeutral);
+    const burst = await page.evaluate(() => {
+      const before = mockSends.length;
+      for (const buttons of [0x4000, 0, 0x1000, 0, 0x2000, 0]) c4fTest.sendInput([0, buttons, 128, 128, 128, 128, 0, 0, 0]);
+      c4fTest.sendMotion([0, 0, 0, 0, 10000, 0, 0, 0, 0, 0, 0]);
+      return mockSends.slice(before);
+    });
+    assert.equal(burst.length, 7, 'all changes send in the same task, without a new pacing cap');
+    for (const record of burst) assert.equal(record.channel, 1);
+    const packets = burst.filter(r => r.message.method === 'i').map(r => r.message.params);
+    assert.deepEqual(packets.map(p => p[2]), [0x4000, 0, 0x1000, 0, 0x2000, 0]);
+    for (let i = 1; i < packets.length; i++) assert.equal(packets[i][1], packets[i - 1][1] + 1);
+    const tail = packets.at(-1), edges = Array.from({ length: tail[10] }, (_, i) => tail.slice(11 + 2 * i, 13 + 2 * i));
+    assert.equal(edges.length, 4);
+    assert.deepEqual(edges.map(e => e[1]), [0, 0x1000, 0, 0x2000]);
+    assert(edges.every((e, i) => e[0] < tail[1] && (!i || e[0] > edges[i - 1][0])));
+    assert.deepEqual(burst.at(-1).message.params, [0, 1, 0, 0, 0, 10000, 0, 0, 0, 0, 0, 0]);
+    await page.evaluate(() => { mockPad.buttons[0].value = 1; });
+    await page.waitForFunction(() => !!(c4fTest.mergedState(0).buttons & 0x4000));
+    await page.evaluate(() => { window.oldPeer = c4fTest.conn.pc; oldPeer.close(); });
+    await page.waitForFunction(() => mockPeers.length === 2 && c4fTest.conn.state === 'open' && c4fTest.status[0].mine);
+    assert.equal(await page.evaluate(() => c4fTest.gamepadSources.get(0).pad), 0, 'reconnect retains the gamepad selection');
+    assert.equal(await page.locator('#padView').isVisible(), true, 'reconnect retains the controller view');
+    assert.equal(await page.evaluate(() => c4fTest.mergedState(0).buttons & 0x4000), 0, 'a held button is not replayed');
+    await page.evaluate(() => oldPeer.channels[0].onmessage({ data: JSON.stringify({ method: 's', params: { pads: [{ pad: 0, mine: false }] } }) }));
+    assert.equal(await page.evaluate(() => c4fTest.status[0].mine), true, 'late messages from the old peer are ignored');
+    await page.evaluate(() => { mockPad.buttons[0].value = 0; });
+    await page.waitForFunction(() => !c4fTest.gamepadSources.get(0).waitNeutral);
+    await page.evaluate(() => { mockPad.buttons[0].value = 1; });
+    await page.waitForFunction(() => !!(c4fTest.mergedState(0).buttons & 0x4000));
+    assert.deepEqual(errors, []);
+    console.log('PASS RTC page: channel modes, immediate changes, four preceding edges, motion sequence, automatic reclaim and held-input recovery');
+  } finally { await context.close(); }
+}
+
 (async () => {
   let browser;
   try {
     browser = await chromium.launch({ headless: true });
+    await checkConnectionLifecycle(browser);
     const context = await browser.newContext({ viewport: { width: 1440, height: 1000 } });
     // A fulfilled test document has no network address-space metadata. Allow
     // its local test service explicitly, as a user would allow local access.
     await context.grantPermissions(['local-network-access']);
+    await context.addInitScript(recordRtcMessages);
     await context.addInitScript(() => {
-      window.testClaims = [];
-      window.testInputs = [];
-      const socketSend = WebSocket.prototype.send;
-      WebSocket.prototype.send = function(data) {
-        try {
-          const message = JSON.parse(data);
-          if (message.method === 'claim') testClaims.push(message.params);
-          if (message.method === 'u') testInputs.push(message.params);
-        } catch {}
-        return socketSend.call(this, data);
-      };
       window.testPads = [0, 1, 2].map(index => ({ index, id: index < 2 ? 'Synthetic standard controller' : 'Synthetic wheel / pedals',
         mapping: index < 2 ? 'standard' : '', connected: true, buttons: Array.from({ length: 24 }, () => ({ value: 0, pressed: false })), axes: Array(6).fill(0) }));
       Object.defineProperty(navigator, 'getGamepads', { value: () => { if (window.failPolling) throw Error('SecurityError'); return window.testPads; } });
     });
     const page = await context.newPage(), errors = [];
-    page.on('websocket', ws => ws.on('socketerror', error => console.error('WebSocket:', error)));
     page.on('pageerror', e => { errors.push(e.message); console.error('Page error:', e.stack); });
+    await relayOffer(page);
     await page.route(/^http:\/\/127\.0\.0\.1:4264\/(?:\?.*)?$/, async r => r.fulfill({ response: await r.fetch(), body: html }));
     await page.goto('http://127.0.0.1:4264/');
     await page.waitForFunction(() => window.c4fTest?.gamepadSources.size === 3);
@@ -99,7 +184,7 @@ const bindings = (page, output) => page.evaluate(o => c4fTest.mapper.draft.bindi
         assert.equal(await page.evaluate(other => c4fTest.mergedState(other).buttons & 0x10000, other), 0, 'PS leaked into the other virtual controller');
         await page.waitForFunction(target => document.querySelector('#psBtn').classList.contains('on') === (target === 1), target);
         await page.waitForFunction(target => !!(testInputs.findLast(p => p[0] === target)?.[1] & 0x10000), target);
-        assert.equal(await page.evaluate(other => testInputs.findLast(p => p[0] === other)?.[1] & 0x10000, other), 0, 'PS went to the wrong WebSocket slot');
+        assert.equal(await page.evaluate(other => testInputs.findLast(p => p[0] === other)?.[1] & 0x10000, other), 0, 'PS went to the wrong input slot');
         await page.evaluate(index => { testPads[index].buttons[16].value = 0; }, index);
         await page.waitForFunction(() => !(c4fTest.mergedState(0).buttons & 0x10000) && !(c4fTest.mergedState(1).buttons & 0x10000));
         await page.waitForFunction(() => !document.querySelector('#psBtn').classList.contains('on'));
@@ -116,7 +201,7 @@ const bindings = (page, output) => page.evaluate(o => c4fTest.mapper.draft.bindi
     }
     await page.evaluate(() => { c4fTest.setGamepadPad(0, 0); c4fTest.setGamepadPad(1, 1); c4fTest.setGamepadPad(2, 0); });
     await page.click('#backBtn');
-    console.log('PASS real browser: independent PS buttons on identical gamepads, reversed assignments, simultaneous holds, both release orders, display and WebSocket routing');
+    console.log('PASS real browser: independent PS buttons on identical gamepads, reversed assignments, simultaneous holds, both release orders, display and RTC routing');
 
     // The two mapping tabs must read only the selected physical source, even
     // when identical pads arrive in a different enumeration order. Guide can
@@ -428,11 +513,13 @@ const bindings = (page, output) => page.evaluate(o => c4fTest.mapper.draft.bindi
 
     // Actual served HTTP document works without instrumentation or grants.
     const plain = await browser.newContext(), smoke = await plain.newPage();
+    await relayOffer(smoke);
     await smoke.goto('http://127.0.0.1:4264/');
     await smoke.waitForFunction(() => document.querySelector('#conn').dataset.conn === 'open');
     await plain.close();
     const saved = await browser.newContext(), filePage = await saved.newPage();
     await saved.grantPermissions(['local-network-access']);
+    await relayOffer(filePage);
     await filePage.goto('file:///src/client/index.html');
     assert.equal(await filePage.locator('#addressForm').isVisible(), true, 'a saved copy asks for the address');
     await filePage.fill('#address', '127.0.0.1');
