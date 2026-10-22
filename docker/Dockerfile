@@ -2,8 +2,8 @@
 #
 # Holds clang/lld plus a pinned ps4-payload-sdk release, so a build needs nothing
 # installed on the host but Docker. Matches the SDK's own CI (clang-18 / lld-18).
-# Docker's official Ubuntu mirror avoids Docker Hub's shared pull quota.
-FROM public.ecr.aws/docker/library/ubuntu:24.04@sha256:534baea6a22c03a63003dbc8dbe78fe34bc0d7e595d9a9dc9834884ff530eb55
+# Use the official registry; the public ECR mirror can reject CI pulls with 429.
+FROM docker.io/library/ubuntu:24.04@sha256:534baea6a22c03a63003dbc8dbe78fe34bc0d7e595d9a9dc9834884ff530eb55
 
 ARG SDK_VERSION=v0.9
 
