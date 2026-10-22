@@ -1,6 +1,6 @@
 # Changelog
 
-## 1.3.0 — Unreleased
+## 1.3.0 — 2026-10-22
 
 WebRTC connections, controller testing on the PS4, and new experimental controller features.
 
