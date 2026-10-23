@@ -529,7 +529,7 @@ void c4fDrawLauncher(uint32_t *pixels, const C4fLauncherScreen *s)
 
     /* .screen-title and .screen-sub */
     c4fText(&c, C4F_FONT_LIGHT, 40 * C4F_S, left, 196, C4F_TEXT, look.title);
-    c4fTextWrapped(&c, C4F_FONT_LIGHT, 26, left, 250, 1500, 39, 2, C4F_MUTED, look.subtitle);
+    c4fTextWrapped(&c, C4F_FONT_LIGHT, 26, left, 250, right - left, 39, 2, C4F_MUTED, look.subtitle);
 
     /* Where to connect, as a controller tile. */
     c4fTile(&c, left, top, mainWidth, height, look.bar);

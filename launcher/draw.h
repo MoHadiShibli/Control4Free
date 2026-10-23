@@ -68,6 +68,9 @@ void c4fShadowPath(C4fCanvas *c, const C4fPath *p, C4fPlacement at, float dx, fl
 float c4fText(C4fCanvas *c, int font, float size, float x, float y, C4fColor color, const char *text);
 float c4fTextN(C4fCanvas *c, int font, float size, float x, float y, C4fColor color, const char *text, int length);
 float c4fTextWidth(int font, float size, const char *text);
+/* User data uses the same renderer without looking it up as interface text. */
+float c4fTextRaw(C4fCanvas *c, int font, float size, float x, float y, C4fColor color, const char *text);
+float c4fTextWidthRaw(int font, float size, const char *text);
 /* Word-wrapped text; returns the number of lines (drawn only if c is set). */
 int c4fTextWrapped(C4fCanvas *c, int font, float size, float x, float y, float maxWidth,
                    float lineHeight, int maxLines, C4fColor color, const char *text);

@@ -41,6 +41,7 @@ const english = load();
 assert.equal(english.observers.length, 0);
 assert.equal(english.ctx.document.documentElement.lang, 'en');
 assert.equal(english.ctx.translate, undefined);
+assert.equal(english.ctx.c4fText('Saved as {name}.', { name: 'Left. Right.' }), 'Saved as Left. Right..');
 console.log('PASS the saved choice, then the browser language, picks the page language; English changes nothing');
 
 const { ctx, observers } = load({ languages: ['pt-BR'] });
@@ -72,6 +73,14 @@ assert.equal(T(T('Options')), 'Opções', 'a translation is not translated again
 assert.equal(ctx.confirm('Disconnect your controllers and stop Control4Free on the PS4?'),
   'Desconectar seus controles e parar o Control4Free no PS4?');
 console.log('PASS Brazilian Portuguese: fixed texts, texts with values, several sentences and untranslated names');
+
+for (const name of ['Left', 'Esquerda', 'Settings', 'Left. Right.', 'Saved as Left. Settings.', '<b>Left</b>', '{name}']) {
+  assert.equal(ctx.c4fText('Saved as {name}.', { name }), 'Salvo como ' + name + '.');
+  assert.equal(ctx.c4fText('Press Delete again to delete {name}.', { name }), 'Aperte Excluir de novo para excluir ' + name + '.');
+  assert.equal(ctx.c4fText('Controller {number} · {name}', { number: 2, name }), 'Controle 2 · ' + name);
+  assert.equal(ctx.c4fText('Gamepad {number} · {name}', { number: 1, name }), 'Gamepad 1 · ' + name);
+}
+console.log('PASS interface templates are translated before literal names are interpolated');
 
 // Every text in the markup has a translation, so new ones are noticed.
 const markup = page.slice(page.indexOf('<body>'), page.indexOf('<script>'));

@@ -97,6 +97,7 @@ def main():
     subprocess.run(['clang-18', '-std=gnu11', '-D_DEFAULT_SOURCE', '-Wall', '-Wextra', '-Werror', '-Ilauncher',
                     'tests/launcher_language_test.c', '-o', 'build/launcher-language-host-test'], check=True)
     subprocess.run(['build/launcher-language-host-test'], check=True)
+    subprocess.run([sys.executable, '-B', 'tests/test_launcher_language_render.py'], check=True)
     subprocess.run(['clang-18', '-std=gnu11', '-D_DEFAULT_SOURCE', '-Wall', '-Wextra', '-Werror',
                     '-ffunction-sections', '-fdata-sections', '-Ilauncher', '-Itests/include',
                     'tests/diag_test.c', '-Wl,--gc-sections,--wrap=write,--wrap=fsync', '-pthread',

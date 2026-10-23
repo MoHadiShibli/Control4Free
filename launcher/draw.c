@@ -528,6 +528,11 @@ static float c4fTextWidthN(int font, float size, const char *text, int length)
 float c4fTextWidth(int font, float size, const char *text)
 {
     text = c4fShown(text);
+    return c4fTextWidthRaw(font, size, text);
+}
+
+float c4fTextWidthRaw(int font, float size, const char *text)
+{
     return c4fTextWidthN(font, size, text, (int)strlen(text));
 }
 
@@ -558,6 +563,11 @@ float c4fTextN(C4fCanvas *c, int font, float size, float x, float y, C4fColor co
 float c4fText(C4fCanvas *c, int font, float size, float x, float y, C4fColor color, const char *text)
 {
     text = c4fShown(text);
+    return c4fTextRaw(c, font, size, x, y, color, text);
+}
+
+float c4fTextRaw(C4fCanvas *c, int font, float size, float x, float y, C4fColor color, const char *text)
+{
     return c4fTextN(c, font, size, x, y, color, text, (int)strlen(text));
 }
 

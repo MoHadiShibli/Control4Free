@@ -122,9 +122,10 @@ static void c4fTesterUsers(C4fTester *t, uint64_t now)
             r->name[0] = 0;
             if (t->ops.userName) t->ops.userName(t->ops.context, r->user, r->name, (int)sizeof(r->name));
             r->name[sizeof(r->name) - 1] = 0;
-            /* Names are drawn in plain ASCII. */
-            for (char *p = r->name; *p; p++) if ((unsigned char)*p < 32 || (unsigned char)*p > 126) *p = '?';
-            if (!r->name[0]) snprintf(r->name, sizeof(r->name), "User %d", s + 1);
+            /* Preserve UTF-8 names. Only replace ASCII control characters. */
+            for (char *p = r->name; *p; p++) if ((unsigned char)*p < 32 || (unsigned char)*p == 127) *p = '?';
+            r->nameGenerated = !r->name[0];
+            if (r->nameGenerated) snprintf(r->name, sizeof(r->name), "User %d", s + 1);
             r->retryAt = now;
             c4fReaderState(t, s, C4F_TESTER_OPENING, 0);
             known = 1;
@@ -520,6 +521,7 @@ void c4fTesterView(const C4fTester *t, C4fTesterView *v)
         if (!v->user[s].used) continue;
         v->user[s].id = r->user;
         snprintf(v->user[s].name, sizeof(v->user[s].name), "%s", r->name);
+        v->user[s].nameGenerated = r->nameGenerated;
         v->user[s].state = r->state;
         v->user[s].error = r->error;
     }

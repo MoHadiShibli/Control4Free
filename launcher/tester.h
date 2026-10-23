@@ -9,7 +9,7 @@
 #define C4F_TESTER_HOLD_MS 2000
 #define C4F_TESTER_RUMBLE_MS 1000
 #define C4F_TESTER_RETRY_MS 1000
-#define C4F_TESTER_NAME 24
+#define C4F_TESTER_NAME 72 /* Room for a complete 16-character UTF-8 username. */
 #define C4F_TESTER_MENU_COLUMNS 4
 #define C4F_TESTER_REPEAT_DELAY_MS 350
 #define C4F_TESTER_REPEAT_MS 100
@@ -65,7 +65,7 @@ typedef struct {
 
 typedef struct {
     int32_t user; /* -1: empty slot */
-    int handle, owned, state, lightSet, seen;
+    int handle, owned, state, lightSet, seen, nameGenerated;
     uint32_t error, previous, pressed, menuBlocked, repeatDirection;
     uint64_t retryAt, repeatAt;
     C4fTesterHold hold;
@@ -90,7 +90,7 @@ typedef struct {
     int active, menu, focus, selected, rumble, lightSet;
     int colorMenu, colorChannel, colorFine;
     uint8_t light[3];
-    struct { int32_t id; char name[C4F_TESTER_NAME]; int state, used; uint32_t error; } user[C4F_TESTER_USERS];
+    struct { int32_t id; char name[C4F_TESTER_NAME]; int state, used, nameGenerated; uint32_t error; } user[C4F_TESTER_USERS];
     uint32_t buttons;
     uint8_t lx, ly, rx, ry, l2, r2, touches;
     uint16_t touchX[2], touchY[2];

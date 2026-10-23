@@ -26,6 +26,7 @@ typedef struct {
     int count, listError;
     FakePad pads[4];
     int stateCalls;
+    const char *nameOverride;
 } Fake;
 
 static FakePad *byUser(Fake *f, int32_t user)
@@ -52,7 +53,11 @@ static int fakeUsers(void *context, int32_t *users)
 
 static void fakeName(void *context, int32_t user, char *name, int size)
 {
-    (void)context;
+    Fake *f = context;
+    if (user == 1 && f->nameOverride) {
+        snprintf(name, (size_t)size, "%s", f->nameOverride);
+        return;
+    }
     /* User 3 has no name the app can draw: the tester falls back. */
     if (user == 3) { name[0] = 0; return; }
     snprintf(name, (size_t)size, user == 1 ? "Alex" : user == 2 ? "Sam\x01" : "Kim");
@@ -741,10 +746,26 @@ static void launcherEntry(void)
     puts("PASS Test controllers: in Actions unless locked, Options opens it, every menu item has a label");
 }
 
+static void literalNames(void)
+{
+    Fake f;
+    static C4fTester t;
+    const char *names[] = { "João", "Left", "User 1" };
+    for (unsigned i = 0; i < sizeof(names) / sizeof(names[0]); i++) {
+        setup(&f, &t); f.nameOverride = names[i];
+        c4fTesterOpen(&t, 0);
+        C4fTesterView view; c4fTesterView(&t, &view);
+        assert(!strcmp(view.user[0].name, names[i]) && !view.user[0].nameGenerated);
+        c4fTesterClose(&t);
+    }
+    puts("PASS accented usernames and names matching interface labels remain literal");
+}
+
 int main(void)
 {
     holdTiming();
     readsUsers();
+    literalNames();
     menuActions();
     switchUsers();
     menuOpeningSafety();

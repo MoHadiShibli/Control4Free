@@ -236,7 +236,7 @@
       letter-spacing: .01em;
     }
 
-    .screen-sub { margin: 8px 0 0; color: var(--muted); font-size: 15px; font-weight: 300; line-height: 1.5; max-width: 60ch; }
+    .screen-sub { margin: 8px 0 0; color: var(--muted); font-size: 15px; font-weight: 300; line-height: 1.5; max-width: 100%; text-wrap: pretty; }
 
     .tiles {
       margin-top: 22px;
@@ -456,7 +456,12 @@
     .lang-pick { appearance: none; border: 0; background: none; padding: 6px 0; color: var(--muted); font: inherit; font-size: 13px; cursor: pointer; text-decoration: underline; text-underline-offset: 3px; text-decoration-color: var(--line); }
     .lang-pick:hover { color: #fff; }
     .lang-pick option, .lang-select option { background: #04143a; color: #fff; }
-    .row .lang-select { width: auto; min-width: 200px; }
+    .row .lang-select { width: auto; min-width: 0; max-width: 100%; }
+    @media (max-width: 360px) {
+      .row:has(.lang-select) { grid-template-columns: minmax(0, 1fr); }
+      .row .lang-select { width: 100%; grid-column: 1; }
+      .row:has(.lang-select) .row-desc { grid-column: 1; }
+    }
 
     /* ---------- Controller ---------- */
 
@@ -1576,6 +1581,9 @@
     const browser = String((navigator.languages && navigator.languages[0]) || navigator.language || '');
     const lang = saved === 'auto' ? (/^pt\b/i.test(browser) ? 'pt-BR' : 'en') : saved;
     window.c4fLang = lang;
+    // Translate the interface template before inserting user/device data.
+    // Consumers mark the result translate=no so the observer cannot inspect it.
+    window.c4fText = (template, values = {}) => template.replace(/\{(\w+)\}/g, (_, key) => String(values[key] ?? ''));
 
     function choose(value) {
       try { localStorage.setItem(KEY, JSON.stringify(value)); } catch (e) { /* private mode */ }
@@ -1603,6 +1611,11 @@
     document.documentElement.lang = 'pt-BR';
 
     const EXACT = {
+      'Controller {number}': 'Controle {number}',
+      'Controller {number} · {name}': 'Controle {number} · {name}',
+      'Gamepad {number} · {name}': 'Gamepad {number} · {name}',
+      'Saved as {name}.': 'Salvo como {name}.',
+      'Press Delete again to delete {name}.': 'Aperte Excluir de novo para excluir {name}.',
       // Home
       'Palestinian flag': 'Bandeira da Palestina',
       'Syrian flag': 'Bandeira da Síria',
@@ -2083,13 +2096,14 @@
       if (!m[2] || !/[A-Za-z]/.test(m[2])) return text;
       return m[1] + T(m[2]) + m[3];
     }
+    window.c4fText = (template, values = {}) => translate(template).replace(/\{(\w+)\}/g, (_, key) => String(values[key] ?? ''));
 
     const ATTRS = ['title', 'aria-label', 'placeholder'];
     const seen = new WeakMap(); // node -> the text this layer last left in it
 
     function textNode(node) {
       const parent = node.parentNode;
-      if (!parent || parent.nodeName === 'SCRIPT' || parent.nodeName === 'STYLE') return;
+      if (!parent || parent.nodeName === 'SCRIPT' || parent.nodeName === 'STYLE' || parent.closest?.('[translate="no"]')) return;
       if (seen.get(node) === node.data) return;
       const t = translate(node.data);
       if (t !== node.data) node.data = t;
@@ -2097,7 +2111,7 @@
     }
 
     function attributes(element) {
-      if (!element.getAttribute) return;
+      if (!element.getAttribute || element.closest?.('[translate="no"]')) return;
       let done = seen.get(element);
       if (!done) seen.set(element, done = {});
       for (const name of ATTRS) {
@@ -2197,6 +2211,11 @@
       if (cls) e.className = cls;
       if (text !== undefined) e.textContent = text;
       return e;
+    }
+
+    function untranslated(element) {
+      element.setAttribute('translate', 'no');
+      return element;
     }
 
     // ---------------------------------------------------------------- clock
@@ -3627,7 +3646,9 @@
 
       src() { return this.index === null ? null : gamepadSources.get(this.index); },
       keyboard() { return this.source === 'keyboard'; },
-      status(text) { $('#mapStatus').textContent = text || ''; },
+      status(text, formatted = false) {
+        untranslated($('#mapStatus')).textContent = formatted ? text : window.c4fText(text || '');
+      },
       guideStatus() {
         if (this.keyboard()) return 'Click a DS4 control to change its key.';
         return (this.tab === 'inputs'
@@ -3714,7 +3735,8 @@
         const select = $('#mapSource');
         select.textContent = '';
         select.appendChild(new Option('Keyboard', 'keyboard'));
-        for (const [i, src] of gamepadSources) select.appendChild(new Option('Gamepad ' + (i + 1) + ' · ' + gamepadName(src), String(i)));
+        for (const [i, src] of gamepadSources)
+          select.appendChild(untranslated(new Option(window.c4fText('Gamepad {number} · {name}', { number: i + 1, name: gamepadName(src) }), String(i))));
         select.value = this.keyboard() ? 'keyboard' : String(this.index);
         const gamepad = !this.keyboard();
         $('#mapProfileBox').hidden = !gamepad;
@@ -3730,7 +3752,10 @@
           (sig.mapping === 'standard' ? 'the browser knows its layout' : 'the browser doesn\'t know its layout: check each control');
         const profiles = $('#mapProfile');
         profiles.textContent = '';
-        for (const p of [ControllerMapping.browserDefault(sig), ...profileStore.profiles]) profiles.appendChild(new Option(p.name, p.id));
+        for (const p of [ControllerMapping.browserDefault(sig), ...profileStore.profiles]) {
+          const option = new Option(p.name, p.id);
+          profiles.appendChild(p.id === 'default' ? option : untranslated(option));
+        }
         if (![...profiles.options].some(o => o.value === this.draft.id)) profiles.appendChild(new Option('New profile', this.draft.id));
         profiles.value = this.draft.id;
         // The standard layout's name is the gamepad's, until one is typed.
@@ -4482,7 +4507,8 @@
         this.draft = ControllerMapping.copy(draft);
         this.saved = JSON.stringify(this.draft);
         this.changed();
-        this.status('Saved as ' + draft.name + '.' + (profilePersistence ? ' ' + profilePersistence : ''));
+        this.status(window.c4fText('Saved as {name}.', { name: draft.name }) +
+          (profilePersistence ? ' ' + window.c4fText(profilePersistence) : ''), true);
       },
       newId() { return 'profile-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 10); },
       // Drops what this gamepad doesn't have and takes on its signature.
@@ -4519,7 +4545,7 @@
         if (!this.deleteArmed || now() - this.deleteArmed > 3000) {
           this.deleteArmed = now();
           $('#mapDelete').textContent = 'Press again to delete it';
-          return this.status('Press Delete again to delete ' + this.draft.name + '.');
+          return this.status(window.c4fText('Press Delete again to delete {name}.', { name: this.draft.name }), true);
         }
         $('#mapMenu').hidden = true;
         this.deleteArmed = 0;
@@ -4809,7 +4835,7 @@
         tile.appendChild(head);
         const body = el('span');
         // Who's signed in on it, once the PS4 says; the ring keeps the number.
-        body.appendChild(el('div', 'tile-name', s.known && s.user ? s.user : 'Controller ' + (i + 1)));
+        body.appendChild(s.known && s.user ? untranslated(el('div', 'tile-name', s.user)) : el('div', 'tile-name', 'Controller ' + (i + 1)));
         body.appendChild(el('div', 'tile-meta', padMeta(s) || ''));
         tile.appendChild(body);
         const states = el('span', 'tile-state');
@@ -4882,7 +4908,8 @@
           b.setAttribute('aria-checked', String(src.pad === pad));
           if (pad >= 0) {
             b.style.setProperty('--pc', css(status[pad].color));
-            b.title = 'Controller ' + (pad + 1) + (status[pad].user ? ' · ' + status[pad].user : '');
+            untranslated(b).title = window.c4fText(status[pad].user ? 'Controller {number} · {name}' : 'Controller {number}',
+              { number: pad + 1, name: status[pad].user });
           }
           b.addEventListener('click', () => setGamepadPad(index, pad));
           seg.appendChild(b);
@@ -4904,10 +4931,11 @@
       const device = el('div', 'gp-device');
       device.insertAdjacentHTML('afterbegin', '<span class="gp-device-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 7h10a5 5 0 0 1 4.8 6.4l-1 3.4a2.6 2.6 0 0 1-4.4 1.2L14.4 16H9.6l-2 2a2.6 2.6 0 0 1-4.4-1.2l-1-3.4A5 5 0 0 1 7 7zM7 10v4m-2-2h4"/><circle cx="16" cy="10.5" r=".6" fill="currentColor"/><circle cx="18" cy="13" r=".6" fill="currentColor"/></svg></span>');
       const text = el('div', 'gp-details');
-      text.appendChild(el('div', 'gp-name', gamepadName(src)));
+      text.appendChild(untranslated(el('div', 'gp-name', gamepadName(src))));
       const meta = el('div', 'gp-sub gp-meta');
       meta.appendChild(el('span', '', 'Gamepad ' + (index + 1)));
-      meta.appendChild(el('span', 'gp-profile', profileFor(src).name));
+      const profile = profileFor(src), profileLabel = el('span', 'gp-profile', profile.name);
+      meta.appendChild(profile.id === 'default' ? profileLabel : untranslated(profileLabel));
       text.appendChild(meta);
       device.appendChild(text);
       return device;
@@ -4948,7 +4976,8 @@
       document.documentElement.style.setProperty('--accent', css(s.color));
       const label = $('#padLabel');
       // And who's signed in on it, once the PS4 says.
-      label.textContent = 'Controller ' + (primaryPad + 1) + (s.known && s.user ? ' · ' + s.user : '');
+      untranslated(label).textContent = window.c4fText(s.known && s.user ? 'Controller {number} · {name}' : 'Controller {number}',
+        { number: primaryPad + 1, name: s.user });
       const state = padState(s);
       const extra = conn.state !== 'open' ? $('#connText').textContent + $('#connDetail').textContent
         : state === 'ready' ? 'Signed in on the PS4'
@@ -4956,7 +4985,7 @@
         : state === 'select' ? 'Choose your user on the PS4 with D-pad and Cross'
         : state === 'noslot' ? 'No free player slot'
         : state === 'disabled' ? 'Turned off' : '';
-      if (extra) label.appendChild(el('span', 'muted', extra));
+      if (extra) label.appendChild(el('span', 'muted', window.c4fText(extra)));
       $('#leaveBtn').hidden = !s.mine;
     }
 

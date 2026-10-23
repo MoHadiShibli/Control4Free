@@ -12,7 +12,7 @@ import sys
 ROOT = Path(__file__).resolve().parents[1]
 
 
-def build(renderer=None, output=None):
+def build(renderer=None, output=None, fixture=None, extra_sources=()):
     sys.path.insert(0, str(ROOT / 'tools'))
     import package_launcher as package
     package.embed_fonts()
@@ -23,10 +23,10 @@ def build(renderer=None, output=None):
              '-Ivendor/stb', '-Ivendor/qrcodegen', f'-DC4F_LAUNCHER_VERSION="{version}"']
     stb = output.with_suffix('.stb.o')
     subprocess.run([*flags, '-w', '-c', 'launcher/stb_truetype.c', '-o', str(stb)], cwd=ROOT, check=True)
-    subprocess.run([*flags, '-Wall', '-Wextra', '-Werror', 'tests/tester_render_test.c',
+    subprocess.run([*flags, '-Wall', '-Wextra', '-Werror', str(fixture or 'tests/tester_render_test.c'),
                     'launcher/screen.c', 'launcher/navigation.c', 'launcher/tester.c',
                     str(renderer or 'launcher/tester_draw.c'), 'launcher/draw.c', 'launcher/logo.c',
-                    'vendor/qrcodegen/qrcodegen.c', str(package.FONTS), str(stb), '-lm', '-o', str(output)],
+                    'vendor/qrcodegen/qrcodegen.c', str(package.FONTS), str(stb), *map(str, extra_sources), '-lm', '-o', str(output)],
                    cwd=ROOT, check=True)
     return output
 
