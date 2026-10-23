@@ -1,5 +1,13 @@
 # Changelog
 
+## Unreleased
+
+- **Brazilian Portuguese.** The controller page follows the browser's language, with a picker at the
+  bottom of the home screen and in **Settings → This device**. The PS4 app follows the console's system
+  language; **L1** on its main screen switches between automatic, English and Português (Brasil). The
+  service's error messages are shown translated on the page.
+- The PS4 app now draws accented letters (Latin-1).
+
 ## 1.3.0 — 2026-10-22
 
 WebRTC connections, controller testing on the PS4, and new experimental controller features.

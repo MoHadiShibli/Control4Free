@@ -63,6 +63,7 @@ static const C4fPlacement c4fIdentity = { 0, 0, 1, 0, 0, 0 };
 static uint32_t *c4fLayer;
 static uint32_t *c4fToolsBase, *c4fToolsFrame;
 static int c4fToolsBaseReady;
+static unsigned c4fLayersTranslation; /* the text translation the still layers were drawn in */
 
 typedef struct { uint32_t *px; int x, y, w, h; } C4fSprite;
 static C4fSprite c4fKnobs[3], c4fPressed[16], c4fTouchGlow, c4fLightStrip;
@@ -708,12 +709,15 @@ static void c4fDrawTabs(C4fCanvas *c, const C4fTesterView *v)
     for (int i = 0; i < C4F_TESTER_USERS; i++) {
         if (!v->user[i].used) continue;
         int on = i == v->selected;
-        float w = c4fTextWidth(C4F_FONT_REGULAR, 26, v->user[i].name) + 84;
+        int generated = v->user[i].nameGenerated;
+        float w = (generated ? c4fTextWidth(C4F_FONT_REGULAR, 26, v->user[i].name) :
+                               c4fTextWidthRaw(C4F_FONT_REGULAR, 26, v->user[i].name)) + 84;
         any = 1;
         c4fFillRoundRect(c, x, y, w, h, 6 * C4F_S, on ? C4F_RGBA(40, 103, 205, .85f) : C4F_TILE);
         c4fInsetRoundRect(c, x, y, w, h, 6 * C4F_S, on ? 3 : 1 * C4F_S, on ? C4F_ACCENT : C4F_LINE);
         c4fDot(c, x + 28, y + h / 2, c4fStateColor(v->user[i].state), v->user[i].state == C4F_TESTER_READY);
-        c4fText(c, C4F_FONT_REGULAR, 26, x + 52, y + h / 2 + 9, on ? C4F_TEXT : C4F_MUTED, v->user[i].name);
+        if (generated) c4fText(c, C4F_FONT_REGULAR, 26, x + 52, y + h / 2 + 9, on ? C4F_TEXT : C4F_MUTED, v->user[i].name);
+        else c4fTextRaw(c, C4F_FONT_REGULAR, 26, x + 52, y + h / 2 + 9, on ? C4F_TEXT : C4F_MUTED, v->user[i].name);
         x += w + 16;
     }
     if (!any) c4fText(c, C4F_FONT_LIGHT, 26, C4F_T_LEFT, y + 34, C4F_MUTED, "Waiting for the PS4's signed-in users...");
@@ -983,12 +987,17 @@ static void c4fDrawInput(C4fCanvas *c, const C4fTesterView *v, C4fColor accent)
 }
 
 /* The touchpad's light strip along its top edge, and its name label, as the page shows them. */
-static void c4fDrawTouchpad(C4fCanvas *c, C4fColor accent, const char *line1, const char *line2)
+static void c4fDrawTouchpad(C4fCanvas *c, C4fColor accent, const char *line1, const char *line2, int literalName)
 {
     const C4fBox pad = c4fControl(C4F_C_TOUCHPAD);
     if (c4fLightStrip.px) c4fBlitSprite(c, &c4fLightStrip, 0, 0);
     else c4fPaintLightStrip(c, accent);
-    if (line1) c4fTextCentered(c, C4F_FONT_LIGHT, 22, pad.x + pad.w / 2, pad.y + pad.h * .9f - 30, C4F_P_ENGRAVED, line1);
+    if (line1) {
+        float width = literalName ? c4fTextWidthRaw(C4F_FONT_LIGHT, 22, line1) : c4fTextWidth(C4F_FONT_LIGHT, 22, line1);
+        float x = pad.x + (pad.w - width) / 2;
+        if (literalName) c4fTextRaw(c, C4F_FONT_LIGHT, 22, x, pad.y + pad.h * .9f - 30, C4F_P_ENGRAVED, line1);
+        else c4fText(c, C4F_FONT_LIGHT, 22, x, pad.y + pad.h * .9f - 30, C4F_P_ENGRAVED, line1);
+    }
     if (line2) c4fTextCentered(c, C4F_FONT_LIGHT, 20, pad.x + pad.w / 2, pad.y + pad.h * .9f - 4,
                                C4F_RGBA(236, 240, 248, .36f), line2);
 }
@@ -1209,7 +1218,8 @@ static void c4fDrawToolsDetails(C4fCanvas *c, const C4fTesterView *v, const C4fT
         status = detail;
     } else status = selected ? "Opening controller..." : "Waiting for a signed-in user";
     c4fText(c, C4F_FONT_LIGHT, 20, C4F_T_LEFT, 257, C4F_FAINT, "SELECTED USER");
-    c4fText(c, C4F_FONT_REGULAR, 30, C4F_T_LEFT, 300, C4F_TEXT, name);
+    if (selected && !v->user[v->selected].nameGenerated) c4fTextRaw(c, C4F_FONT_REGULAR, 30, C4F_T_LEFT, 300, C4F_TEXT, name);
+    else c4fText(c, C4F_FONT_REGULAR, 30, C4F_T_LEFT, 300, C4F_TEXT, name);
     c4fText(c, C4F_FONT_LIGHT, 20, 620, 257, C4F_FAINT, "CONTROLLER");
     c4fDot(c, 629, 290, c4fStateColor(state), 0);
     c4fText(c, C4F_FONT_REGULAR, 26, 650, 300, state == C4F_TESTER_FAILED ? C4F_BAD : C4F_MUTED, status);
@@ -1310,6 +1320,36 @@ static void c4fDrawColorPicker(C4fCanvas *c, const C4fTesterView *v)
     c4fText(c, C4F_FONT_REGULAR, 28, 1324, 753, C4F_TEXT, value);
 }
 
+/* The still layers carry words: a new language draws them again. */
+static void c4fForgetOtherLanguage(void)
+{
+    const unsigned now = c4fTextTranslationGeneration();
+    if (now == c4fLayersTranslation) return;
+    c4fLayersTranslation = now;
+    free(c4fLayer);
+    c4fLayer = NULL;
+    if (c4fToolsBase && c4fToolsBaseReady) {
+        C4fCanvas base = { c4fToolsBase, C4F_SCREEN_WIDTH, C4F_SCREEN_HEIGHT };
+        c4fPaintBackdrop(&base, C4F_S);
+        c4fToolsBaseReady = 0;
+    }
+    free(c4fToolsFrame);
+    c4fToolsFrame = NULL;
+    for (int i = 0; i < C4F_TESTER_ITEMS; i++)
+        for (int variant = 0; variant < 4; variant++) {
+            free(c4fToolTiles[i][variant].px);
+            c4fToolTiles[i][variant].px = NULL;
+        }
+    for (int channel = 0; channel < 3; channel++)
+        for (int focused = 0; focused < 2; focused++) {
+            free(c4fColorRows[channel][focused].px);
+            c4fColorRows[channel][focused].px = NULL;
+        }
+    free(c4fColorPreview.px);
+    c4fColorPreview.px = NULL;
+    c4fHasToolsKey = 0;
+}
+
 static void c4fDrawMenu(C4fCanvas *c, const C4fTesterView *v, const C4fTesterConnection *connection)
 {
     const size_t bytes = (size_t)c->w * c->h * sizeof(uint32_t);
@@ -1333,6 +1373,7 @@ static void c4fDrawMenu(C4fCanvas *c, const C4fTesterView *v, const C4fTesterCon
     unsigned available = 0;
     for (int i = 0; i < C4F_TESTER_USERS; i++) {
         key.user[i].used = v->user[i].used; key.user[i].state = v->user[i].state; key.user[i].error = v->user[i].error;
+        key.user[i].nameGenerated = v->user[i].nameGenerated;
         memcpy(key.user[i].name, v->user[i].name, sizeof(key.user[i].name));
     }
     for (int i = 0; i < C4F_TESTER_ITEMS; i++) if (c4fTesterItemAvailable(v, i)) available |= 1U << i;
@@ -1366,6 +1407,7 @@ void c4fDrawTester(uint32_t *pixels, const C4fLauncherScreen *s)
     const C4fTesterView *v = &s->tester;
     C4fCanvas c = { pixels, C4F_SCREEN_WIDTH, C4F_SCREEN_HEIGHT };
     const size_t bytes = (size_t)c.w * (size_t)c.h * sizeof(uint32_t);
+    c4fForgetOtherLanguage();
     if (v->menu) { c4fDrawMenu(&c, v, &s->connection); return; }
     const int state = v->selected >= 0 ? v->user[v->selected].state : -1, ready = state == C4F_TESTER_READY;
     const C4fColor accent = v->lightSet ? (C4fColor){ v->light[0], v->light[1], v->light[2], 255 } : C4F_ACCENT;
@@ -1392,7 +1434,8 @@ void c4fDrawTester(uint32_t *pixels, const C4fLauncherScreen *s)
         else if (state < 0) { name = "No one is signed in"; detail = NULL; }
         else detail = "Opening this user's controller...";
     }
-    c4fDrawTouchpad(&c, accent, name, detail);
+    c4fDrawTouchpad(&c, accent, name, detail,
+                    v->selected >= 0 && !v->user[v->selected].nameGenerated);
     c4fDrawValues(&c, v, ready);
     c4fDrawConnection(&c, v, &s->connection, C4F_P_X + 4, 853);
     if (v->rumble)

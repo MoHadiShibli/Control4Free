@@ -15,6 +15,7 @@
 #include <orbis/VideoOut.h>
 #include "autorun.h"
 #include "input.h"
+#include "language.h"
 #include "navigation.h"
 #include "sandbox.h"
 #include "screen.h"
@@ -511,6 +512,8 @@ static void *c4fInputWorker(void *)
             c4fCommand = off ? C4F_DO_AUTORUN_OFF : C4F_DO_AUTORUN_ON; c4fScreen.busy = 1;
             snprintf(c4fScreen.message, sizeof(c4fScreen.message), "%s",
                      off ? "Turning auto-start off..." : "Turning auto-start on...");
+        } else if (action == C4F_ACTION_LANGUAGE) {
+            c4fScreen.language = (c4fScreen.language + 1) % C4F_LANGUAGE_COUNT;
         }
 #ifdef C4F_DIAG
         uint32_t pressed = wasTesting ? 0 : standardUnhandled | remoteUnhandled;
@@ -622,6 +625,9 @@ int main(void)
      * app could reach neither Control4Free nor PayLoader from inside it. */
     int sandbox = c4fSandboxLeave(), sandboxError = errno;
     if (sandbox) printf("[c4f-launcher] could not leave the sandbox, errno %d\n", sandboxError);
+    /* The saved language lives in /data, only visible outside the sandbox. */
+    int language = c4fScreen.language = c4fLanguageLoad();
+    c4fLanguageUse(language);
 #ifdef C4F_DIAG
     c4fDiagStart(sandbox, sandboxError);
     for (int i = 0; i < C4F_DIAG_PAGES; i++) c4fScreen.diagScroll[i] = i ? C4F_DIAG_END : 0;
@@ -666,6 +672,12 @@ int main(void)
 #endif
         pthread_mutex_unlock(&c4fMutex);
         if (done) break;
+        /* L1 changed the language: the screen redraws as the state differs. */
+        if (snapshot.language != language) {
+            language = snapshot.language;
+            c4fLanguageUse(language);
+            c4fLanguageSave(language);
+        }
         snapshot.connection = c4fTesterConnectionView(&connectionStatus, connectionService, connectionCheckedAt, now, &snapshot.tester);
         int wantedRate = snapshot.tester.active ? 0 : 1;
         if (wantedRate != requestedRate) {

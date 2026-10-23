@@ -550,6 +550,30 @@ static void diagnosticNavigation(void)
     puts("PASS diagnostic arrows remain page/scroll inputs outside Actions; remote can choose Capture");
 }
 
+static void languageButton(void)
+{
+    C4fLauncherScreen screen = stopped();
+    uint32_t standardUnhandled, remoteUnhandled;
+    assert(c4fNavigate(&screen, C4F_INPUT_BUTTON_L1, 0, 0, &standardUnhandled, &remoteUnhandled) == C4F_ACTION_LANGUAGE);
+    assert(!standardUnhandled && !remoteUnhandled);
+    /* Even while the app is busy: it changes nothing on the console. */
+    screen.busy = 1;
+    assert(navigate(&screen, C4F_INPUT_BUTTON_L1, 0, 0) == C4F_ACTION_LANGUAGE);
+    screen.busy = 0;
+    /* Open menus and the stop confirmation keep L1 to themselves. */
+    navigate(&screen, 0, C4F_INPUT_BUTTON_CROSS, 0);
+    assert(screen.actionMenu && navigate(&screen, C4F_INPUT_BUTTON_L1, 0, 0) == C4F_ACTION_NONE);
+    screen = stopped();
+    screen.running = 1;
+    navigate(&screen, C4F_INPUT_BUTTON_SQUARE, 0, 0);
+    assert(screen.confirmStop && navigate(&screen, C4F_INPUT_BUTTON_L1, 0, 0) == C4F_ACTION_NONE && screen.confirmStop);
+    /* The diagnostic build pages with L1, so it is left unhandled there. */
+    screen = stopped();
+    assert(c4fNavigate(&screen, C4F_INPUT_BUTTON_L1, 0, 1, &standardUnhandled, &remoteUnhandled) == C4F_ACTION_NONE);
+    assert(standardUnhandled == C4F_INPUT_BUTTON_L1);
+    puts("PASS L1 changes the language on the main screen only, and still pages the diagnostic build");
+}
+
 int main(void)
 {
     remoteKeyNormalization();
@@ -565,5 +589,6 @@ int main(void)
     stopConfirmation();
     unavailableActions();
     diagnosticNavigation();
+    languageButton();
     return 0;
 }

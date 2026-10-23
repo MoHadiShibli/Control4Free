@@ -236,7 +236,7 @@
       letter-spacing: .01em;
     }
 
-    .screen-sub { margin: 8px 0 0; color: var(--muted); font-size: 15px; font-weight: 300; line-height: 1.5; max-width: 60ch; }
+    .screen-sub { margin: 8px 0 0; color: var(--muted); font-size: 15px; font-weight: 300; line-height: 1.5; max-width: 100%; text-wrap: pretty; }
 
     .tiles {
       margin-top: 22px;
@@ -452,6 +452,16 @@
     .link-btn:hover { color: #fff; }
     .home-foot a { color: var(--muted); text-underline-offset: 3px; }
     .home-foot .link-btn, .clock { white-space: nowrap; }
+    .foot-links { display: flex; align-items: center; gap: 16px; }
+    .lang-pick { appearance: none; border: 0; background: none; padding: 6px 0; color: var(--muted); font: inherit; font-size: 13px; cursor: pointer; text-decoration: underline; text-underline-offset: 3px; text-decoration-color: var(--line); }
+    .lang-pick:hover { color: #fff; }
+    .lang-pick option, .lang-select option { background: #04143a; color: #fff; }
+    .row .lang-select { width: auto; min-width: 0; max-width: 100%; }
+    @media (max-width: 360px) {
+      .row:has(.lang-select) { grid-template-columns: minmax(0, 1fr); }
+      .row .lang-select { width: 100%; grid-column: 1; }
+      .row:has(.lang-select) .row-desc { grid-column: 1; }
+    }
 
     /* ---------- Controller ---------- */
 
@@ -1332,7 +1342,10 @@
 
     <footer class="home-foot">
       <a id="version" href="https://github.com/MoHadiShibli/Control4Free" target="_blank" rel="noopener noreferrer">Control4Free</a>
-      <button class="link-btn" type="button" id="keysLink">Keyboard keys</button>
+      <span class="foot-links">
+        <select class="lang-pick" id="langPick" aria-label="Language"></select>
+        <button class="link-btn" type="button" id="keysLink">Keyboard keys</button>
+      </span>
     </footer>
   </div>
 
@@ -1448,6 +1461,9 @@
           <h2 class="page-title">This device</h2>
           <p class="hint">Saved on this phone or computer only.</p>
           <div class="rows" id="deviceRows"></div>
+          <div class="rows">
+            <label class="row"><span class="row-label">Language</span><select class="field lang-select" id="langSelect"></select><span class="row-desc">The language of this page. Saved on this phone or computer only.</span></label>
+          </div>
         </section>
 
         <section data-page="experimental" hidden>
@@ -1552,6 +1568,588 @@
   </div>
 
   <script>
+  // Interface language. The page itself is written in English; when another
+  // language is chosen, every text the page shows (written in the markup or by
+  // the script below, and the console's own messages) is swapped for its
+  // translation as it appears, so the controller code never has to know.
+  (function () {
+    'use strict';
+    const KEY = 'c4f.lang';
+    const LANGS = [['en', 'English'], ['pt-BR', 'Português (Brasil)']];
+    let saved = 'auto';
+    try { saved = JSON.parse(localStorage.getItem(KEY)) || 'auto'; } catch (e) { /* private mode */ }
+    const browser = String((navigator.languages && navigator.languages[0]) || navigator.language || '');
+    const lang = saved === 'auto' ? (/^pt\b/i.test(browser) ? 'pt-BR' : 'en') : saved;
+    window.c4fLang = lang;
+    // Translate the interface template before inserting user/device data.
+    // Consumers mark the result translate=no so the observer cannot inspect it.
+    window.c4fText = (template, values = {}) => template.replace(/\{(\w+)\}/g, (_, key) => String(values[key] ?? ''));
+
+    function choose(value) {
+      try { localStorage.setItem(KEY, JSON.stringify(value)); } catch (e) { /* private mode */ }
+      // Everything the script has drawn is redrawn in the new language.
+      location.reload();
+    }
+
+    function fillPickers() {
+      const settings = document.getElementById('langSelect');
+      if (settings) {
+        settings.appendChild(new Option('Automatic (browser language)', 'auto'));
+        for (const [value, name] of LANGS) settings.appendChild(new Option(name, value));
+        settings.value = saved;
+        settings.addEventListener('change', () => choose(settings.value));
+      }
+      const foot = document.getElementById('langPick');
+      if (foot) {
+        for (const [value, name] of LANGS) foot.appendChild(new Option(name, value));
+        foot.value = lang;
+        foot.addEventListener('change', () => choose(foot.value));
+      }
+    }
+
+    if (lang !== 'pt-BR') { fillPickers(); return; }
+    document.documentElement.lang = 'pt-BR';
+
+    const EXACT = {
+      'Controller {number}': 'Controle {number}',
+      'Controller {number} · {name}': 'Controle {number} · {name}',
+      'Gamepad {number} · {name}': 'Gamepad {number} · {name}',
+      'Saved as {name}.': 'Salvo como {name}.',
+      'Press Delete again to delete {name}.': 'Aperte Excluir de novo para excluir {name}.',
+      // Home
+      'Palestinian flag': 'Bandeira da Palestina',
+      'Syrian flag': 'Bandeira da Síria',
+      'Connecting': 'Conectando',
+      'Connected': 'Conectado',
+      'Not connected': 'Não conectado',
+      'Invite someone': 'Convidar alguém',
+      'Settings': 'Configurações',
+      'Control4Free by MoHadiShibli on GitHub': 'Control4Free por MoHadiShibli no GitHub',
+      'by MoHadiShibli': 'por MoHadiShibli',
+      "Your PS4's address": 'Endereço do seu PS4',
+      'This copy of the page was opened from a file, so it needs the address the Control4Free app shows on the PS4, like 192.168.1.20.':
+        'Esta cópia da página foi aberta de um arquivo, então precisa do endereço que o app Control4Free mostra no PS4, como 192.168.1.20.',
+      'Connect': 'Conectar',
+      'Connect a controller': 'Conectar um controle',
+      'Select a controller, then choose its user on the PS4 with the D-pad and Cross. Connect one at a time. PS cancels the user-selection screen.':
+        'Selecione um controle e escolha o usuário dele no PS4 com o direcional e o X. Conecte um de cada vez. O botão PS cancela a tela de seleção de usuário.',
+      'Gamepads on this device': 'Gamepads neste dispositivo',
+      'Several gamepads can share one controller. Keep this window active while playing.':
+        'Vários gamepads podem compartilhar um controle. Mantenha esta janela ativa enquanto joga.',
+      'Keyboard keys': 'Teclas do teclado',
+      'Language': 'Idioma',
+      'Automatic (browser language)': 'Automático (idioma do navegador)',
+      'The language of this page. Saved on this phone or computer only.':
+        'O idioma desta página. Salvo apenas neste celular ou computador.',
+
+      // Controller screen
+      'Back to the controllers': 'Voltar aos controles',
+      'Controller menu': 'Menu do controle',
+      'Full screen': 'Tela cheia',
+      'Options': 'Opções',
+      'PS button': 'Botão PS',
+      'Directional buttons': 'Botões direcionais',
+      'Triangle': 'Triângulo',
+      'Circle': 'Círculo',
+      'Cross': 'X',
+      'Square': 'Quadrado',
+      'Left stick': 'Analógico esquerdo',
+      'Right stick': 'Analógico direito',
+      'left stick': 'analógico esquerdo',
+      'right stick': 'analógico direito',
+      'D-pad': 'Direcional',
+      'Face buttons': 'Botões de ação',
+      'Move this bar': 'Mover esta barra',
+      'Reset to default': 'Restaurar o padrão',
+      'Tap again to reset': 'Toque de novo para restaurar',
+      'Cancel': 'Cancelar',
+      'Done': 'Concluído',
+      'Size': 'Tamanho',
+      'Hide': 'Ocultar',
+      'Show': 'Mostrar',
+      'Turn your phone sideways': 'Vire o celular de lado',
+      'The controller needs landscape mode.': 'O controle precisa do modo paisagem.',
+      'Use it upright anyway': 'Usar na vertical mesmo assim',
+      'Drag a control to move it. Tap one to resize or hide it.': 'Arraste um comando para movê-lo. Toque em um para redimensionar ou ocultar.',
+      'Back to the default layout. Tap Done to keep it.': 'Layout padrão restaurado. Toque em Concluído para mantê-lo.',
+      'Choose your user on the PS4 with D-pad and Cross': 'Escolha seu usuário no PS4 com o direcional e o X',
+      'Choose your user on the PS4 with D-pad and Cross. Use the ☰ button for layout and settings.':
+        'Escolha seu usuário no PS4 com o direcional e o X. Use o botão ☰ para o layout e as configurações.',
+      'Another device is using this controller': 'Outro dispositivo está usando este controle',
+      "iPhone does not let pages go full screen. Tap Share, then Add to Home Screen, and open Control4Free from its icon to play without Safari's bars.":
+        'O iPhone não deixa páginas ficarem em tela cheia. Toque em Compartilhar, depois em Adicionar à Tela de Início, e abra o Control4Free pelo ícone para jogar sem as barras do Safari.',
+      'Full screen is not available here': 'A tela cheia não está disponível aqui',
+
+      // Options menu and invitation
+      'Close': 'Fechar',
+      'Edit the button layout': 'Editar o layout dos botões',
+      'All settings': 'Todas as configurações',
+      'Disconnect controller': 'Desconectar controle',
+      'Stop Control4Free': 'Parar o Control4Free',
+      "Scan this with a phone's camera to open the controller page. The phone has to be on the same network as the PS4.":
+        'Escaneie com a câmera de um celular para abrir a página do controle. O celular precisa estar na mesma rede do PS4.',
+      "Couldn't make the QR code": 'Não foi possível gerar o código QR',
+      "Couldn't work out the console's address": 'Não foi possível descobrir o endereço do console',
+      'Disconnect your controllers and stop Control4Free on the PS4?': 'Desconectar seus controles e parar o Control4Free no PS4?',
+
+      // Settings
+      'Back': 'Voltar',
+      'This device': 'Este dispositivo',
+      'Keyboard': 'Teclado',
+      'Gamepads': 'Gamepads',
+      'Experimental': 'Experimental',
+      'Choose what each button and stick on a gamepad does. Mappings are saved in this browser, for every gamepad of the same kind.':
+        'Escolha o que cada botão e analógico de um gamepad faz. Os mapeamentos ficam salvos neste navegador, para todo gamepad do mesmo tipo.',
+      "Connect a gamepad to this device and press a button on it. If it never shows up, this browser only allows gamepads on secure pages: save this page, open the saved file, and enter the console's address.":
+        'Conecte um gamepad a este dispositivo e aperte um botão nele. Se ele nunca aparecer, este navegador só permite gamepads em páginas seguras: salve esta página, abra o arquivo salvo e digite o endereço do console.',
+      'Saved on this phone or computer only.': 'Salvo apenas neste celular ou computador.',
+      "Extras that use browser features most pages don't get, or that PS4 games never ask for. Each one stays off until you turn it on here, and it's saved on this phone or computer only.":
+        'Extras que usam recursos do navegador que a maioria das páginas não recebe, ou que os jogos de PS4 nunca pedem. Cada um fica desligado até você ativá-lo aqui, e a escolha fica salva apenas neste celular ou computador.',
+      'Sony controllers': 'Controles Sony',
+      "Link a DualShock 4 or DualSense connected to this computer. The browser asks which controller to allow. A linked controller lights up in its PS4 controller's colour, rumbles directly, and its touchpad works with fingers, not only clicks.":
+        'Vincule um DualShock 4 ou DualSense conectado a este computador. O navegador pergunta qual controle permitir. Um controle vinculado acende na cor do controle do PS4, vibra diretamente, e o touchpad dele funciona com os dedos, não só com cliques.',
+      'Connect a DualShock 4 or DualSense to this computer and press a button on it.':
+        'Conecte um DualShock 4 ou DualSense a este computador e aperte um botão nele.',
+      'Motion': 'Movimento',
+      'Recenter': 'Recentralizar',
+      'Motion recentered': 'Movimento recentralizado',
+      'Keys drive the controller open on this page. Choose them on a picture of the controller: click a control, then press its key.':
+        'As teclas comandam o controle aberto nesta página. Escolha-as numa imagem do controle: clique num comando e depois aperte a tecla dele.',
+      'Choose keys': 'Escolher teclas',
+      'Reset keys': 'Restaurar teclas',
+      'Keyboard keys reset': 'Teclas do teclado restauradas',
+      'Keep the screen on': 'Manter a tela ligada',
+      "While this page drives a controller, the screen doesn't turn off.": 'Enquanto esta página comanda um controle, a tela não desliga.',
+      'Vibration': 'Vibração',
+      'Buzz this device when you press a button or the game rumbles (Android).': 'Vibra este dispositivo quando você aperta um botão ou o jogo vibra (Android).',
+      'Floating sticks': 'Analógicos flutuantes',
+      'A stick starts wherever your thumb lands inside its area.': 'O analógico começa onde o seu polegar tocar dentro da área dele.',
+      'Tap the touchpad to click': 'Tocar no touchpad para clicar',
+      'A quick tap presses the touchpad button. Hold still to keep it pressed.': 'Um toque rápido aperta o botão do touchpad. Segure parado para mantê-lo apertado.',
+      'Double-tap a stick for L3 / R3': 'Toque duplo no analógico para L3 / R3',
+      'Tap a stick, then touch it again right away to press it in. Hold the second touch to keep it pressed. Off: L3 and R3 get their own buttons.':
+        'Toque no analógico e toque de novo logo em seguida para afundá-lo. Segure o segundo toque para mantê-lo apertado. Desligado: L3 e R3 ganham botões próprios.',
+      'Show keyboard keys': 'Mostrar as teclas do teclado',
+      'Label the on-screen buttons with their keyboard keys.': 'Mostra nos botões da tela as teclas do teclado correspondentes.',
+      'Lights and rumble on Sony controllers': 'Luzes e vibração em controles Sony',
+      "A DualShock 4 or DualSense connected to this computer lights up in its PS4 controller's colour, rumbles directly (a DualSense included), and passes on its touchpad's fingers. Chrome or Edge on a computer.":
+        'Um DualShock 4 ou DualSense conectado a este computador acende na cor do controle do PS4, vibra diretamente (DualSense incluído) e repassa os dedos no touchpad. Chrome ou Edge num computador.',
+      'Trigger rumble': 'Vibração nos gatilhos',
+      "Xbox controllers and a linked DualSense vibrate the trigger you're pulling, following the game's rumble. PS4 games don't ask for this: Control4Free makes it up.":
+        'Controles de Xbox e um DualSense vinculado vibram o gatilho que você está puxando, acompanhando a vibração do jogo. Os jogos de PS4 não pedem isso: o Control4Free cria o efeito.',
+      'Motion controls': 'Controles de movimento',
+      "Tilting this phone, or a linked DualShock 4 or DualSense, moves the PS4 controller's motion sensors.":
+        'Inclinar este celular, ou um DualShock 4 ou DualSense vinculado, move os sensores de movimento do controle do PS4.',
+      'This browser treats the page as insecure, so it holds this back.': 'Este navegador trata a página como insegura, então bloqueia este recurso.',
+      "This browser can't talk to controllers directly. Use Chrome or Edge on a computer.":
+        'Este navegador não consegue falar diretamente com controles. Use o Chrome ou o Edge num computador.',
+      'This browser has no motion sensors to offer.': 'Este navegador não oferece sensores de movimento.',
+      'How to turn it on': 'Como ativar',
+      'Hold the phone sideways, screen towards you, like a controller.': 'Segure o celular de lado, com a tela virada para você, como um controle.',
+      'A linked DualShock 4 or DualSense sends its own motion.': 'Um DualShock 4 ou DualSense vinculado envia o próprio movimento.',
+      "Recenter makes the way you hold it now the controller's resting position.":
+        'Recentralizar faz da posição em que você segura agora a posição de repouso do controle.',
+      'Linked over Bluetooth': 'Vinculado por Bluetooth',
+      'Linked by USB': 'Vinculado por USB',
+      'Not linked': 'Não vinculado',
+      'Link': 'Vincular',
+      'Unlink': 'Desvincular',
+      "The browser didn't allow the controller": 'O navegador não permitiu o controle',
+      "Couldn't open the controller. Close other apps that use it, then try again.":
+        'Não foi possível abrir o controle. Feche outros apps que o usam e tente de novo.',
+
+      // Controller tiles and gamepads
+      'Connecting to the PS4': 'Conectando ao PS4',
+      'Choose a user on the PS4': 'Escolha um usuário no PS4',
+      'Signed in on the PS4': 'Usuário conectado no PS4',
+      'Input paused': 'Entrada pausada',
+      'Input error — disconnect and reconnect': 'Erro de entrada — desconecte e reconecte',
+      'Touch, keyboard, or a gamepad on this device': 'Toque, teclado ou um gamepad neste dispositivo',
+      'Choose user on PS4': 'Escolha o usuário no PS4',
+      'Paused': 'Pausado',
+      'Error': 'Erro',
+      'Free': 'Livre',
+      'No free player slot': 'Sem vaga de jogador livre',
+      'Turned off': 'Desligado',
+      '+1 device': '+1 dispositivo',
+      'This browser does not support gamepads.': 'Este navegador não suporta gamepads.',
+      'This browser only allows gamepads on secure pages. Save this page to your device, open the saved file, and enter the console address.':
+        'Este navegador só permite gamepads em páginas seguras. Salve esta página no seu dispositivo, abra o arquivo salvo e digite o endereço do console.',
+      'Choose which PS4 controller each gamepad controls.': 'Escolha qual controle do PS4 cada gamepad comanda.',
+      'Connect gamepads to this device and press a button on each one. Each one can play as a different controller.':
+        'Conecte gamepads a este dispositivo e aperte um botão em cada um. Cada um pode jogar como um controle diferente.',
+      'Buttons may be mixed up. Check Mapping.': 'Os botões podem estar trocados. Confira o Mapeamento.',
+      'Linked: light bar and rumble': 'Vinculado: barra de luz e vibração',
+      'No rumble in this browser': 'Sem vibração neste navegador',
+      'Let go of the held buttons': 'Solte os botões pressionados',
+      'Off': 'Desl.',
+      'Mapping': 'Mapeamento',
+      'Pick its controller on the home screen.': 'Escolha o controle dele na tela inicial.',
+
+      // Connection and the console's messages
+      'Waiting for Control4Free on the PS4': 'Aguardando o Control4Free no PS4',
+      'This browser cannot connect with WebRTC': 'Este navegador não consegue conectar com WebRTC',
+      'Could not open the connection': 'Não foi possível abrir a conexão',
+      "Can't reach": 'Sem resposta de',
+      "Can't reach the console. Load the Control4Free payload, then check the address.":
+        'Não foi possível alcançar o console. Carregue o payload do Control4Free e confira o endereço.',
+      'Not connected to the console': 'Sem conexão com o console',
+      'The console did not answer': 'O console não respondeu',
+      'Connection changed': 'A conexão mudou',
+      'Controller error': 'Erro no controle',
+      'Could not connect the controller': 'Não foi possível conectar o controle',
+      'A pending controller claim reserves these slots; try again in a moment': 'Um pedido de controle pendente reserva estas vagas; tente de novo em instantes',
+      'A stick or trigger was outside its range': 'Um analógico ou gatilho saiu do seu alcance',
+      'A touch landed outside the touchpad': 'Um toque caiu fora do touchpad',
+      'Another controller is being connected; try again in a moment': 'Outro controle está sendo conectado; tente de novo em instantes',
+      'Control4Free cannot add controllers until it is restarted. Restart it from the Control4Free app on the PS4.':
+        'O Control4Free não consegue adicionar controles até ser reiniciado. Reinicie-o pelo app Control4Free no PS4.',
+      'Control4Free is shutting down': 'O Control4Free está sendo encerrado',
+      'Control4Free on the PS4 is older than this page. Update the PS4 side.': 'O Control4Free no PS4 é mais antigo que esta página. Atualize o lado do PS4.',
+      'Controller connection canceled': 'Conexão do controle cancelada',
+      'Controller is in use on another device': 'O controle está em uso em outro dispositivo',
+      'Controller ownership changed; select controllers again': 'O dono do controle mudou; selecione os controles de novo',
+      'Input history is not in sequence': 'O histórico de entrada está fora de sequência',
+      'Invalid request': 'Pedido inválido',
+      'Message sent on the wrong data channel': 'Mensagem enviada no canal de dados errado',
+      'Motion was outside its range': 'O movimento saiu do seu alcance',
+      "Signing a controller in needs the PS4's kernel log, and something else has it. Close any klog viewer connected to GoldHEN, then try again.":
+        'Conectar um controle precisa do log do kernel do PS4, e outro programa está usando. Feche qualquer visualizador de klog conectado ao GoldHEN e tente de novo.',
+      'Someone else is still using a controller. Ask them to disconnect, or stop Control4Free from its app on the PS4.':
+        'Outra pessoa ainda está usando um controle. Peça para ela desconectar, ou pare o Control4Free pelo app no PS4.',
+      'That controller is not yours to disconnect': 'Esse controle não é seu para desconectar',
+      'That controller was disconnected after sitting unused. Select it again to play.':
+        'Esse controle foi desconectado por ficar sem uso. Selecione-o de novo para jogar.',
+      'That input was not in a form Control4Free understands': 'Essa entrada não veio num formato que o Control4Free entende',
+      "That isn't a port": 'Isso não é uma porta',
+      "That isn't an IPv4 address": 'Isso não é um endereço IPv4',
+      'That motion was not in a form Control4Free understands': 'Esse movimento não veio num formato que o Control4Free entende',
+      'That touch was not in a form Control4Free understands': 'Esse toque não veio num formato que o Control4Free entende',
+      'The PS4 did not report the new controller. Restart Control4Free from its app on the PS4 before trying again.':
+        'O PS4 não informou o novo controle. Reinicie o Control4Free pelo app no PS4 antes de tentar de novo.',
+      'The PS4 user signed out. Controller disconnected. Select it again to play.':
+        'O usuário do PS4 saiu. Controle desconectado. Selecione-o de novo para jogar.',
+      "The PS4's kernel log went away while the controller was being connected. Try again.":
+        'O log do kernel do PS4 sumiu enquanto o controle era conectado. Tente de novo.',
+      'There is no controller with that number': 'Não existe controle com esse número',
+      'Those are not buttons a DualShock 4 has': 'Esses não são botões que um DualShock 4 tem',
+      'Wait for the pending controller claim': 'Aguarde o pedido de controle pendente',
+
+      // Keys and what they drive
+      'Space': 'Espaço',
+      'R Shift': 'Shift dir.',
+      'R Ctrl': 'Ctrl dir.',
+      'Touchpad click': 'Clique do touchpad',
+      'D-pad up': 'Direcional para cima',
+      'D-pad down': 'Direcional para baixo',
+      'D-pad left': 'Direcional para a esquerda',
+      'D-pad right': 'Direcional para a direita',
+      'Left stick up': 'Analógico esquerdo para cima',
+      'Left stick down': 'Analógico esquerdo para baixo',
+      'Left stick left': 'Analógico esquerdo para a esquerda',
+      'Left stick right': 'Analógico esquerdo para a direita',
+      'Right stick up': 'Analógico direito para cima',
+      'Right stick down': 'Analógico direito para baixo',
+      'Right stick left': 'Analógico direito para a esquerda',
+      'Right stick right': 'Analógico direito para a direita',
+      'Left stick, left and right': 'Analógico esquerdo, esquerda e direita',
+      'Left stick, up and down': 'Analógico esquerdo, cima e baixo',
+      'Right stick, left and right': 'Analógico direito, esquerda e direita',
+      'Right stick, up and down': 'Analógico direito, cima e baixo',
+      'Touch top left': 'Toque no canto superior esquerdo',
+      'Touch top right': 'Toque no canto superior direito',
+      'Touch bottom left': 'Toque no canto inferior esquerdo',
+      'Touch bottom right': 'Toque no canto inferior direito',
+      'Left and right': 'Esquerda e direita',
+      'Up and down': 'Cima e baixo',
+      'left and right': 'esquerda e direita',
+      'up and down': 'cima e baixo',
+      'Up': 'Cima',
+      'Down': 'Baixo',
+      'Left': 'Esquerda',
+      'Right': 'Direita',
+
+      // Mapping
+      'Input device': 'Dispositivo de entrada',
+      'Profile': 'Perfil',
+      'Name': 'Nome',
+      'More profile options': 'Mais opções de perfil',
+      'Save as a new profile': 'Salvar como novo perfil',
+      'New empty profile': 'Novo perfil vazio',
+      'Back to the standard layout': 'Voltar ao layout padrão',
+      'Export to a file': 'Exportar para um arquivo',
+      'Import from a file': 'Importar de um arquivo',
+      'Delete this profile': 'Excluir este perfil',
+      'Press again to delete it': 'Aperte de novo para excluir',
+      'Standard keys': 'Teclas padrão',
+      'Save': 'Salvar',
+      'View': 'Visualização',
+      'DS4 Mapping': 'Mapeamento DS4',
+      'Gamepad Controls': 'Comandos do gamepad',
+      'Standard layout': 'Layout padrão',
+      'New profile': 'Novo perfil',
+      'Not saved': 'Não salvo',
+      'Nothing': 'Nada',
+      'Key': 'Tecla',
+      'Press a key…': 'Aperte uma tecla…',
+      'Clear': 'Limpar',
+      'Stop': 'Parar',
+      'Remove': 'Remover',
+      'Change': 'Alterar',
+      'Add another': 'Adicionar outra',
+      'Response': 'Resposta',
+      'Dead zone': 'Zona morta',
+      'Curve': 'Curva',
+      'straight': 'linear',
+      'quicker': 'mais rápida',
+      'gentler': 'mais suave',
+      'Presses at': 'Aciona em',
+      'Reverse': 'Inverter',
+      'Reverse left and right': 'Inverter esquerda e direita',
+      'Reverse up and down': 'Inverter cima e baixo',
+      'Buttons': 'Botões',
+      'Axes': 'Eixos',
+      'stick or wheel': 'analógico ou volante',
+      'D-pad hat': 'hat direcional',
+      'What is it?': 'O que é?',
+      'A stick or wheel': 'Um analógico ou volante',
+      'A pedal or trigger': 'Um pedal ou gatilho',
+      'A D-pad (hat)': 'Um direcional (hat)',
+      'Make it drive…': 'Fazer acionar…',
+      'Set its range again': 'Definir o alcance de novo',
+      'Set its range': 'Definir o alcance',
+      'Forget its range': 'Esquecer o alcance',
+      'Fit it to this gamepad': 'Adaptar a este gamepad',
+      'the browser knows its layout': 'o navegador conhece o layout dele',
+      "the browser doesn't know its layout: check each control": 'o navegador não conhece o layout dele: confira cada comando',
+      'Keys drive the controller open on this page.': 'As teclas comandam o controle aberto nesta página.',
+      'Click a DS4 control to change its key.': 'Clique num comando do DS4 para mudar a tecla dele.',
+      'Select a button or axis to inspect or change it.': 'Selecione um botão ou eixo para inspecionar ou alterar.',
+      'Click a DS4 control, then choose the gamepad input for it.': 'Clique num comando do DS4 e escolha a entrada do gamepad para ele.',
+      'This gamepad stops playing until you leave.': 'Este gamepad para de jogar até você sair.',
+      "You have changes that aren't saved. Press Back again to throw them away, or Save.":
+        'Há alterações não salvas. Aperte Voltar de novo para descartá-las, ou Salvar.',
+      'This profile was made for a different gamepad.': 'Este perfil foi feito para outro gamepad.',
+      'Press Fit it to this gamepad first.': 'Aperte Adaptar a este gamepad primeiro.',
+      'See the buttons and axes your browser detects, their live readings, and what they control on the DS4.':
+        'Veja os botões e eixos que o navegador detecta, as leituras ao vivo e o que eles controlam no DS4.',
+      'Press a button or move a stick to identify it. Select its tile or bar to change its mapping. Axes also have response and range settings.':
+        'Aperte um botão ou mova um analógico para identificá-lo. Selecione o bloco ou a barra dele para mudar o mapeamento. Os eixos também têm ajustes de resposta e alcance.',
+      'Click a control on the controller to choose its key.': 'Clique num comando do controle para escolher a tecla dele.',
+      'Press keys to see what they do.': 'Aperte teclas para ver o que elas fazem.',
+      'Click a control on the controller to choose what drives it.': 'Clique num comando do controle para escolher o que o aciona.',
+      'Press anything on the gamepad to see what it does.': 'Aperte qualquer coisa no gamepad para ver o que faz.',
+      "The browser doesn't know this gamepad, so the standard layout is only a guess.":
+        'O navegador não conhece este gamepad, então o layout padrão é só um palpite.',
+      'A key drives one control: choosing it here takes it from wherever it was.':
+        'Uma tecla aciona um só comando: escolhê-la aqui a tira de onde estiver.',
+      "That key can't be used. Choose one without Ctrl, Alt or the Windows key.":
+        'Essa tecla não pode ser usada. Escolha uma sem Ctrl, Alt ou a tecla Windows.',
+      'Nothing drives it.': 'Nada o aciona.',
+      "It doesn't drive anything.": 'Não aciona nada.',
+      'Click the control on the controller it should drive.': 'Clique no comando do controle que ele deve acionar.',
+      'The browser shows no inputs for this gamepad.': 'O navegador não mostra entradas para este gamepad.',
+      'Let go of everything for a moment…': 'Solte tudo por um instante…',
+      'Let go of the stick…': 'Solte o analógico…',
+      'Now move the stick you want all the way to the right.': 'Agora mova o analógico desejado totalmente para a direita.',
+      'Now move it all the way down.': 'Agora mova-o totalmente para baixo.',
+      'That was a button.': 'Isso foi um botão.',
+      'Move a stick instead.': 'Mova um analógico.',
+      "That's a D-pad.": 'Isso é um direcional.',
+      'Press a button or move a stick instead.': 'Aperte um botão ou mova um analógico.',
+      'That one rests at one end, like a trigger or a pedal.': 'Esse repousa numa ponta, como um gatilho ou um pedal.',
+      'Let go of it, so it rests in the middle.': 'Solte, para que ele fique no meio.',
+      "It's in the middle": 'Está no meio',
+      'Push or turn it all the way one way, and hold it.': 'Empurre ou gire totalmente para um lado e segure.',
+      'Holding it there': 'Segurando aí',
+      'Now all the way the other way, and hold it.': 'Agora totalmente para o outro lado, e segure.',
+      'Let go of it completely.': 'Solte completamente.',
+      "It's let go": 'Está solto',
+      'Press it all the way, and hold it.': 'Aperte até o fim e segure.',
+      'Let go of the D-pad.': 'Solte o direcional.',
+      'Hold up.': 'Segure para cima.',
+      'Holding up': 'Segurando para cima',
+      'Hold right.': 'Segure para a direita.',
+      'Holding right': 'Segurando para a direita',
+      'Hold down.': 'Segure para baixo.',
+      'Holding down': 'Segurando para baixo',
+      'Hold left.': 'Segure para a esquerda.',
+      "The gamepad isn't sending this axis right now.": 'O gamepad não está enviando este eixo agora.',
+      "That didn't look right: the readings were too close together.": 'Algo não pareceu certo: as leituras ficaram próximas demais.',
+      'Try again.': 'Tente de novo.',
+      'Range saved in the profile.': 'Alcance salvo no perfil.',
+      'Save to keep it.': 'Salve para mantê-lo.',
+      'Save to keep them.': 'Salve para mantê-las.',
+      'Keys saved.': 'Teclas salvas.',
+      'This gamepad uses the standard layout.': 'Este gamepad usa o layout padrão.',
+      'An empty profile: nothing does anything until you set it.': 'Um perfil vazio: nada funciona até você configurar.',
+      'Back to the standard keys.': 'Teclas padrão restauradas.',
+      'Back to the standard layout.': 'Layout padrão restaurado.',
+      'Profile deleted.': 'Perfil excluído.',
+      'That file is too big to be a profile.': 'Esse arquivo é grande demais para ser um perfil.',
+      'Imported.': 'Importado.',
+      'Check it, then Save to keep it.': 'Confira e depois Salve para mantê-lo.',
+      "it can't be read": 'não foi possível ler',
+      'Save or press Back first: this one has changes.': 'Salve ou aperte Voltar antes: este tem alterações.',
+      'The browser stopped giving this page the gamepads.': 'O navegador parou de fornecer os gamepads a esta página.',
+      'Unknown storage schema preserved.': 'Esquema de armazenamento desconhecido preservado.',
+      'Changes are session-only.': 'As alterações valem só nesta sessão.',
+      'Invalid saved profiles were ignored.': 'Perfis salvos inválidos foram ignorados.',
+      'Saved profiles could not be read.': 'Não foi possível ler os perfis salvos.',
+      'Browser defaults are active.': 'Os padrões do navegador estão ativos.',
+      'Storage unavailable.': 'Armazenamento indisponível.',
+      'Profile changes are session-only.': 'As alterações de perfil valem só nesta sessão.',
+      'Invalid profile structure': 'Estrutura de perfil inválida',
+      'Invalid calibration index': 'Índice de calibração inválido',
+      'Minimum must be below center and maximum': 'O mínimo precisa ficar abaixo do centro e do máximo',
+      'Released and full positions must differ': 'As posições solta e máxima precisam ser diferentes',
+      'Hat positions must be distinct with a smaller tolerance': 'As posições do hat precisam ser distintas, com uma tolerância menor',
+      'Unknown calibration type': 'Tipo de calibração desconhecido',
+      'Invalid binding or tuning': 'Vínculo ou ajuste inválido',
+      'Invalid input mode': 'Modo de entrada inválido',
+      'Calibrate this hat before applying': 'Calibre este hat antes de aplicar',
+      'Input mode must match calibration': 'O modo de entrada precisa corresponder à calibração',
+      'Unsupported profile format or schema': 'Formato ou esquema de perfil não suportado',
+    };
+
+    const KEY_ACTIONS = ['Cross', 'Circle', 'Square', 'Triangle', 'L1', 'R1', 'L2', 'R2', 'L3', 'R3', 'Options', 'PS button', 'Share',
+      'Touchpad click', 'D-pad up', 'D-pad down', 'D-pad left', 'D-pad right', 'Left stick up', 'Left stick down', 'Left stick left',
+      'Left stick right', 'Right stick up', 'Right stick down', 'Right stick left', 'Right stick right', 'Touch top left',
+      'Touch top right', 'Touch bottom left', 'Touch bottom right'];
+    const INPUT_KIND = { Button: 'Botão', Hat: 'Hat', Axis: 'Eixo' };
+    const INPUT_MODE = { pressure: 'pressão', up: 'cima', right: 'direita', down: 'baixo', left: 'esquerda',
+      '+ side': 'lado +', '− side': 'lado −', pedal: 'pedal' };
+    const list = text => text.split(', ').map(T).join(', ');
+    // No sentence boundary inside a name the user typed.
+    const NAME = '((?:(?!\\. ).)+)';
+
+    // Texts with numbers, names or other texts in them, tried in order.
+    const PATTERNS = [
+      [/^Controller (\d+)$/, m => 'Controle ' + m[1]],
+      [/^Controller (\d+) · (.+)$/, m => 'Controle ' + m[1] + ' · ' + m[2]],
+      [/^to (.+)$/, m => 'a ' + m[1]],
+      [/^\+(\d+) devices$/, m => '+' + m[1] + ' dispositivos'],
+      [/^Controller for gamepad (\d+)$/, m => 'Controle do gamepad ' + m[1]],
+      [/^Controller (\d+) is turned off in Settings$/, m => 'O Controle ' + m[1] + ' está desligado nas Configurações'],
+      [/^Controller (\d+) disconnected$/, m => 'Controle ' + m[1] + ' desconectado'],
+      [/^Gamepad (\d+) plays as Controller (\d+)$/, m => 'O gamepad ' + m[1] + ' joga como Controle ' + m[2]],
+      [/^Gamepad (\d+) connected\.$/, m => 'Gamepad ' + m[1] + ' conectado.'],
+      [/^Gamepad (\d+) · (.+)$/, m => 'Gamepad ' + m[1] + ' · ' + T(m[2])],
+      [/^QR code for (.+)$/, m => 'Código QR para ' + m[1]],
+      [/^(\d+) buttons, (\d+) axes · (.+)$/, m => m[1] + ' botões, ' + m[2] + ' eixos · ' + T(m[3])],
+      [/^Saving also changes (.+), which use this profile\.$/, m => 'Salvar também altera ' + m[1].replace(/ and /g, ' e ') + ', que usam este perfil.'],
+      [/^(Button|Hat|Axis) (\d+)(?:, (pressure|up|right|down|left|\+ side|− side|pedal))?(, reversed)?$/,
+        m => INPUT_KIND[m[1]] + ' ' + m[2] + (m[3] ? ', ' + INPUT_MODE[m[3]] : '') + (m[4] ? ', invertido' : '')],
+      [/^Axis (\d+) · (.+)$/, m => 'Eixo ' + m[1] + ' · ' + T(m[2])],
+      [/^(.+): ((?:Button|Hat|Axis) \d+.*)$/, m => T(m[1]) + ': ' + T(m[2])],
+      [new RegExp('^(' + KEY_ACTIONS.map(s => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|') + ') is (.+?)(?:, taken from (.+))?\\.$'),
+        m => T(m[1]) + ': ' + T(m[2]) + (m[3] ? ' (tirada de ' + list(m[3]) + ')' : '') + '.'],
+      [/^Set the range of axis (\d+)$/, m => 'Definir o alcance do eixo ' + m[1]],
+      [/^Range of axis (\d+)$/, m => 'Alcance do eixo ' + m[1]],
+      [/^Step (\d+) of (\d+)$/, m => 'Passo ' + m[1] + ' de ' + m[2]],
+      [/^Axis (\d+) is the D-pad now\.$/, m => 'O eixo ' + m[1] + ' agora é o direcional.'],
+      [/^Now press the button for (.+) on the gamepad\.$/, m => 'Agora aperte no gamepad o botão para ' + T(m[1]) + '.'],
+      [/^Which way on the (.+)\?$/, m => 'Qual direção no ' + T(m[1]) + '?'],
+      [/^That input can't be used for (.+) \((.+)\)\.$/, m => 'Essa entrada não pode ser usada para ' + T(m[1]) + ' (' + T(m[2]) + ').'],
+      [/^(.+?) now uses (.+?)(?:, taken from (.+))?\.$/, m => T(m[1]) + ' agora usa ' + T(m[2]) + (m[3] ? ', tirado de ' + list(m[3]) : '') + '.'],
+      [/^(.+) now drives (.+)\.$/, m => T(m[1]) + ' agora aciona ' + T(m[2]) + '.'],
+      [/^That doesn't work here: (.+)\.$/, m => 'Isso não funciona aqui: ' + T(m[1]) + '.'],
+      [/^It can't be saved yet: (.+)\.$/, m => 'Ainda não dá para salvar: ' + T(m[1]) + '.'],
+      [/^It can't be exported yet: (.+)\.$/, m => 'Ainda não dá para exportar: ' + T(m[1]) + '.'],
+      [new RegExp('^Saved as ' + NAME + '\\.$'), m => 'Salvo como ' + m[1] + '.'],
+      [new RegExp('^Press Delete again to delete ' + NAME + '\\.$'), m => 'Aperte Excluir de novo para excluir ' + m[1] + '.'],
+      [/^That isn't a Control4Free profile: (.+)$/, m => 'Isso não é um perfil do Control4Free: ' + T(m[1])],
+    ];
+
+    function one(text) {
+      if (Object.prototype.hasOwnProperty.call(EXACT, text)) return EXACT[text];
+      for (const [re, make] of PATTERNS) {
+        const m = re.exec(text);
+        if (m) return make(m);
+      }
+      return null;
+    }
+
+    // Messages built from several sentences are translated one sentence at a time.
+    function sentences(text) {
+      const parts = text.replace(/([.!?…])\s+/g, '$1\u0000').split('\u0000');
+      if (parts.length < 2) return null;
+      let any = false;
+      const out = parts.map(part => {
+        const t = one(part);
+        if (t !== null) any = true;
+        return t === null ? part : t;
+      });
+      return any ? out.join(' ') : null;
+    }
+
+    function T(text) {
+      const t = one(text);
+      if (t !== null) return t;
+      const s = sentences(text);
+      return s === null ? text : s;
+    }
+
+    // Keeps the spaces around a text, which the page uses to join pieces.
+    function translate(text) {
+      const m = /^(\s*)([\s\S]*?)(\s*)$/.exec(text);
+      if (!m[2] || !/[A-Za-z]/.test(m[2])) return text;
+      return m[1] + T(m[2]) + m[3];
+    }
+    window.c4fText = (template, values = {}) => translate(template).replace(/\{(\w+)\}/g, (_, key) => String(values[key] ?? ''));
+
+    const ATTRS = ['title', 'aria-label', 'placeholder'];
+    const seen = new WeakMap(); // node -> the text this layer last left in it
+
+    function textNode(node) {
+      const parent = node.parentNode;
+      if (!parent || parent.nodeName === 'SCRIPT' || parent.nodeName === 'STYLE' || parent.closest?.('[translate="no"]')) return;
+      if (seen.get(node) === node.data) return;
+      const t = translate(node.data);
+      if (t !== node.data) node.data = t;
+      seen.set(node, node.data);
+    }
+
+    function attributes(element) {
+      if (!element.getAttribute || element.closest?.('[translate="no"]')) return;
+      let done = seen.get(element);
+      if (!done) seen.set(element, done = {});
+      for (const name of ATTRS) {
+        const value = element.getAttribute(name);
+        if (value === null || done[name] === value) continue;
+        const t = translate(value);
+        if (t !== value) element.setAttribute(name, t);
+        done[name] = t;
+      }
+    }
+
+    function walk(root) {
+      if (root.nodeType === 3) return textNode(root);
+      if (root.nodeType !== 1 && root.nodeType !== 9 && root.nodeType !== 11) return;
+      if (root.nodeType === 1) attributes(root);
+      const it = document.createTreeWalker(root, NodeFilter.SHOW_ELEMENT | NodeFilter.SHOW_TEXT);
+      for (let node = it.nextNode(); node; node = it.nextNode()) {
+        if (node.nodeType === 3) textNode(node); else attributes(node);
+      }
+    }
+
+    new MutationObserver(records => {
+      for (const r of records) {
+        if (r.type === 'characterData') textNode(r.target);
+        else if (r.type === 'attributes') attributes(r.target);
+        else for (const node of r.addedNodes) walk(node);
+      }
+    }).observe(document.documentElement, { subtree: true, childList: true, characterData: true, attributes: true, attributeFilter: ATTRS });
+
+    const nativeConfirm = window.confirm;
+    window.confirm = message => nativeConfirm.call(window, translate(String(message)));
+
+    fillPickers();
+    walk(document.documentElement);
+  }());
+  </script>
+
+  <script>
   (() => {
     'use strict';
 
@@ -1613,6 +2211,11 @@
       if (cls) e.className = cls;
       if (text !== undefined) e.textContent = text;
       return e;
+    }
+
+    function untranslated(element) {
+      element.setAttribute('translate', 'no');
+      return element;
     }
 
     // ---------------------------------------------------------------- clock
@@ -3043,7 +3646,9 @@
 
       src() { return this.index === null ? null : gamepadSources.get(this.index); },
       keyboard() { return this.source === 'keyboard'; },
-      status(text) { $('#mapStatus').textContent = text || ''; },
+      status(text, formatted = false) {
+        untranslated($('#mapStatus')).textContent = formatted ? text : window.c4fText(text || '');
+      },
       guideStatus() {
         if (this.keyboard()) return 'Click a DS4 control to change its key.';
         return (this.tab === 'inputs'
@@ -3130,7 +3735,8 @@
         const select = $('#mapSource');
         select.textContent = '';
         select.appendChild(new Option('Keyboard', 'keyboard'));
-        for (const [i, src] of gamepadSources) select.appendChild(new Option('Gamepad ' + (i + 1) + ' · ' + gamepadName(src), String(i)));
+        for (const [i, src] of gamepadSources)
+          select.appendChild(untranslated(new Option(window.c4fText('Gamepad {number} · {name}', { number: i + 1, name: gamepadName(src) }), String(i))));
         select.value = this.keyboard() ? 'keyboard' : String(this.index);
         const gamepad = !this.keyboard();
         $('#mapProfileBox').hidden = !gamepad;
@@ -3146,7 +3752,10 @@
           (sig.mapping === 'standard' ? 'the browser knows its layout' : 'the browser doesn\'t know its layout: check each control');
         const profiles = $('#mapProfile');
         profiles.textContent = '';
-        for (const p of [ControllerMapping.browserDefault(sig), ...profileStore.profiles]) profiles.appendChild(new Option(p.name, p.id));
+        for (const p of [ControllerMapping.browserDefault(sig), ...profileStore.profiles]) {
+          const option = new Option(p.name, p.id);
+          profiles.appendChild(p.id === 'default' ? option : untranslated(option));
+        }
         if (![...profiles.options].some(o => o.value === this.draft.id)) profiles.appendChild(new Option('New profile', this.draft.id));
         profiles.value = this.draft.id;
         // The standard layout's name is the gamepad's, until one is typed.
@@ -3898,7 +4507,8 @@
         this.draft = ControllerMapping.copy(draft);
         this.saved = JSON.stringify(this.draft);
         this.changed();
-        this.status('Saved as ' + draft.name + '.' + (profilePersistence ? ' ' + profilePersistence : ''));
+        this.status(window.c4fText('Saved as {name}.', { name: draft.name }) +
+          (profilePersistence ? ' ' + window.c4fText(profilePersistence) : ''), true);
       },
       newId() { return 'profile-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 10); },
       // Drops what this gamepad doesn't have and takes on its signature.
@@ -3935,7 +4545,7 @@
         if (!this.deleteArmed || now() - this.deleteArmed > 3000) {
           this.deleteArmed = now();
           $('#mapDelete').textContent = 'Press again to delete it';
-          return this.status('Press Delete again to delete ' + this.draft.name + '.');
+          return this.status(window.c4fText('Press Delete again to delete {name}.', { name: this.draft.name }), true);
         }
         $('#mapMenu').hidden = true;
         this.deleteArmed = 0;
@@ -4225,7 +4835,7 @@
         tile.appendChild(head);
         const body = el('span');
         // Who's signed in on it, once the PS4 says; the ring keeps the number.
-        body.appendChild(el('div', 'tile-name', s.known && s.user ? s.user : 'Controller ' + (i + 1)));
+        body.appendChild(s.known && s.user ? untranslated(el('div', 'tile-name', s.user)) : el('div', 'tile-name', 'Controller ' + (i + 1)));
         body.appendChild(el('div', 'tile-meta', padMeta(s) || ''));
         tile.appendChild(body);
         const states = el('span', 'tile-state');
@@ -4298,7 +4908,8 @@
           b.setAttribute('aria-checked', String(src.pad === pad));
           if (pad >= 0) {
             b.style.setProperty('--pc', css(status[pad].color));
-            b.title = 'Controller ' + (pad + 1) + (status[pad].user ? ' · ' + status[pad].user : '');
+            untranslated(b).title = window.c4fText(status[pad].user ? 'Controller {number} · {name}' : 'Controller {number}',
+              { number: pad + 1, name: status[pad].user });
           }
           b.addEventListener('click', () => setGamepadPad(index, pad));
           seg.appendChild(b);
@@ -4320,10 +4931,11 @@
       const device = el('div', 'gp-device');
       device.insertAdjacentHTML('afterbegin', '<span class="gp-device-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 7h10a5 5 0 0 1 4.8 6.4l-1 3.4a2.6 2.6 0 0 1-4.4 1.2L14.4 16H9.6l-2 2a2.6 2.6 0 0 1-4.4-1.2l-1-3.4A5 5 0 0 1 7 7zM7 10v4m-2-2h4"/><circle cx="16" cy="10.5" r=".6" fill="currentColor"/><circle cx="18" cy="13" r=".6" fill="currentColor"/></svg></span>');
       const text = el('div', 'gp-details');
-      text.appendChild(el('div', 'gp-name', gamepadName(src)));
+      text.appendChild(untranslated(el('div', 'gp-name', gamepadName(src))));
       const meta = el('div', 'gp-sub gp-meta');
       meta.appendChild(el('span', '', 'Gamepad ' + (index + 1)));
-      meta.appendChild(el('span', 'gp-profile', profileFor(src).name));
+      const profile = profileFor(src), profileLabel = el('span', 'gp-profile', profile.name);
+      meta.appendChild(profile.id === 'default' ? profileLabel : untranslated(profileLabel));
       text.appendChild(meta);
       device.appendChild(text);
       return device;
@@ -4364,7 +4976,8 @@
       document.documentElement.style.setProperty('--accent', css(s.color));
       const label = $('#padLabel');
       // And who's signed in on it, once the PS4 says.
-      label.textContent = 'Controller ' + (primaryPad + 1) + (s.known && s.user ? ' · ' + s.user : '');
+      untranslated(label).textContent = window.c4fText(s.known && s.user ? 'Controller {number} · {name}' : 'Controller {number}',
+        { number: primaryPad + 1, name: s.user });
       const state = padState(s);
       const extra = conn.state !== 'open' ? $('#connText').textContent + $('#connDetail').textContent
         : state === 'ready' ? 'Signed in on the PS4'
@@ -4372,7 +4985,7 @@
         : state === 'select' ? 'Choose your user on the PS4 with D-pad and Cross'
         : state === 'noslot' ? 'No free player slot'
         : state === 'disabled' ? 'Turned off' : '';
-      if (extra) label.appendChild(el('span', 'muted', extra));
+      if (extra) label.appendChild(el('span', 'muted', window.c4fText(extra)));
       $('#leaveBtn').hidden = !s.mine;
     }
 

@@ -9,12 +9,31 @@
 extern const unsigned char c4fFontLight[], c4fFontRegular[];
 
 typedef struct { unsigned char *bitmap; int w, h, x0, y0, ready; float advance; } C4fGlyph;
-typedef struct { int font, size; float scale; C4fGlyph glyph[95]; } C4fFace;
+/* Printable ASCII, then Latin-1's letters and signs (160-255). */
+enum { C4F_GLYPHS = 95 + 96 };
+typedef struct { int font, size; float scale; C4fGlyph glyph[C4F_GLYPHS]; } C4fFace;
 
 static stbtt_fontinfo c4fFonts[C4F_FONT_COUNT];
 static C4fFace c4fFaces[24];
 static int c4fFaceCount;
 static uint8_t c4fTextGamma[256];
+static const char *(*c4fTranslate)(const char *text);
+static unsigned c4fTranslation;
+
+void c4fSetTextTranslation(const char *(*translate)(const char *text))
+{
+    c4fTranslate = translate;
+    c4fTranslation++;
+}
+
+unsigned c4fTextTranslationGeneration(void) { return c4fTranslation; }
+
+/* The text as it is shown: its translation when there is one. */
+static const char *c4fShown(const char *text)
+{
+    const char *shown = c4fTranslate && text ? c4fTranslate(text) : NULL;
+    return shown ? shown : text;
+}
 
 int c4fDrawInit(void)
 {
@@ -456,11 +475,24 @@ static C4fFace *c4fFace(int font, float size)
     return face;
 }
 
-static int c4fCodepoint(unsigned char ch) { return ch < 32 || ch > 126 ? '?' : ch; }
+/* The next character of UTF-8 text, as one the faces carry: printable ASCII
+ * or Latin-1. Anything else, or a broken sequence, shows as '?'. */
+static int c4fCodepoint(const char *text, int length, int *at)
+{
+    const unsigned char *s = (const unsigned char *)text;
+    int i = *at, ch = s[i++];
+    if (ch >= 0xc0 && ch < 0xe0 && i < length && (s[i] & 0xc0) == 0x80) ch = ((ch & 0x1f) << 6) | (s[i++] & 0x3f);
+    else if (ch >= 0x80) {
+        while (i < length && (s[i] & 0xc0) == 0x80) i++;
+        ch = '?';
+    }
+    *at = i;
+    return ch < 32 || (ch > 126 && ch < 160) || ch > 255 ? '?' : ch;
+}
 
 static C4fGlyph *c4fGlyph(C4fFace *face, int ch)
 {
-    C4fGlyph *g = &face->glyph[ch - 32];
+    C4fGlyph *g = &face->glyph[ch < 127 ? ch - 32 : ch - 160 + 95];
     if (!g->ready) {
         const stbtt_fontinfo *font = &c4fFonts[face->font];
         int advance, bearing, x0, y0, x1, y1;
@@ -484,8 +516,8 @@ static float c4fTextWidthN(int font, float size, const char *text, int length)
     float width = 0;
     int previous = 0;
     if (!face) return 0;
-    for (int i = 0; i < length && text[i]; i++) {
-        int ch = c4fCodepoint((unsigned char)text[i]);
+    for (int i = 0; i < length && text[i];) {
+        int ch = c4fCodepoint(text, length, &i);
         if (previous) width += stbtt_GetCodepointKernAdvance(&c4fFonts[font], previous, ch) * face->scale;
         width += c4fGlyph(face, ch)->advance;
         previous = ch;
@@ -494,6 +526,12 @@ static float c4fTextWidthN(int font, float size, const char *text, int length)
 }
 
 float c4fTextWidth(int font, float size, const char *text)
+{
+    text = c4fShown(text);
+    return c4fTextWidthRaw(font, size, text);
+}
+
+float c4fTextWidthRaw(int font, float size, const char *text)
 {
     return c4fTextWidthN(font, size, text, (int)strlen(text));
 }
@@ -504,8 +542,8 @@ float c4fTextN(C4fCanvas *c, int font, float size, float x, float y, C4fColor co
     float pen = x;
     int previous = 0, baseline = (int)floorf(y + 0.5f);
     if (!face) return 0;
-    for (int i = 0; i < length && text[i]; i++) {
-        int ch = c4fCodepoint((unsigned char)text[i]);
+    for (int i = 0; i < length && text[i];) {
+        int ch = c4fCodepoint(text, length, &i);
         if (previous) pen += stbtt_GetCodepointKernAdvance(&c4fFonts[font], previous, ch) * face->scale;
         C4fGlyph *g = c4fGlyph(face, ch);
         if (g->bitmap) {
@@ -524,6 +562,12 @@ float c4fTextN(C4fCanvas *c, int font, float size, float x, float y, C4fColor co
 
 float c4fText(C4fCanvas *c, int font, float size, float x, float y, C4fColor color, const char *text)
 {
+    text = c4fShown(text);
+    return c4fTextRaw(c, font, size, x, y, color, text);
+}
+
+float c4fTextRaw(C4fCanvas *c, int font, float size, float x, float y, C4fColor color, const char *text)
+{
     return c4fTextN(c, font, size, x, y, color, text, (int)strlen(text));
 }
 
@@ -531,6 +575,7 @@ int c4fTextWrapped(C4fCanvas *c, int font, float size, float x, float y, float m
                    float lineHeight, int maxLines, C4fColor color, const char *text)
 {
     int lines = 0;
+    text = c4fShown(text);
     while (*text && lines < maxLines) {
         while (*text == ' ') text++;
         if (!*text) break;

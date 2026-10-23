@@ -37,7 +37,7 @@ jobs:
       - name: Browser editor checks
         run: |
           docker run --rm -v "$PWD:/src" -w /src mcr.microsoft.com/playwright:v1.63.0-noble \
-            bash -lc 'mkdir -p /tmp/c4f-browser; cd /tmp/c4f-browser; npm init -y >/dev/null; npm install playwright@1.63.0; cd /src; NODE_PATH=/tmp/c4f-browser/node_modules node tests/browser_test.cjs'
+            bash -lc 'mkdir -p /tmp/c4f-browser; cd /tmp/c4f-browser; npm init -y >/dev/null; npm install playwright@1.63.0; cd /src; NODE_PATH=/tmp/c4f-browser/node_modules node tests/browser_test.cjs && NODE_PATH=/tmp/c4f-browser/node_modules node tests/i18n_browser_test.cjs'
 
       - name: Emulated gamepad checks
         run: |
