@@ -64,6 +64,9 @@ sees a virtual DualShock 4, which provides:
 - **On your phone's home screen**, like an app.
 - **Stays awake**: your phone's screen doesn't turn off while you play.
 - **Gets through rest mode.** After the PS4 wakes up, open the page and pick your controller again.
+- **English and Brazilian Portuguese.** The page follows the browser's language; change it at the bottom of
+  the home screen or in **Settings → This device**. The PS4 app follows the console's system language; press
+  **L1** on its main screen to switch between automatic, English and Português (Brasil).
 
 ## Controller connection
 
