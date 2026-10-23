@@ -5,6 +5,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include "stb_truetype.h"
+#include "text.h"
 
 extern const unsigned char c4fFontLight[], c4fFontRegular[];
 
@@ -27,6 +28,7 @@ void c4fSetTextTranslation(const char *(*translate)(const char *text))
 }
 
 unsigned c4fTextTranslationGeneration(void) { return c4fTranslation; }
+void c4fTextFontChanged(void) { c4fTranslation++; }
 
 /* The text as it is shown: its translation when there is one. */
 static const char *c4fShown(const char *text)
@@ -37,6 +39,7 @@ static const char *c4fShown(const char *text)
 
 int c4fDrawInit(void)
 {
+    if (c4fShapedTextInit() < 0) return -1;
     const unsigned char *data[C4F_FONT_COUNT] = { c4fFontLight, c4fFontRegular };
     for (int i = 0; i < C4F_FONT_COUNT; i++)
         if (!stbtt_InitFont(&c4fFonts[i], data[i], stbtt_GetFontOffsetForIndex(data[i], 0))) return -1;
@@ -465,8 +468,11 @@ static C4fFace *c4fFace(int font, float size)
     int pixels = (int)(size + 0.5f);
     for (int i = 0; i < c4fFaceCount; i++)
         if (c4fFaces[i].font == font && c4fFaces[i].size == pixels) return &c4fFaces[i];
-    if (font < 0 || font >= C4F_FONT_COUNT || c4fFaceCount == (int)(sizeof(c4fFaces) / sizeof(c4fFaces[0]))) return NULL;
-    C4fFace *face = &c4fFaces[c4fFaceCount++];
+    if (font < 0 || font >= C4F_FONT_COUNT) return NULL;
+    static unsigned replace;
+    const int capacity = (int)(sizeof(c4fFaces) / sizeof(c4fFaces[0]));
+    C4fFace *face = c4fFaceCount < capacity ? &c4fFaces[c4fFaceCount++] : &c4fFaces[replace++ % capacity];
+    for (int i = 0; i < C4F_GLYPHS; i++) free(face->glyph[i].bitmap);
     memset(face, 0, sizeof(*face));
     face->font = font;
     face->size = pixels;
@@ -512,6 +518,8 @@ static C4fGlyph *c4fGlyph(C4fFace *face, int ch)
 
 static float c4fTextWidthN(int font, float size, const char *text, int length)
 {
+    if (c4fTextNeedsShaping(text, length))
+        return c4fShapedText(NULL, font, size, 0, 0, (C4fColor){0}, text, length);
     C4fFace *face = c4fFace(font, size);
     float width = 0;
     int previous = 0;
@@ -538,6 +546,7 @@ float c4fTextWidthRaw(int font, float size, const char *text)
 
 float c4fTextN(C4fCanvas *c, int font, float size, float x, float y, C4fColor color, const char *text, int length)
 {
+    if (c4fTextNeedsShaping(text, length)) return c4fShapedText(c, font, size, x, y, color, text, length);
     C4fFace *face = c4fFace(font, size);
     float pen = x;
     int previous = 0, baseline = (int)floorf(y + 0.5f);
@@ -587,7 +596,8 @@ int c4fTextWrapped(C4fCanvas *c, int font, float size, float x, float y, float m
             if (!text[end]) break;
             end++;
         }
-        if (c) c4fTextN(c, font, size, x, y + lines * lineHeight, color, text, fit);
+        float at = c4fTextIsRTL() ? x + maxWidth - c4fTextWidthN(font, size, text, fit) : x;
+        if (c) c4fTextN(c, font, size, at, y + lines * lineHeight, color, text, fit);
         lines++;
         text += fit;
     }

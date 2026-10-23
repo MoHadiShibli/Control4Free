@@ -8,12 +8,20 @@
 #include <string.h>
 #include "autorun.h"
 #include "logo.h"
+#include "language.h"
 #include "screen.h"
 #ifdef C4F_DIAG
 #include "diag.h"
 /* Host preview fixture; the native application does not link it. */
 void c4fDiagPreviewPage(int page, const char *text);
 #endif
+
+int sceSystemServiceParamGetInt(int id, int *value)
+{
+    (void)id;
+    *value = 1;
+    return 0;
+}
 
 static int c4fWrite(const char *path, const uint32_t *pixels, size_t count)
 {
@@ -141,6 +149,28 @@ int main(int argc, char **argv)
 {
     if (argc == 2 && !strcmp(argv[1], "svg")) return c4fPrintSvg();
     if (argc != 4 || c4fScreenInit()) return 2;
+    const char *locale = getenv("C4F_PREVIEW_LANGUAGE");
+    int language = locale && !strcmp(locale, "ar") ? C4F_LANGUAGE_ARABIC :
+                   locale && !strcmp(locale, "pt-BR") ? C4F_LANGUAGE_PORTUGUESE : C4F_LANGUAGE_ENGLISH;
+    c4fLanguageUse(language);
+    /* Optional private system font fixture. Never copied into package assets. */
+    const char *fontDirectory = getenv("C4F_PREVIEW_FONT_DIR");
+    if (fontDirectory) {
+        const char *names[2] = { "SSTArabic-Light.otf", "SSTArabic-Roman.otf" };
+        unsigned char *fonts[2] = {0}; size_t sizes[2] = {0};
+        for (int i = 0; i < 2; i++) {
+            char path[512]; snprintf(path, sizeof(path), "%s/%s", fontDirectory, names[i]);
+            FILE *file = fopen(path, "rb");
+            if (!file) return 2;
+            if (fseek(file, 0, SEEK_END)) return 2;
+            long length = ftell(file);
+            if (length <= 0 || length > 1024 * 1024 || fseek(file, 0, SEEK_SET)) return 2;
+            sizes[i] = (size_t)length; fonts[i] = malloc(sizes[i]);
+            if (!fonts[i] || fread(fonts[i], 1, sizes[i], file) != sizes[i]) return 2;
+            fclose(file);
+        }
+        if (c4fTextSetArabicFonts(fonts[0], sizes[0], fonts[1], sizes[1])) return 2;
+    }
     if (!strcmp(argv[1], "icon")) {
         int size = atoi(argv[2]);
         uint32_t *pixels = size > 0 && size <= 4096 ? calloc((size_t)size * size, sizeof(uint32_t)) : NULL;
@@ -151,6 +181,7 @@ int main(int argc, char **argv)
     if (strcmp(argv[1], "screen")) return 2;
     C4fLauncherScreen s;
     memset(&s, 0, sizeof(s));
+    s.language = language; s.rtl = c4fLanguageIsArabic();
     snprintf(s.address, sizeof(s.address), "http://192.168.1.20:4264");
     const char *state = argv[2], *message = "";
     s.autorun = C4F_AUTORUN_ON;

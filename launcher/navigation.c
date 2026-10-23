@@ -109,6 +109,7 @@ C4fLauncherAction c4fNavigate(C4fLauncherScreen *screen, uint32_t standardPresse
                 screen->confirmChoice = 0;
             }
             int direction = c4fDirection(pressed);
+            if (screen->rtl && (pressed & (C4F_INPUT_BUTTON_LEFT | C4F_INPUT_BUTTON_RIGHT))) direction = -direction;
             if (direction) screen->confirmChoice = direction > 0;
             return C4F_ACTION_NONE;
         }

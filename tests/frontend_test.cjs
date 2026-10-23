@@ -3,6 +3,7 @@
 const fs = require('node:fs');
 const vm = require('node:vm');
 const assert = require('node:assert/strict');
+const tr = (key, values) => values ? key.replace(/\{(\w+)\}/g, (_, name) => values[name]) : key;
 const page = fs.readFileSync('client/index.html', 'utf8');
 const extract = (start, end) => {
   const from = page.indexOf(start);
@@ -25,7 +26,7 @@ function padStatus(fields) {
     conn: { echoes: new Map([[7, 100]]), pending: new Map(), latency: true },
     now: () => 116.6, pingMs: 0, send: message => sentRtt.push(message), showVersion() {},
   };
-  vm.createContext(pingCtx);
+  vm.createContext(Object.assign(pingCtx, { tr }));
   vm.runInContext(extract('    function onMessage(data)', '    function applyStatus('), pingCtx);
   vm.runInContext('onMessage(JSON.stringify({ method: "e", params: [7, 100] }))', pingCtx);
   assert.equal(pingCtx.pingMs, 17);
@@ -38,7 +39,7 @@ function padStatus(fields) {
   const routed = [], routeCtx = { conn: { state: 'open',
     input: { readyState: 'open', bufferedAmount: 0, send: data => routed.push(['input', JSON.parse(data)]) },
     control: { readyState: 'open', bufferedAmount: 0, send: data => routed.push(['control', JSON.parse(data)]) } } };
-  vm.createContext(routeCtx);
+  vm.createContext(Object.assign(routeCtx, { tr }));
   vm.runInContext(extract('    function send(obj)', '    function call('), routeCtx);
   vm.runInContext('send({ method: "latency", params: [7, 17] })', routeCtx);
   assert.equal(routed[0][0], 'input');
@@ -62,7 +63,7 @@ function padStatus(fields) {
     },
     applyStatus() {}, toast() {}, closePad() { ctx.primaryPad = -1; }, renderGamepads() {},
   };
-  vm.createContext(ctx);
+  vm.createContext(Object.assign(ctx, { tr }));
   vm.runInContext(sendClaimSource, ctx);
   vm.runInContext('sendClaim(true)', ctx);
   for (let i = 0; i < 5; i++) await new Promise(setImmediate);
@@ -85,7 +86,7 @@ function padStatus(fields) {
       serialClaims.push(params); return new Promise((resolve, reject) => deferred.push({ resolve, reject }));
     }, applyStatus() {}, toast() {}, closePad() {}, renderGamepads() {},
   };
-  vm.createContext(serial); vm.runInContext(sendClaimSource, serial);
+  vm.createContext(Object.assign(serial, { tr })); vm.runInContext(sendClaimSource, serial);
   vm.runInContext('sendClaim(true)', serial);
   serial.gamepadSources.get(0).pad = 2; vm.runInContext('sendClaim()', serial);
   for (const s of serial.gamepadSources.values()) s.pad = -1;
@@ -123,7 +124,7 @@ function padStatus(fields) {
     clearDevice(src) { Object.assign(src, pads.blankSource(src.pad)); },
     mapper: { index: null, cancelCapture() {}, status() {} },
   };
-  vm.createContext(pads);
+  vm.createContext(Object.assign(pads, { tr }));
   vm.runInContext(pollSource, pads);
   vm.runInContext('pollGamepads(100)', pads);
   const src = pads.gamepadSources.get(0);
@@ -151,7 +152,7 @@ function padStatus(fields) {
       toast(message) { ctx.toasts.push(message); },
     };
     ctx.window.matchMedia = ctx.matchMedia;
-    vm.createContext(ctx);
+    vm.createContext(Object.assign(ctx, { tr }));
     vm.runInContext(fsSource, ctx);
     if (!button.hidden) await button.handlers.click();
     return ctx;
@@ -179,7 +180,7 @@ function padStatus(fields) {
 
   // Which gamepads the page says it can rumble.
   const rumbleCtx = {};
-  vm.createContext(rumbleCtx);
+  vm.createContext(Object.assign(rumbleCtx, { tr }));
   vm.runInContext(extract('    function canRumble(gp)', '    function renderGamepads()'), rumbleCtx);
   const can = gp => vm.runInContext('canRumble(gp)', Object.assign(rumbleCtx, { gp }));
   const play = () => Promise.resolve();
@@ -192,7 +193,7 @@ function padStatus(fields) {
 
   // The Invite panel draws the console's grid as runs of dark modules.
   const qrCtx = {};
-  vm.createContext(qrCtx);
+  vm.createContext(Object.assign(qrCtx, { tr }));
   vm.runInContext(extract('    function qrPath(size, rows, quiet)', '    // The address this page reached'), qrCtx);
   // 5 wide: row 0 = 11011, row 1 = 00100 -> hex d8, 20.
   assert.equal(vm.runInContext("qrPath(5, ['d8', '20'], 4)", qrCtx),

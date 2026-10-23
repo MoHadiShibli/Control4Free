@@ -163,6 +163,9 @@ static char *c4fIniEdited(const char *text, int enable)
     return out;
 }
 
+static C4fMessage c4fAutorunText;
+const C4fMessage *c4fAutorunMessage(void) { return &c4fAutorunText; }
+
 /* ---- public ---- */
 
 int c4fAutorunCheck(char *problem, size_t size)
@@ -170,12 +173,13 @@ int c4fAutorunCheck(char *problem, size_t size)
     char path[300];
     size_t length = 0;
     problem[0] = 0;
-    if (!c4fBundled) { snprintf(problem, size, "the bundled payload could not be read"); return C4F_AUTORUN_UNKNOWN; }
-    if (c4fSandboxLeave()) { snprintf(problem, size, "GoldHEN did not let the app check (errno %d)", errno); return C4F_AUTORUN_UNKNOWN; }
+    c4fMessageClear(&c4fAutorunText);
+    if (!c4fBundled) { c4fMessageWrite(&c4fAutorunText, problem, size, "the bundled payload could not be read"); return C4F_AUTORUN_UNKNOWN; }
+    if (c4fSandboxLeave()) { c4fMessageWrite(&c4fAutorunText, problem, size, "GoldHEN did not let the app check (errno %d)", errno); return C4F_AUTORUN_UNKNOWN; }
     int state = C4F_AUTORUN_OFF;
     char *ini = c4fPath(path, sizeof(path), "GoldHEN/payloads.ini") ? NULL : (char *)c4fReadFile(path, &length, 1u << 20);
     if (!ini && errno != ENOENT) {
-        snprintf(problem, size, "Could not inspect AutoRun (errno %d)", errno); return C4F_AUTORUN_UNKNOWN;
+        c4fMessageWrite(&c4fAutorunText, problem, size, "Could not inspect AutoRun (errno %d)", errno); return C4F_AUTORUN_UNKNOWN;
     }
     if (ini && c4fIniEnabled(ini) && !c4fPath(path, sizeof(path), "payloads/control4free.elf")) {
         size_t installedSize = 0;
@@ -184,10 +188,10 @@ int c4fAutorunCheck(char *problem, size_t size)
             state = installedSize == c4fBundledSize && !memcmp(installed, c4fBundled, installedSize) ? C4F_AUTORUN_ON : C4F_AUTORUN_OUTDATED;
         else if (errno == ENOENT) {
             state = C4F_AUTORUN_OUTDATED;
-            snprintf(problem, size, "Enabled, but the payload is missing; choose Update auto-start in Actions or press Triangle");
+            c4fMessageWrite(&c4fAutorunText, problem, size, "Enabled, but the payload is missing; choose Update auto-start in Actions or press Triangle");
         } else {
             state = C4F_AUTORUN_UNKNOWN;
-            snprintf(problem, size, "Enabled, but the payload cannot be inspected (errno %d)", errno);
+            c4fMessageWrite(&c4fAutorunText, problem, size, "Enabled, but the payload cannot be inspected (errno %d)", errno);
         }
         free(installed);
     }
@@ -199,13 +203,13 @@ int c4fAutorunEnable(char *message, size_t size)
 {
     char directory[300], path[300];
     size_t length = 0;
-    if (!c4fBundled) { snprintf(message, size, "The bundled payload could not be read. Reinstall the Control4Free package."); return -1; }
-    if (c4fSandboxLeave()) { snprintf(message, size, "GoldHEN did not let the app set up auto-start (errno %d).", errno); return -1; }
+    if (!c4fBundled) { c4fMessageWrite(&c4fAutorunText, message, size, "The bundled payload could not be read. Reinstall the Control4Free package."); return -1; }
+    if (c4fSandboxLeave()) { c4fMessageWrite(&c4fAutorunText, message, size, "GoldHEN did not let the app set up auto-start (errno %d).", errno); return -1; }
     int failed = c4fPath(directory, sizeof(directory), "payloads") || c4fPath(path, sizeof(path), "payloads/control4free.elf");
     if (!failed && mkdir(directory, 0777) && errno != EEXIST) failed = 1;
     if (!failed && c4fWriteFile(path, c4fBundled, c4fBundledSize)) failed = 1;
     if (failed) {
-        snprintf(message, size, "Could not copy Control4Free to /data/payloads (errno %d).", errno);
+        c4fMessageWrite(&c4fAutorunText, message, size, "Could not copy Control4Free to /data/payloads (errno %d).", errno);
         return -1;
     }
     failed = c4fPath(directory, sizeof(directory), "GoldHEN") || c4fPath(path, sizeof(path), "GoldHEN/payloads.ini");
@@ -214,8 +218,8 @@ int c4fAutorunEnable(char *message, size_t size)
     if (!failed && !old && errno != ENOENT) failed = 1;
     char *edited = failed ? NULL : c4fIniEdited(old ? old : "", 1);
     if (!failed && (!edited || c4fWriteFile(path, edited, strlen(edited)))) failed = 1;
-    if (failed) snprintf(message, size, "Could not add Control4Free to GoldHEN's AutoRun list (errno %d).", errno);
-    else snprintf(message, size, "Auto-start is on. GoldHEN starts Control4Free each time it loads.");
+    if (failed) c4fMessageWrite(&c4fAutorunText, message, size, "Could not add Control4Free to GoldHEN's AutoRun list (errno %d).", errno);
+    else c4fMessageWrite(&c4fAutorunText, message, size, "Auto-start is on. GoldHEN starts Control4Free each time it loads.");
     free(old);
     free(edited);
     return failed ? -1 : 0;
@@ -225,14 +229,14 @@ int c4fAutorunDisable(char *message, size_t size)
 {
     char path[300];
     size_t length = 0;
-    if (c4fSandboxLeave()) { snprintf(message, size, "GoldHEN did not let the app change auto-start (errno %d).", errno); return -1; }
+    if (c4fSandboxLeave()) { c4fMessageWrite(&c4fAutorunText, message, size, "GoldHEN did not let the app change auto-start (errno %d).", errno); return -1; }
     int failed = c4fPath(path, sizeof(path), "GoldHEN/payloads.ini");
     char *old = failed ? NULL : (char *)c4fReadFile(path, &length, 1u << 20);
     char *edited = old ? c4fIniEdited(old, 0) : NULL;
     if (!failed && old && (!edited || c4fWriteFile(path, edited, strlen(edited)))) failed = 1;
     if (!failed && !old && errno != ENOENT) failed = 1;
-    if (failed) snprintf(message, size, "Could not change GoldHEN's AutoRun list (errno %d).", errno);
-    else snprintf(message, size, "Auto-start is off. Start Control4Free here with Cross, or from GoldHEN's Payloader LaunchPad.");
+    if (failed) c4fMessageWrite(&c4fAutorunText, message, size, "Could not change GoldHEN's AutoRun list (errno %d).", errno);
+    else c4fMessageWrite(&c4fAutorunText, message, size, "Auto-start is off. Start Control4Free here with Cross, or from GoldHEN's Payloader LaunchPad.");
     free(old);
     free(edited);
     return failed ? -1 : 0;

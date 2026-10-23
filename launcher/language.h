@@ -1,9 +1,7 @@
 #ifndef C4F_LAUNCHER_LANGUAGE_H
 #define C4F_LAUNCHER_LANGUAGE_H
-/* The app's language. Every text is written in English; in Brazilian
- * Portuguese, draw.c shows each one's translation (language.c) instead. The
- * choice (C4F_LANGUAGE_* in screen.h) is kept in /data, so it needs the app
- * out of the sandbox. */
+/* Offline interface catalogs. Translate a source message key before formatting
+ * values into it. Saved language choices require the app to leave its sandbox. */
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -14,8 +12,12 @@ void c4fLanguageSave(int choice);
 /* Shows every text in the language chosen. Automatic follows the PS4's system
  * language. */
 void c4fLanguageUse(int choice);
-/* A text in Brazilian Portuguese, or NULL when it has no translation. */
-const char *c4fPortugueseText(const char *text);
+/* Exact source-key lookups, returning NULL when a catalog has no entry. */
+const char *c4fPortugueseText(const char *key);
+const char *c4fArabicText(const char *key);
+/* Active-language lookup; an unknown key is returned unchanged. */
+const char *c4fTr(const char *key);
+int c4fLanguageIsArabic(void);
 
 #ifdef __cplusplus
 }

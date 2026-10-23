@@ -111,43 +111,53 @@ of Bluetooth, or the other way round), can also help.
 **A gamepad button does nothing after changing its mapping.** Let go of it and press it again: a button held
 down while a gamepad starts playing waits until it's released.
 
-**The Xbox button presses PS for another controller in Chrome or Edge on Windows.** The browser's
-Windows.Gaming.Input backend combines Xbox/Guide presses from several controllers and reports them on one
-gamepad. Other buttons can still belong to the correct gamepad. Check **Mapping → Gamepad Controls** on
-each device: if the wrong device's **B16** lights up, the browser has already lost the physical source.
-Control4Free cannot recover that source from the reported input. See the
-[Chromium implementation](https://chromium.googlesource.com/chromium/src/+/refs/heads/main/device/gamepad/wgi_data_fetcher_win.cc#419).
+**The Xbox button presses PS for another controller in Chrome or Edge on Windows.** By default these
+browsers read Xbox controllers through Windows.Gaming.Input, which has no Xbox/Guide button. The browser
+reads that button separately for all Xbox controllers at once and reports the combined press on its
+lowest-numbered one, whichever controller it came from. It happens with any two Xbox controllers, not
+only mixed generations. Other buttons still belong to the correct gamepad. Check
+**Mapping → Gamepad Controls** on each device: if the wrong device's **B16** lights up, the browser has
+already lost the physical source, and Control4Free cannot recover it from the reported input. See the
+[Chromium implementation](https://chromium.googlesource.com/chromium/src/+/refs/heads/main/device/gamepad/wgi_data_fetcher_win.cc).
 
-On Windows 11, newer Chrome builds offer an experimental **Windows GameInput** backend with
-per-device Guide-button callbacks. If your browser offers it, open
-`chrome://flags/#enable-windows-gameinput-data-fetcher` (or search `edge://flags` in Edge), set it to
-**Enabled**, and relaunch. Reconnect the gamepads and repeat the **Gamepad Controls** check: each Xbox
-button should light **B16** only on its own gamepad. Confirm both PS buttons after assigning controllers.
-This resolved combined Xbox/Guide reporting in a two-controller user test on Chrome 154 and Windows 11.
-Controller models and connection modes were not recorded, and other input and haptic capabilities were
-not revalidated. The option remains experimental; input counts and haptics may change. Compare
-**Gamepad Controls**, including any extra paddles, and review saved profiles after changing the backend.
-If gamepads stop appearing, return the flag to **Default**.
-See Chromium's [backend selection](https://chromium.googlesource.com/chromium/src/+/refs/heads/main/device/gamepad/gamepad_platform_data_fetcher.h)
-and [per-device Guide handling](https://chromium.googlesource.com/chromium/src/+/refs/heads/main/device/gamepad/gameinput_data_fetcher.cc).
+On Windows 11, Chrome and Edge also have an experimental **Windows GameInput** backend that reports each
+Xbox button on its own gamepad. It is off by default. Find your browser's version under
+`chrome://settings/help` (`edge://settings/help` in Edge), then turn GameInput on:
+
+- **Version 155 or older:** open `chrome://flags/#enable-windows-gameinput-data-fetcher`
+  (`edge://flags/#enable-windows-gameinput-data-fetcher` in Edge), set it to **Enabled**, and relaunch.
+- **Version 156 or 157:** the option is hidden because it has expired. Set
+  `chrome://flags/#temporary-unexpire-flags-m155` (`edge://flags/#temporary-unexpire-flags-m155`) to
+  **Enabled** and relaunch, then enable the GameInput option as above and relaunch again.
+- **Any version, including 158 and newer:** start the browser with
+  `--enable-features=EnableWindowsGameInputDataFetcher`. Right-click the browser's shortcut, choose
+  **Properties**, add a space and the option to the end of **Target**, and press **OK**. Close every
+  browser window, check the notification area for a browser still running in the background, and open
+  the browser from that shortcut. `chrome://version` (`edge://version`) lists the option under
+  **Command Line** when it was applied.
+
+Chromium hides expired options from the flags page, but the command-line option keeps working as long
+as the browser still contains the GameInput backend. See Chromium's
+[backend selection](https://chromium.googlesource.com/chromium/src/+/refs/heads/main/device/gamepad/gamepad_platform_data_fetcher.h),
+[per-device Guide handling](https://chromium.googlesource.com/chromium/src/+/refs/heads/main/device/gamepad/gameinput_data_fetcher.cc)
+and [flag expiry](https://chromium.googlesource.com/chromium/src/+/refs/heads/main/docs/flag_expiry.md).
+
+Reconnect the gamepads and repeat the **Gamepad Controls** check: each Xbox button should light **B16**
+only on its own gamepad. Confirm both PS buttons after assigning controllers. This resolved combined
+Xbox/Guide reporting in a two-controller user test on Chrome 154 and Windows 11. Controller models and
+connection modes were not recorded, and other input and haptic capabilities were not revalidated. The
+backend remains experimental; input counts and haptics may change. Compare **Gamepad Controls**,
+including any extra paddles, and review saved profiles after changing the backend. If gamepads stop
+appearing, return the flag to **Default** or remove the option from the shortcut.
 
 GameInput is a workaround for this browser's multi-controller Guide reporting, not a general
 Control4Free requirement. The controller page cannot select a Windows input backend or change browser
 flags through the [Gamepad API](https://w3c.github.io/gamepad/). A permanent correction to this browser
-path requires a browser fix; a future PC app could choose its own per-device reader. The existing mapper
-can also use an independently reported button for PS.
+path requires a browser fix; a future PC app could choose its own per-device reader.
 
-In older browser builds that offer **Enable Windows.Gaming.Input**, open
-`chrome://flags/#enable-windows-gaming-input-data-fetcher` (or search `edge://flags` in Edge), set it to
-**Disabled**, and relaunch the browser. Reconnect the gamepads, select their controllers again, and check
-both Xbox buttons independently. This switches those builds to per-device XInput; extra paddles, input
-counts and haptic capabilities may change, so review saved mappings. The flag is unavailable in some
-newer builds.
-
-If these options are unavailable or the raw Guide input still crosses devices, try Firefox on Windows
-or map an independently reported button to **PS button**
-using **DS4 Mapping → PS button → Change**. That replaces the Xbox/Guide binding. Remapping or swapping
-controller numbers alone cannot separate the combined Xbox-button signal.
+On Windows 10, or if none of these work, try Firefox on Windows or map an independently reported button
+to **PS button** using **DS4 Mapping → PS button → Change**. That replaces the Xbox/Guide binding.
+Remapping or swapping controller numbers alone cannot separate the combined Xbox-button signal.
 
 **The gamepad does nothing.** Keep the page's window in front, press a button on the gamepad after the page
 has loaded, and check it has a controller under **Gamepads on this device**.

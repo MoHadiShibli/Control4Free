@@ -4,6 +4,7 @@
  * game reads it, with rumble and light-bar test actions. The native pad and
  * user calls are injected, so this logic also runs in host tests. */
 #include <stdint.h>
+#include "message.h"
 
 #define C4F_TESTER_USERS 4
 #define C4F_TESTER_HOLD_MS 2000
@@ -76,12 +77,13 @@ typedef struct {
 
 typedef struct {
     C4fTesterOps ops;
-    int active, menu, focus, armed, selected, rumble, rumbleReader;
+    int active, menu, focus, armed, selected, rumble, rumbleReader, rtl;
     int colorMenu, colorChannel, colorFine;
     unsigned menuOpeners;
     uint64_t usersAt, rumbleUntil;
     C4fTesterReader readers[C4F_TESTER_USERS];
     char note[96];
+    C4fMessage noteText;
 } C4fTester;
 
 /* What the screen shows, in whole display units so that an unchanged reading
@@ -98,6 +100,7 @@ typedef struct {
     int16_t accel[3]; /* x 100, G */
     int16_t gyro[3];  /* x 100, rad/s */
     char note[96];
+    C4fMessage noteText;
 } C4fTesterView;
 
 #ifdef __cplusplus

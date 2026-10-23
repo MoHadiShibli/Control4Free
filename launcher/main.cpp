@@ -14,6 +14,7 @@
 #include <orbis/UserService.h>
 #include <orbis/VideoOut.h>
 #include "autorun.h"
+#include "draw.h"
 #include "input.h"
 #include "language.h"
 #include "navigation.h"
@@ -39,17 +40,22 @@ static int c4fConnectionService = C4F_SERVICE_UNKNOWN;
 static uint64_t c4fConnectionCheckedAt;
 
 /* Set up: auto-start on, then start it now if PayLoader takes it. */
-static int c4fSetUp(char *message, size_t size)
+static int c4fSetUp(char *message, size_t size, C4fMessage *text)
 {
     int result = c4fAutorunEnable(message, size);
+    *text = *c4fAutorunMessage();
     if (result) return result;
     char started[160];
     size_t payloadSize;
     const unsigned char *payload = c4fAutorunBundled(&payloadSize);
     result = c4fLauncherStart(payload, payloadSize, started, sizeof(started));
-    if (result == 0) snprintf(message, size, "Set up and running. GoldHEN will also start it after each restart.");
+    *text = *c4fLauncherMessage();
+    if (result == 0) c4fMessageWrite(text, message, size, "Set up and running. GoldHEN will also start it after each restart.");
     else if (result == -2) snprintf(message, size, "%s", started);
-    else snprintf(message, size, "Auto-start is on. %s", started);
+    else {
+        snprintf(message, size, "Auto-start is on. %s", started);
+        text->prefix = "Auto-start is on. %s";
+    }
     return result == -2 ? -2 : 0;
 }
 
@@ -58,6 +64,7 @@ static void *c4fWorker(void *)
     uint64_t nextCheck = 0;
     int first = 1, autorun = C4F_AUTORUN_UNKNOWN;
     char autorunNote[96] = {0}, shownProblem[128] = {0};
+    C4fMessage autorunText = {};
     for (;;) {
         pthread_mutex_lock(&c4fMutex);
         int command = c4fCommand, quit = c4fQuit;
@@ -66,6 +73,7 @@ static void *c4fWorker(void *)
         if (quit) return NULL;
         if (command || c4fLauncherTimeMs() >= nextCheck) {
             char message[160] = {0}, address[64] = {0};
+            C4fMessage messageText = {};
             [[maybe_unused]] int result = 0; /* read by the diagnostic build */
             /* The console's own address: shown for the phone or PC, and the
              * app's second way to reach Control4Free from its sandbox. */
@@ -85,15 +93,28 @@ static void *c4fWorker(void *)
                 size_t payloadSize;
                 const unsigned char *payload = c4fAutorunBundled(&payloadSize);
                 result = c4fLauncherStart(payload, payloadSize, message, sizeof(message));
+                messageText = *c4fLauncherMessage();
             }
-            if (command == C4F_DO_STOP) result = c4fLauncherStop(message, sizeof(message));
-            if (command == C4F_DO_SET_UP) result = c4fSetUp(message, sizeof(message));
+            if (command == C4F_DO_STOP) {
+                result = c4fLauncherStop(message, sizeof(message));
+                messageText = *c4fLauncherMessage();
+            }
+            if (command == C4F_DO_SET_UP) result = c4fSetUp(message, sizeof(message), &messageText);
 #ifdef C4F_DIAG
             if (command == C4F_DO_START || command == C4F_DO_SET_UP) c4fDiagAfterStart(result, message);
 #endif
-            if (command == C4F_DO_AUTORUN_ON) result = c4fAutorunEnable(message, sizeof(message));
-            if (command == C4F_DO_AUTORUN_OFF) result = c4fAutorunDisable(message, sizeof(message));
-            if (first || command >= C4F_DO_SET_UP) autorun = c4fAutorunCheck(autorunNote, sizeof(autorunNote));
+            if (command == C4F_DO_AUTORUN_ON) {
+                result = c4fAutorunEnable(message, sizeof(message));
+                messageText = *c4fAutorunMessage();
+            }
+            if (command == C4F_DO_AUTORUN_OFF) {
+                result = c4fAutorunDisable(message, sizeof(message));
+                messageText = *c4fAutorunMessage();
+            }
+            if (first || command >= C4F_DO_SET_UP) {
+                autorun = c4fAutorunCheck(autorunNote, sizeof(autorunNote));
+                autorunText = *c4fAutorunMessage();
+            }
             C4fServiceStatus status;
             uint64_t probeAt = c4fLauncherTimeMs();
             int running = c4fLauncherProbe(&status);
@@ -101,12 +122,15 @@ static void *c4fWorker(void *)
             pthread_mutex_lock(&c4fMutex);
             if (command) {
                 snprintf(c4fScreen.message, sizeof(c4fScreen.message), "%s", message);
+                c4fScreen.messageText = messageText;
             } else if (!c4fScreen.locked &&
                        (first || running != c4fScreen.running || (running < 0 && strcmp(problem, shownProblem)))) {
-                if (running == 1) snprintf(c4fScreen.message, sizeof(c4fScreen.message), "Ready. Open the address on your phone or PC.");
-                else if (running == 0) snprintf(c4fScreen.message, sizeof(c4fScreen.message), "Not running.");
-                else if (!c4fLauncherReached()) snprintf(c4fScreen.message, sizeof(c4fScreen.message), "The app cannot reach Control4Free: %s", problem);
-                else snprintf(c4fScreen.message, sizeof(c4fScreen.message), "No answer the app understands: %s", problem);
+                if (running == 1) c4fMessageWrite(&c4fScreen.messageText, c4fScreen.message, sizeof(c4fScreen.message), "Ready. Open the address on your phone or PC.");
+                else if (running == 0) c4fMessageWrite(&c4fScreen.messageText, c4fScreen.message, sizeof(c4fScreen.message), "Not running.");
+                else if (!c4fLauncherReached()) c4fMessageWrite(&c4fScreen.messageText, c4fScreen.message, sizeof(c4fScreen.message), "The app cannot reach Control4Free: %s", problem);
+                else c4fMessageWrite(&c4fScreen.messageText, c4fScreen.message, sizeof(c4fScreen.message), "No answer the app understands: %s", problem);
+                if (c4fScreen.messageText.argType == C4F_MESSAGE_STRING)
+                    c4fScreen.messageText.valueIsKey = c4fLauncherProblemIsKey();
                 snprintf(shownProblem, sizeof(shownProblem), "%s", problem);
             }
             c4fScreen.running = running;
@@ -117,6 +141,7 @@ static void *c4fWorker(void *)
             snprintf(c4fScreen.runningVersion, sizeof(c4fScreen.runningVersion), "%s", running == 1 ? status.version : "");
             c4fScreen.autorun = autorun;
             snprintf(c4fScreen.autorunNote, sizeof(c4fScreen.autorunNote), "%s", autorunNote);
+            c4fScreen.autorunText = autorunText;
             snprintf(c4fScreen.address, sizeof(c4fScreen.address), "%s", address);
             /* A queued click while a periodic probe was in flight remains busy. */
             if (!c4fCommand) c4fScreen.busy = 0;
@@ -426,6 +451,7 @@ static void *c4fInputWorker(void *)
         pthread_mutex_lock(&c4fMutex);
         int quit = c4fQuit || c4fCloseRequested;
         uint64_t renderedAt = c4fRenderAt;
+        tester.rtl = c4fScreen.rtl;
         pthread_mutex_unlock(&c4fMutex);
         if (quit) break;
         /* A suspended or stalled display must not leave test output running.
@@ -502,15 +528,15 @@ static void *c4fInputWorker(void *)
         else if (action == C4F_ACTION_START) {
             int setUp = c4fScreen.autorun != C4F_AUTORUN_ON;
             c4fCommand = setUp ? C4F_DO_SET_UP : C4F_DO_START; c4fScreen.busy = 1;
-            snprintf(c4fScreen.message, sizeof(c4fScreen.message), "%s",
+            c4fMessageWrite(&c4fScreen.messageText, c4fScreen.message, sizeof(c4fScreen.message),
                      setUp ? "Setting up Control4Free. Please wait..." : "Starting Control4Free. Please wait...");
         } else if (action == C4F_ACTION_STOP) {
             c4fCommand = C4F_DO_STOP; c4fScreen.busy = 1;
-            snprintf(c4fScreen.message, sizeof(c4fScreen.message), "Stopping and releasing controllers...");
+            c4fMessageWrite(&c4fScreen.messageText, c4fScreen.message, sizeof(c4fScreen.message), "Stopping and releasing controllers...");
         } else if (action == C4F_ACTION_AUTORUN) {
             int off = c4fScreen.autorun == C4F_AUTORUN_ON;
             c4fCommand = off ? C4F_DO_AUTORUN_OFF : C4F_DO_AUTORUN_ON; c4fScreen.busy = 1;
-            snprintf(c4fScreen.message, sizeof(c4fScreen.message), "%s",
+            c4fMessageWrite(&c4fScreen.messageText, c4fScreen.message, sizeof(c4fScreen.message),
                      off ? "Turning auto-start off..." : "Turning auto-start on...");
         } else if (action == C4F_ACTION_LANGUAGE) {
             c4fScreen.language = (c4fScreen.language + 1) % C4F_LANGUAGE_COUNT;
@@ -618,16 +644,19 @@ int main(void)
     params.priority = ORBIS_KERNEL_PRIO_FIFO_LOWEST;
     sceUserServiceInitialize(&params);
     c4fScreen.running = -1; c4fScreen.busy = 1; c4fScreen.autorun = C4F_AUTORUN_UNKNOWN;
-    snprintf(c4fScreen.message, sizeof(c4fScreen.message), "Checking Control4Free...");
+    c4fMessageWrite(&c4fScreen.messageText, c4fScreen.message, sizeof(c4fScreen.message), "Checking Control4Free...");
     /* Read before leaving the sandbox: /app0 is only visible from inside it. */
     if (c4fAutorunLoadBundled(C4F_BUNDLED_PAYLOAD)) printf("[c4f-launcher] bundled payload unreadable\n");
     /* The sandbox refuses connections to the console itself (EACCES), so the
      * app could reach neither Control4Free nor PayLoader from inside it. */
     int sandbox = c4fSandboxLeave(), sandboxError = errno;
     if (sandbox) printf("[c4f-launcher] could not leave the sandbox, errno %d\n", sandboxError);
+    if (!sandbox && c4fTextLoadSystemFonts())
+        printf("[c4f-launcher] system Arabic fonts unavailable; using bundled fallback\n");
     /* The saved language lives in /data, only visible outside the sandbox. */
     int language = c4fScreen.language = c4fLanguageLoad();
     c4fLanguageUse(language);
+    c4fScreen.rtl = c4fLanguageIsArabic();
 #ifdef C4F_DIAG
     c4fDiagStart(sandbox, sandboxError);
     for (int i = 0; i < C4F_DIAG_PAGES; i++) c4fScreen.diagScroll[i] = i ? C4F_DIAG_END : 0;
@@ -637,7 +666,7 @@ int main(void)
     if (!workerStarted) {
         pthread_mutex_lock(&c4fMutex);
         c4fScreen.locked = 1;
-        snprintf(c4fScreen.message, sizeof(c4fScreen.message), "Could not initialize launcher. Close with PS and retry.");
+        c4fMessageWrite(&c4fScreen.messageText, c4fScreen.message, sizeof(c4fScreen.message), "Could not initialize launcher. Close with PS and retry.");
         pthread_mutex_unlock(&c4fMutex);
     }
     c4fRenderAt = c4fLauncherTimeMs();
@@ -646,7 +675,7 @@ int main(void)
     if (!inputStarted) {
         pthread_mutex_lock(&c4fMutex);
         c4fScreen.locked = 1;
-        snprintf(c4fScreen.message, sizeof(c4fScreen.message), "Could not initialize input. Close with PS and retry.");
+        c4fMessageWrite(&c4fScreen.messageText, c4fScreen.message, sizeof(c4fScreen.message), "Could not initialize input. Close with PS and retry.");
         pthread_mutex_unlock(&c4fMutex);
     }
     sceSystemServiceHideSplashScreen();
@@ -676,6 +705,9 @@ int main(void)
         if (snapshot.language != language) {
             language = snapshot.language;
             c4fLanguageUse(language);
+            pthread_mutex_lock(&c4fMutex);
+            c4fScreen.rtl = c4fLanguageIsArabic();
+            pthread_mutex_unlock(&c4fMutex);
             c4fLanguageSave(language);
         }
         snapshot.connection = c4fTesterConnectionView(&connectionStatus, connectionService, connectionCheckedAt, now, &snapshot.tester);

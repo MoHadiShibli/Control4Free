@@ -1,5 +1,5 @@
-/* The app in Brazilian Portuguese: a translation for each English text it
- * shows, the choice kept between runs, and the PS4's own system language. */
+/* Offline interface catalogs. Source message keys are looked up exactly,
+ * before values are inserted, so user data is never translated. */
 #include "language.h"
 #include <stdio.h>
 #include <string.h>
@@ -12,11 +12,13 @@ int sceSystemServiceParamGetInt(int id, int *value);
 #define C4F_SYSTEM_PARAM_LANG 1
 #define C4F_SYSTEM_LANG_PORTUGUESE 7
 #define C4F_SYSTEM_LANG_PORTUGUESE_BR 17
+#define C4F_SYSTEM_LANG_ARABIC 21
 
 #define C4F_LANGUAGE_DIR "/data/control4free"
 #define C4F_LANGUAGE_FILE C4F_LANGUAGE_DIR "/launcher-language"
 
-static const char *const c4fLanguageNames[C4F_LANGUAGE_COUNT] = { "auto", "en", "pt-BR" };
+static const char *const c4fLanguageNames[C4F_LANGUAGE_COUNT] = { "auto", "en", "pt-BR", "ar" };
+static int c4fActiveLanguage = C4F_LANGUAGE_ENGLISH;
 
 int c4fLanguageLoad(void)
 {
@@ -41,26 +43,34 @@ void c4fLanguageSave(int choice)
     fclose(f);
 }
 
-static int c4fSystemPortuguese(void)
+static int c4fSystemLanguage(void)
 {
     int language = -1;
-    if (sceSystemServiceParamGetInt(C4F_SYSTEM_PARAM_LANG, &language) < 0) return 0;
-    return language == C4F_SYSTEM_LANG_PORTUGUESE || language == C4F_SYSTEM_LANG_PORTUGUESE_BR;
+    if (sceSystemServiceParamGetInt(C4F_SYSTEM_PARAM_LANG, &language) < 0)
+        return C4F_LANGUAGE_ENGLISH;
+    if (language == C4F_SYSTEM_LANG_ARABIC) return C4F_LANGUAGE_ARABIC;
+    if (language == C4F_SYSTEM_LANG_PORTUGUESE || language == C4F_SYSTEM_LANG_PORTUGUESE_BR)
+        return C4F_LANGUAGE_PORTUGUESE;
+    return C4F_LANGUAGE_ENGLISH;
 }
 
 void c4fLanguageUse(int choice)
 {
     static int used = -1;
-    int portuguese = choice == C4F_LANGUAGE_PORTUGUESE || (choice == C4F_LANGUAGE_AUTO && c4fSystemPortuguese());
-    if (portuguese == used) return;
-    used = portuguese;
-    c4fSetTextTranslation(portuguese ? c4fPortugueseText : NULL);
+    int selected = choice == C4F_LANGUAGE_AUTO ? c4fSystemLanguage() : choice;
+    if (selected <= C4F_LANGUAGE_AUTO || selected >= C4F_LANGUAGE_COUNT)
+        selected = C4F_LANGUAGE_ENGLISH;
+    if (selected == used) return;
+    used = selected;
+    c4fActiveLanguage = selected;
+    c4fSetTextTranslation(selected == C4F_LANGUAGE_PORTUGUESE ? c4fPortugueseText :
+                          selected == C4F_LANGUAGE_ARABIC ? c4fArabicText : NULL);
+    c4fSetTextDirection(selected == C4F_LANGUAGE_ARABIC);
 }
 
 /* ---- the translations ---- */
 
-/* A '%' conversion in the English stands for a value the app filled in; the
- * Portuguese has the same conversions in the same order. */
+/* Format conversions remain in the same order; callers format translated keys. */
 typedef struct { const char *en, *pt; } C4fPhrase;
 
 static const C4fPhrase c4fPortuguese[] = {
@@ -292,75 +302,232 @@ static const C4fPhrase c4fPortuguese[] = {
       "Segure L3 + R3 por dois segundos para o menu: trocar usuário, vibração, barra de luz, sair." },
 };
 
-enum { C4F_CAPTURES = 4, C4F_CAPTURE_SIZE = 192 };
+/* Exact interface keys only. Values are formatted after lookup by the caller. */
+static const C4fPhrase c4fArabic[] = {
+    { "Touchpad", "لوحة اللمس" },
+    { "Not responding", "لا يستجيب" },
+    { "Check Control4Free", "تحقق من Control4Free" },
+    { "Something answers on port 4264 but not the way this app expects. If an older Control4Free is running, stop it on its controller page or restart the PS4.", "توجد استجابة على المنفذ 4264 لا يتعرف عليها التطبيق. إذا كان إصدار أقدم من Control4Free يعمل، فأوقفه من صفحة التحكم أو أعد تشغيل PS4." },
+    { "App error", "خطأ في التطبيق" },
+    { "Reopen the app", "أعد فتح التطبيق" },
+    { "The app could not start properly. Close it with the PS button and open it again. Control4Free itself is not affected.", "تعذر بدء التطبيق. أغلقه باستخدام زر PS ثم افتحه مجددًا. لا يؤثر ذلك على خدمة Control4Free." },
+    { "Working", "جارٍ التنفيذ" },
+    { "Please wait", "يرجى الانتظار" },
+    { "Checking", "جارٍ التحقق" },
+    { "1 controller connected", "وحدة تحكم واحدة متصلة" },
+    { "%d controllers connected", "وحدات تحكم متصلة: %d" },
+    { "Running", "يعمل" },
+    { "Control4Free is running", "Control4Free يعمل" },
+    { "Open the address or scan the code on your phone or PC. Pick a controller there, then choose its user on the PS4.", "افتح العنوان أو امسح الرمز بهاتفك أو حاسوبك. اختر وحدة تحكم، ثم اختر مستخدمها على PS4." },
+    { "Stopped", "متوقف" },
+    { "Start Control4Free", "تشغيل Control4Free" },
+    { "It starts with GoldHEN after each restart. To start now, enable GoldHEN's PayLoader Server and press Cross.", "يبدأ مع GoldHEN بعد كل إعادة تشغيل. للبدء الآن، فعّل PayLoader Server في GoldHEN واضغط ×." },
+    { "Not running", "لا يعمل" },
+    { "Set up Control4Free", "إعداد Control4Free" },
+    { "Press Cross to set up auto-start. To start Control4Free now, enable GoldHEN's PayLoader Server.", "اضغط × لإعداد التشغيل التلقائي. لتشغيل Control4Free الآن، فعّل PayLoader Server في GoldHEN." },
+    { "Open on your phone or PC", "افتحه على هاتفك أو حاسوبك" },
+    { "Connect the PS4 to your home network", "صِل PS4 بشبكتك المنزلية" },
+    { "Use the same network as the PS4. Touch, a keyboard and gamepads connected to the phone or PC all work.", "استخدم شبكة PS4 نفسها. يمكنك اللعب باللمس أو بلوحة مفاتيح أو بوحدة تحكم متصلة بهاتفك أو حاسوبك." },
+    { "Working...", "جارٍ التنفيذ..." },
+    { "Scan with your phone's camera", "امسح الرمز بكاميرا هاتفك" },
+    { "The code appears once it runs", "يظهر الرمز عند تشغيل الخدمة" },
+    { "Installed %s; running %s", "المثبّت %s؛ قيد التشغيل %s" },
+    { "Press Square, then Cross to stop, and Cross again to start this app's version. All players disconnect.", "اضغط المربع ثم × للإيقاف، ثم × مجددًا لتشغيل إصدار هذا التطبيق. سينقطع اتصال جميع اللاعبين." },
+    { "Starts by itself with GoldHEN", "يبدأ تلقائيًا مع GoldHEN" },
+    { "GoldHEN starts Control4Free each time it loads. Closing this app leaves your controllers running. Turn off other controller plugins in your games.", "يبدأ GoldHEN خدمة Control4Free عند تحميله. تبقى وحدات التحكم متصلة بعد إغلاق التطبيق. عطّل إضافات التحكم الأخرى في ألعابك." },
+    { "Auto-start uses an older Control4Free", "التشغيل التلقائي يستخدم إصدارًا أقدم" },
+    { "Press Triangle to update auto-start. GoldHEN uses this version after the next restart.", "اضغط المثلث لتحديث التشغيل التلقائي. سيستخدم GoldHEN هذا الإصدار بعد إعادة التشغيل التالية." },
+    { "Auto-start is off", "التشغيل التلقائي معطّل" },
+    { "Press Triangle to turn auto-start on. GoldHEN then starts Control4Free each time it loads.", "اضغط المثلث لتفعيل التشغيل التلقائي. سيبدأ GoldHEN خدمة Control4Free عند تحميله." },
+    { "Auto-start status unknown", "حالة التشغيل التلقائي غير معروفة" },
+    { "Checking with GoldHEN...", "جارٍ التحقق من GoldHEN..." },
+    { "TV remote: OK opens actions / arrows select / Back returns", "ريموت التلفاز: OK للإجراءات / الأسهم للاختيار / رجوع للعودة" },
+    { "L1  Language: automatic", "L1  اللغة: تلقائي" },
+    { "L1  Language: English", "L1  اللغة: English" },
+    { "L1  Language: Portuguese (Brazil)", "L1  اللغة: البرتغالية (البرازيل)" },
+    { "Start", "تشغيل" },
+    { "Set up", "إعداد" },
+    { "Turn off auto-start", "تعطيل التشغيل التلقائي" },
+    { "Update auto-start", "تحديث التشغيل التلقائي" },
+    { "Turn on auto-start", "تفعيل التشغيل التلقائي" },
+    { "Stop", "إيقاف" },
+    { "Test controllers", "اختبار وحدات التحكم" },
+    { "Close", "إغلاق" },
+    { "Actions", "الإجراءات" },
+    { "Working... You can return to the screen.", "جارٍ التنفيذ... يمكنك العودة إلى الشاشة." },
+    { "Use arrows or the D-pad to choose an action.", "استخدم الأسهم أو أزرار الاتجاهات لاختيار إجراء." },
+    { "Select", "اختيار" },
+    { "Back", "رجوع" },
+    { "TV remote: OK select / Back return", "ريموت التلفاز: OK للاختيار / رجوع للعودة" },
+    { "Stop Control4Free?", "إيقاف Control4Free؟" },
+    { "Every controller disconnects. You can start Control4Free again from this screen.", "سينقطع اتصال جميع وحدات التحكم. يمكنك تشغيل Control4Free مجددًا من هذه الشاشة." },
+    { "Cancel", "إلغاء" },
+    { "Arrows / D-pad: select    OK / Cross: confirm    Back / Circle: cancel", "الأسهم / الاتجاهات: اختيار    OK / ×: تأكيد    رجوع / الدائرة: إلغاء" },
+    { "Resume", "متابعة" },
+    { "Set up and start", "إعداد وتشغيل" },
+    { "Turn auto-start off", "تعطيل التشغيل التلقائي" },
+    { "Turn auto-start on", "تفعيل التشغيل التلقائي" },
+    { "Stop Control4Free", "إيقاف Control4Free" },
+    { "Close app", "إغلاق التطبيق" },
+    { "Capture kernel log", "تسجيل سجل النواة" },
+    { "Checking Control4Free...", "جارٍ التحقق من Control4Free..." },
+    { "Could not initialize launcher. Close with PS and retry.", "تعذر بدء التطبيق. أغلقه بزر PS وحاول مجددًا." },
+    { "Could not initialize input. Close with PS and retry.", "تعذر بدء الإدخال. أغلق التطبيق بزر PS وحاول مجددًا." },
+    { "Setting up Control4Free. Please wait...", "جارٍ إعداد Control4Free. يرجى الانتظار..." },
+    { "Starting Control4Free. Please wait...", "جارٍ تشغيل Control4Free. يرجى الانتظار..." },
+    { "Stopping and releasing controllers...", "جارٍ الإيقاف وفصل وحدات التحكم..." },
+    { "Turning auto-start off...", "جارٍ تعطيل التشغيل التلقائي..." },
+    { "Turning auto-start on...", "جارٍ تفعيل التشغيل التلقائي..." },
+    { "Set up and running. GoldHEN will also start it after each restart.", "اكتمل الإعداد والخدمة تعمل. سيشغلها GoldHEN أيضًا بعد كل إعادة تشغيل." },
+    { "Ready. Open the address on your phone or PC.", "جاهز. افتح العنوان على هاتفك أو حاسوبك." },
+    { "Not running.", "لا يعمل." },
+    { "The app cannot reach Control4Free: %s", "يتعذر اتصال التطبيق بخدمة Control4Free: %s" },
+    { "No answer the app understands: %s", "لم يتعرف التطبيق على الاستجابة: %s" },
+    { "Already running. Open the address on your phone or PC.", "الخدمة تعمل بالفعل. افتح العنوان على هاتفك أو حاسوبك." },
+    { "The app cannot check whether Control4Free is running (%s).", "تعذر على التطبيق التحقق من تشغيل Control4Free (%s)." },
+    { "Control4Free is not responding (%s). Wait a moment after waking. If it stays stuck, restart the PS4.", "Control4Free لا يستجيب (%s). انتظر قليلًا بعد الخروج من وضع السكون. إذا استمرت المشكلة، فأعد تشغيل PS4." },
+    { "The payload is missing. Reinstall the Control4Free package.", "ملف الخدمة مفقود. أعد تثبيت حزمة Control4Free." },
+    { "The bundled payload is damaged. Reinstall the Control4Free package.", "ملف الخدمة المرفق تالف. أعد تثبيت حزمة Control4Free." },
+    { "PayLoader did not answer (errno %d). Enable PayLoader Server in GoldHEN > Server Settings, then retry Start.", "لم يستجب PayLoader (errno %d). فعّل PayLoader Server من GoldHEN > Server Settings، ثم حاول التشغيل مجددًا." },
+    { "The transfer to PayLoader broke off. Retry Start.", "انقطع الإرسال إلى PayLoader. حاول التشغيل مجددًا." },
+    { "Sent, but Control4Free did not start (%s). Retry Start.", "اكتمل الإرسال، لكن Control4Free لم يبدأ (%s). حاول التشغيل مجددًا." },
+    { "Stopped. Ready to start again.", "توقفت الخدمة. جاهزة للتشغيل مجددًا." },
+    { "The app cannot reach Control4Free (%s). Stop it on its controller page.", "يتعذر اتصال التطبيق بخدمة Control4Free (%s). أوقفها من صفحة التحكم." },
+    { "This copy does not answer the app (%s). Stop it on its controller page.", "هذه النسخة لا تستجيب للتطبيق (%s). أوقفها من صفحة التحكم." },
+    { "Stop was not confirmed (%s). Check the controller page.", "لم يتأكد الإيقاف (%s). تحقق من صفحة التحكم." },
+    { "Still stopping. Wait a moment, then try again.", "لا تزال الخدمة تتوقف. انتظر قليلًا وحاول مجددًا." },
+    { "the status reply is not from Control4Free", "استجابة الحالة ليست من Control4Free" },
+    { "Auto-start is on. %s", "التشغيل التلقائي مفعّل. %s" },
+    { "the bundled payload could not be read", "تعذرت قراءة ملف الخدمة المرفق" },
+    { "GoldHEN did not let the app check (errno %d)", "لم يسمح GoldHEN للتطبيق بالتحقق (errno %d)" },
+    { "Could not inspect AutoRun (errno %d)", "تعذر فحص AutoRun (errno %d)" },
+    { "Enabled, but the payload is missing; choose Update auto-start in Actions or press Triangle", "مفعّل، لكن ملف الخدمة مفقود؛ اختر تحديث التشغيل التلقائي من الإجراءات أو اضغط المثلث" },
+    { "Enabled, but the payload cannot be inspected (errno %d)", "مفعّل، لكن تعذر فحص ملف الخدمة (errno %d)" },
+    { "The bundled payload could not be read. Reinstall the Control4Free package.", "تعذرت قراءة ملف الخدمة المرفق. أعد تثبيت حزمة Control4Free." },
+    { "GoldHEN did not let the app set up auto-start (errno %d).", "لم يسمح GoldHEN بإعداد التشغيل التلقائي (errno %d)." },
+    { "Could not copy Control4Free to /data/payloads (errno %d).", "تعذر نسخ Control4Free إلى /data/payloads (errno %d)." },
+    { "Could not add Control4Free to GoldHEN's AutoRun list (errno %d).", "تعذرت إضافة Control4Free إلى قائمة AutoRun في GoldHEN (errno %d)." },
+    { "Auto-start is on. GoldHEN starts Control4Free each time it loads.", "التشغيل التلقائي مفعّل. يبدأ GoldHEN خدمة Control4Free عند تحميله." },
+    { "GoldHEN did not let the app change auto-start (errno %d).", "لم يسمح GoldHEN بتغيير التشغيل التلقائي (errno %d)." },
+    { "Could not change GoldHEN's AutoRun list (errno %d).", "تعذر تعديل قائمة AutoRun في GoldHEN (errno %d)." },
+    { "Auto-start is off. Start Control4Free here with Cross, or from GoldHEN's Payloader LaunchPad.", "التشغيل التلقائي معطّل. شغّل Control4Free هنا بزر × أو من Payloader LaunchPad في GoldHEN." },
+    { "Controller test", "اختبار وحدة التحكم" },
+    { "See the controller input received by this PS4. Select a user, then press buttons or move the sticks. PS and Share go to the PS4 itself and aren't shown here.", "شاهد الإدخال الذي يتلقاه PS4. اختر مستخدمًا ثم اضغط الأزرار أو حرّك العصوين. يذهب زرا PS وShare مباشرة إلى PS4 ولا يظهران هنا." },
+    { "Sticks", "العصوان" },
+    { "Left", "اليسرى" },
+    { "Right", "اليمنى" },
+    { "Triggers", "الزنادان" },
+    { "Motion", "الحركة" },
+    { "Acceleration (G)", "التسارع (G)" },
+    { "Gyro (rad/s)", "الجيروسكوب (rad/s)" },
+    { "Orientation", "الاتجاه" },
+    { "Light bar", "شريط الإضاءة" },
+    { "Hold L3 + R3: menu    TV remote: OK menu / Back leave", "اضغط مطولًا L3 + R3: القائمة    ريموت التلفاز: OK للقائمة / رجوع للخروج" },
+    { "Waiting for the PS4's signed-in users...", "بانتظار المستخدمين المسجّلين على PS4..." },
+    { "No touch", "لا يوجد لمس" },
+    { "Set by this test", "مضبوط من هذا الاختبار" },
+    { "As the PS4 sets it", "حسب إعداد PS4" },
+    { "Controller page RTT", "زمن اتصال صفحة التحكم" },
+    { "No controller page for this user", "لا توجد صفحة تحكم لهذا المستخدم" },
+    { "C%d measuring...", "C%d جارٍ القياس..." },
+    { "User %d", "المستخدم %d" },
+    { "The PS4 refused that (0x%08x).", "رفض PS4 هذا الإجراء (0x%08x)." },
+    { "No other user is signed in.", "لا يوجد مستخدم آخر مسجّل." },
+    { "This user has no controller to test.", "لا توجد وحدة تحكم لهذا المستخدم لاختبارها." },
+    { "Large motor: rumbling for a second.", "المحرك الكبير: اهتزاز لمدة ثانية." },
+    { "Small motor: rumbling for a second.", "المحرك الصغير: اهتزاز لمدة ثانية." },
+    { "Light bar reset.", "أُعيد ضبط شريط الإضاءة." },
+    { "Orientation reset.", "أُعيد ضبط الاتجاه." },
+    { "Light bar set. It goes back to normal when you leave.", "ضُبط شريط الإضاءة. سيعود إلى لونه المعتاد عند الخروج." },
+    { "This user's controller is unavailable.", "وحدة تحكم هذا المستخدم غير متاحة." },
+    { "Switch user", "تبديل المستخدم" },
+    { "Rumble the large motor", "تشغيل اهتزاز المحرك الكبير" },
+    { "Rumble the small motor", "تشغيل اهتزاز المحرك الصغير" },
+    { "Choose the light-bar color", "اختيار لون شريط الإضاءة" },
+    { "Reset the light bar", "إعادة ضبط شريط الإضاءة" },
+    { "Reset orientation", "إعادة ضبط الاتجاه" },
+    { "Back to the launcher", "العودة إلى المشغّل" },
+    { "Return to live input", "العودة إلى الإدخال المباشر" },
+    { "Choose another player", "اختيار لاعب آخر" },
+    { "Recenter motion", "إعادة توسيط الحركة" },
+    { "Choose any RGB color", "اختيار أي لون RGB" },
+    { "One-second vibration", "اهتزاز لمدة ثانية" },
+    { "Restore default color", "استعادة اللون الافتراضي" },
+    { "No other signed-in user", "لا يوجد مستخدم آخر مسجّل" },
+    { "Controller unavailable", "وحدة التحكم غير متاحة" },
+    { "Large motor", "المحرك الكبير" },
+    { "Small motor", "المحرك الصغير" },
+    { "Reset light", "إعادة ضبط اللون" },
+    { "Leave test", "مغادرة الاختبار" },
+    { "Controller tools", "أدوات وحدة التحكم" },
+    { "Mix red, green and blue. Changes preview on the selected controller.", "امزج الأحمر والأخضر والأزرق. يظهر اللون على وحدة التحكم المختارة." },
+    { "Test motion, vibration and the light bar.", "اختبر الحركة والاهتزاز وشريط الإضاءة." },
+    { "D-pad or arrows to move", "استخدم الاتجاهات أو الأسهم للتنقل" },
+    { "Fast adjustment", "تعديل سريع" },
+    { "Fine adjustment", "تعديل دقيق" },
+    { "Done", "تم" },
+    { "Up/Down: channel / Left/Right: adjust / OK: step size / Back: done", "أعلى/أسفل: القناة / يمين/يسار: تعديل / OK: مقدار التغيير / رجوع: إنهاء" },
+    { "No one signed in", "لا يوجد مستخدم مسجّل" },
+    { "Controller connected", "وحدة التحكم متصلة" },
+    { "No controller connected", "لا توجد وحدة تحكم متصلة" },
+    { "Signed out", "سُجّل الخروج" },
+    { "Cannot read (0x%08x)", "تعذرت القراءة (0x%08x)" },
+    { "Opening controller...", "جارٍ فتح وحدة التحكم..." },
+    { "Waiting for a signed-in user", "بانتظار مستخدم مسجّل" },
+    { "SELECTED USER", "المستخدم المختار" },
+    { "CONTROLLER", "وحدة التحكم" },
+    { "TEST OUTPUT", "خرج الاختبار" },
+    { "Light bar set by this test", "شريط الإضاءة مضبوط من الاختبار" },
+    { "Light bar: PS4 default", "شريط الإضاءة: إعداد PS4 الافتراضي" },
+    { "Large motor running", "المحرك الكبير يعمل" },
+    { "Small motor running", "المحرك الصغير يعمل" },
+    { "The light bar returns to its PS4 color when you leave the tester.", "يعود شريط الإضاءة إلى لون PS4 عند مغادرة الاختبار." },
+    { "Choose a tool, or resume testing to see live input.", "اختر أداة أو تابع الاختبار لمشاهدة الإدخال المباشر." },
+    { "Sign in another PS4 user to switch players here.", "سجّل دخول مستخدم آخر على PS4 للتبديل بين اللاعبين هنا." },
+    { "Connect this user's controller to use this tool.", "صِل وحدة تحكم هذا المستخدم لاستخدام الأداة." },
+    { "Red", "أحمر" },
+    { "Green", "أخضر" },
+    { "Blue", "أزرق" },
+    { "COLOR PREVIEW", "معاينة اللون" },
+    { "Cross / OK switches fine and fast", "× / OK للتبديل بين التعديل الدقيق والسريع" },
+    { "Step: %d", "مقدار التغيير: %d" },
+    { "Reading this user's controller", "جارٍ قراءة وحدة تحكم هذا المستخدم" },
+    { "The PS4 would not read it (0x%08x)", "لم يتمكن PS4 من قراءتها (0x%08x)" },
+    { "No one is signed in", "لا يوجد مستخدم مسجّل" },
+    { "Opening this user's controller...", "جارٍ فتح وحدة تحكم هذا المستخدم..." },
+    { "Rumbling: large motor", "اهتزاز: المحرك الكبير" },
+    { "Rumbling: small motor", "اهتزاز: المحرك الصغير" },
+    { "Hold L3 + R3 for two seconds for the menu: change user, rumble, light bar, leave.", "اضغط مطولًا L3 + R3 لمدة ثانيتين لفتح القائمة: المستخدم والاهتزاز والإضاءة والخروج." },
+    { "L1  Language: Arabic", "L1  اللغة: العربية" },
+};
 
-/* The end of the '%' conversion that starts at `at`. */
-static const char *c4fConversionEnd(const char *at)
+static const char *c4fFind(const C4fPhrase *phrases, size_t count, const char *key)
 {
-    at++;
-    while (*at && strchr("0123456789.-+ #lhz", *at)) at++;
-    return *at ? at + 1 : at;
-}
-
-/* Whether `text` reads as `pattern`, each conversion standing for a non-empty
- * run of text, kept in `captures`. */
-static int c4fMatch(const char *pattern, const char *text, char captures[][C4F_CAPTURE_SIZE], int n)
-{
-    while (*pattern && *pattern != '%') {
-        if (*pattern++ != *text++) return 0;
-    }
-    if (!*pattern) return !*text;
-    if (n == C4F_CAPTURES) return 0;
-    const char *rest = c4fConversionEnd(pattern);
-    for (size_t length = 1; text[length - 1]; length++) {
-        if (length >= C4F_CAPTURE_SIZE) return 0;
-        if (*rest && *rest != '%' && text[length] != *rest) continue;
-        if (c4fMatch(rest, text + length, captures, n + 1)) {
-            memcpy(captures[n], text, length);
-            captures[n][length] = 0;
-            return 1;
-        }
-    }
-    return 0;
-}
-
-static const char *c4fExact(const char *text)
-{
-    for (size_t i = 0; i < sizeof(c4fPortuguese) / sizeof(c4fPortuguese[0]); i++)
-        if (!strchr(c4fPortuguese[i].en, '%') && !strcmp(c4fPortuguese[i].en, text)) return c4fPortuguese[i].pt;
+    if (!key) return NULL;
+    for (size_t i = 0; i < count; ++i)
+        if (!strcmp(phrases[i].en, key)) return phrases[i].pt;
     return NULL;
 }
 
-const char *c4fPortugueseText(const char *text)
+const char *c4fPortugueseText(const char *key)
 {
-    /* Text and its width are asked for one after the other: a few results
-     * stay valid at once. */
-    static char shown[8][512];
-    static int next;
-    if (!text || !*text) return NULL;
-    const char *exact = c4fExact(text);
-    if (exact) return exact;
-    char captures[C4F_CAPTURES][C4F_CAPTURE_SIZE];
-    for (size_t i = 0; i < sizeof(c4fPortuguese) / sizeof(c4fPortuguese[0]); i++) {
-        const C4fPhrase *p = &c4fPortuguese[i];
-        if (!strchr(p->en, '%') || !c4fMatch(p->en, text, captures, 0)) continue;
-        char *out = shown[next];
-        next = (next + 1) % 8;
-        size_t used = 0;
-        int n = 0;
-        for (const char *at = p->pt; *at && used + 1 < sizeof(shown[0]);) {
-            if (*at != '%') { out[used++] = *at++; continue; }
-            const char *end = c4fConversionEnd(at);
-            /* A filled-in text may itself be one the app translates. */
-            const char *value = n < C4F_CAPTURES ? captures[n] : "";
-            const char *translated = end[-1] == 's' ? c4fExact(value) : NULL;
-            used += (size_t)snprintf(out + used, sizeof(shown[0]) - used, "%s", translated ? translated : value);
-            if (used >= sizeof(shown[0])) used = sizeof(shown[0]) - 1;
-            n++;
-            at = end;
-        }
-        out[used] = 0;
-        return out;
-    }
-    return NULL;
+    if (key && !strcmp(key, "L1  Language: Arabic")) return "L1  Idioma: العربية";
+    return c4fFind(c4fPortuguese, sizeof(c4fPortuguese) / sizeof(c4fPortuguese[0]), key);
+}
+
+const char *c4fArabicText(const char *key)
+{
+    return c4fFind(c4fArabic, sizeof(c4fArabic) / sizeof(c4fArabic[0]), key);
+}
+
+const char *c4fTr(const char *key)
+{
+    const char *translated = c4fActiveLanguage == C4F_LANGUAGE_PORTUGUESE ? c4fPortugueseText(key) :
+                             c4fActiveLanguage == C4F_LANGUAGE_ARABIC ? c4fArabicText(key) : NULL;
+    return translated ? translated : key;
+}
+
+int c4fLanguageIsArabic(void)
+{
+    return c4fActiveLanguage == C4F_LANGUAGE_ARABIC;
 }

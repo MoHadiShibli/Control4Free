@@ -3,6 +3,7 @@
 const { chromium } = require('playwright');
 const fs = require('node:fs'), assert = require('node:assert/strict'), { spawn } = require('node:child_process');
 const { relayOffer, recordRtcMessages, copyService } = require('./rtc_browser_helpers.cjs');
+const checkControllerLayout = require('./layout_browser_test.cjs');
 const hook = '\nwindow.c4fTest = { ControllerMapping, mapper, profileStore, gamepadSources, pollGamepads, setGamepadPad, mergedState, renderGamepads, renderPads, openSettings, closeSettings, openPad, profileFor, loadProfiles, persistProfiles, clearDevice, applyStatus, status, conn, sendInput, sendMotion, getKeys: () => keymap };\n';
 const html = fs.readFileSync('/src/client/index.html', 'utf8').replace('\n  })();', hook + '  })();');
 copyService('/tmp/c4f-browser-service');
@@ -114,6 +115,7 @@ async function checkConnectionLifecycle(browser) {
   let browser;
   try {
     browser = await chromium.launch({ headless: true });
+    await checkControllerLayout(browser);
     await checkConnectionLifecycle(browser);
     const context = await browser.newContext({ viewport: { width: 1440, height: 1000 } });
     // A fulfilled test document has no network address-space metadata. Allow

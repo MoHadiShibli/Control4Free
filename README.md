@@ -64,9 +64,11 @@ sees a virtual DualShock 4, which provides:
 - **On your phone's home screen**, like an app.
 - **Stays awake**: your phone's screen doesn't turn off while you play.
 - **Gets through rest mode.** After the PS4 wakes up, open the page and pick your controller again.
-- **English and Brazilian Portuguese.** The page follows the browser's language; change it at the bottom of
+- **English, Brazilian Portuguese and Arabic.** The page follows the browser's language; change it at the bottom of
   the home screen or in **Settings → This device**. The PS4 app follows the console's system language; press
-  **L1** on its main screen to switch between automatic, English and Português (Brasil).
+  **L1** on its main screen to switch between automatic, English, Português (Brasil) and العربية.
+  Arabic menus read from right to left while controller positions stay unchanged.
+  See [Languages](docs/languages.md) for font loading and offline use.
 
 ## Controller connection
 
@@ -163,6 +165,12 @@ Found a bug? Install the diagnostic package from the latest release first, then
 [Reporting a problem](docs/troubleshooting.md#reporting-a-problem)). I maintain this project and read every
 report. If Control4Free is useful to you, you can help keep it going on
 [Liberapay](https://liberapay.com/MoHadiShibli/).
+
+## Contributors
+
+- [@NotDev-Kike](https://github.com/NotDev-Kike) — HDMI-CEC testing and feedback.
+- [@lucasmaraia](https://github.com/lucasmaraia) — Brazilian Portuguese translation for the web interface
+  and PS4 app.
 
 ## Credits
 

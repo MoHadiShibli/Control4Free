@@ -4,6 +4,7 @@
  * entry in /data/GoldHEN/payloads.ini, the files GoldHEN's Payloader LaunchPad
  * uses. The app leaves its sandbox for this through GoldHEN's SDK call. */
 #include <stddef.h>
+#include "message.h"
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -19,6 +20,7 @@ const unsigned char *c4fAutorunBundled(size_t *size);
 int c4fAutorunCheck(char *problem, size_t size);
 int c4fAutorunEnable(char *message, size_t size);
 int c4fAutorunDisable(char *message, size_t size);
+const C4fMessage *c4fAutorunMessage(void);
 
 #ifdef __cplusplus
 }

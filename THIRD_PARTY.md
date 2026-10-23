@@ -54,6 +54,21 @@
   of John "Nielk1" Klein's DualSense trigger effect generator
   (https://gist.github.com/Nielk1/6d54cc2c00d2201ccb8c2720ad7538db), MIT.
 
+- Arabic text shaping uses [HarfBuzz 11.2.1](https://github.com/harfbuzz/harfbuzz/tree/11.2.1).
+  Its copyright notices and permissive license terms are retained in
+  `vendor/harfbuzz/COPYING` and `vendor/harfbuzz/src/ms-use/COPYING`.
+- Mixed-direction native text uses [SheenBidi 2.9.0](https://github.com/Tehreer/SheenBidi/tree/v2.9.0),
+  Apache-2.0; see `vendor/sheenbidi/LICENSE`.
+- The offline fallback Arabic fonts are [Noto Sans Arabic 2.013](https://github.com/notofonts/arabic/releases/tag/NotoSansArabic-v2.013),
+  Light and Regular, under the SIL Open Font License 1.1 in `vendor/noto-sans-arabic/OFL.txt`.
+  Their provenance and hashes are recorded in that directory's `README.control4free.md`.
+- The PS4 app reads SST Arabic Light and Roman from the console's installed system
+  fonts; the web page requests those same fonts from the local PS4 service. SST is
+  [Sony's typeface, developed with Monotype](https://www.sony.com/en/SonyInfo/design/stories/sst-font/).
+  No SST font files are included in the
+  source, packages or standalone page. The bundled Noto fonts remain available if
+  the console's fonts cannot be loaded.
+
 These license notices are also included inside the package.
 
 The HTTP, ICE/STUN and SCTP transport code is implemented in this project;

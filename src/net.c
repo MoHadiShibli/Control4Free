@@ -28,6 +28,45 @@
 #define C4F_NET_LOG(c, fmt, ...) do { } while (0)
 #endif
 
+/* System fonts stay on the console. Only these two read-only assets are served;
+ * no request path is ever used as a filesystem path. Retain them across transport
+ * reopens so font reads never enter the controller input loop. */
+#ifndef C4F_SYSTEM_FONT_PRIMARY
+#define C4F_SYSTEM_FONT_PRIMARY "/preinst/common/font/"
+#endif
+#ifndef C4F_SYSTEM_FONT_FALLBACK
+#define C4F_SYSTEM_FONT_FALLBACK "/system/common/font2/"
+#endif
+typedef struct { unsigned char *data; size_t size; } C4fSystemFont;
+static C4fSystemFont c4fSystemFonts[2];
+
+static void c4fReadSystemFonts(void)
+{
+    static const char *const names[2] = { "SSTArabic-Light.otf", "SSTArabic-Roman.otf" };
+    static const char *const directories[2] = { C4F_SYSTEM_FONT_PRIMARY, C4F_SYSTEM_FONT_FALLBACK };
+    for (int weight = 0; weight < 2; weight++) {
+        if (c4fSystemFonts[weight].data) continue;
+        for (int directory = 0; directory < 2; directory++) {
+            char path[256];
+            snprintf(path, sizeof(path), "%s%s", directories[directory], names[weight]);
+            FILE *file = fopen(path, "rb");
+            if (!file) continue;
+            long length = -1;
+            if (!fseek(file, 0, SEEK_END)) length = ftell(file);
+            if (length < 128 || length > 1024 * 1024 || fseek(file, 0, SEEK_SET)) {
+                fclose(file); continue;
+            }
+            unsigned char *data = malloc((size_t)length);
+            int valid = data && fread(data, 1, (size_t)length, file) == (size_t)length;
+            fclose(file);
+            if (valid) valid = !memcmp(data, "OTTO", 4) || !memcmp(data, "\0\1\0\0", 4);
+            if (!valid) { free(data); continue; }
+            c4fSystemFonts[weight] = (C4fSystemFont){ data, (size_t)length };
+            break;
+        }
+    }
+}
+
 /* Which interface would carry traffic out, without sending anything: a connected
  * UDP socket picks the route, and getsockname then names the local end. */
 void c4fNetLocalAddress(char *out, size_t size)
@@ -239,6 +278,15 @@ static void c4fHttp(C4fNet *net, C4fNetClient *c)
     int stopRequest = !strncmp(request, "POST /api/stop HTTP/1.1\r\n", 25);
     int offerRequest = !strncmp(request, "POST /rtc HTTP/1.1\r\n", 20);
     int preflightRequest = !strncmp(request, "OPTIONS /rtc HTTP/1.1\r\n", 23);
+    int fontRequest = -1, fontPreflight = 0;
+    static const char *const fontRoutes[2] = { "/fonts/arabic-light.otf", "/fonts/arabic-regular.otf" };
+    for (int weight = 0; weight < 2; weight++) {
+        char route[80];
+        snprintf(route, sizeof(route), "GET %s HTTP/1.1\r\n", fontRoutes[weight]);
+        if (!strncmp(request, route, strlen(route))) fontRequest = weight;
+        snprintf(route, sizeof(route), "OPTIONS %s HTTP/1.1\r\n", fontRoutes[weight]);
+        if (!strncmp(request, route, strlen(route))) { fontRequest = weight; fontPreflight = 1; }
+    }
     int websocketRequest = 0;
 #ifdef C4F_TEST_WEBSOCKET
     websocketRequest = !strncmp(request, "GET /ws HTTP/1.1\r\n", 18);
@@ -252,7 +300,7 @@ static void c4fHttp(C4fNet *net, C4fNetClient *c)
     } else if (!strncmp(request, "GET /icon-192.png HTTP/1.1\r\n", 28)) {
         asset = c4fIcon; assetSize = c4fIconSize; assetType = "image/png";
     }
-    if (!statusRequest && !stopRequest && !offerRequest && !preflightRequest && !asset &&
+    if (!statusRequest && !stopRequest && !offerRequest && !preflightRequest && fontRequest < 0 && !asset &&
         strncmp(request, "GET / HTTP/1.1\r\n", 16) &&
         strncmp(request, "GET /index.html HTTP/1.1\r\n", 26) &&
         !websocketRequest &&
@@ -273,7 +321,30 @@ static void c4fHttp(C4fNet *net, C4fNetClient *c)
             c4fHttpError(c, 403, "Open the PS4 IP address"); return;
         }
     }
-    if (offerRequest || preflightRequest) {
+    if (fontRequest >= 0) {
+        char expected[160];
+        snprintf(expected, sizeof(expected), "http://%s", host);
+        if (upgrade[0] || (origin[0] && strcmp(origin, "null") && strcmp(origin, expected))) {
+            c4fHttpError(c, 403, "Origin not allowed"); return;
+        }
+        c->savedOrigin = !strcmp(origin, "null");
+        if (fontPreflight) {
+            if (!c->savedOrigin) { c4fHttpError(c, 403, "Origin not allowed"); return; }
+            static const char reply[] = "HTTP/1.1 204 No Content\r\nAccess-Control-Allow-Origin: null\r\n"
+                "Access-Control-Allow-Methods: GET\r\nAccess-Control-Allow-Private-Network: true\r\n"
+                "Access-Control-Max-Age: 600\r\nContent-Length: 0\r\nConnection: close\r\n\r\n";
+            c4fQueue(c, reply, sizeof(reply) - 1); c->closing = 2;
+            return;
+        }
+        C4fSystemFont *font = &c4fSystemFonts[fontRequest];
+        if (!font->data) { c4fHttpError(c, 404, "System font unavailable"); return; }
+        char reply[384];
+        int n = snprintf(reply, sizeof(reply), "HTTP/1.1 200 OK\r\nContent-Type: font/otf\r\nContent-Length: %zu\r\n"
+            "Cache-Control: private, max-age=86400\r\nX-Content-Type-Options: nosniff\r\n%sConnection: close\r\n\r\n",
+            font->size, c->savedOrigin ? "Access-Control-Allow-Origin: null\r\n" : "");
+        c4fQueue(c, reply, (size_t)n);
+        c->body = font->data; c->bodySize = font->size; c->rxUsed = 0;
+    } else if (offerRequest || preflightRequest) {
         c4fHttpOffer(net, c, request, used, host, origin, preflightRequest);
     } else if (statusRequest || stopRequest) {
         char launcher[8], length[16], transfer[32];
@@ -331,7 +402,7 @@ static void c4fHttp(C4fNet *net, C4fNetClient *c)
         c->body = asset; c->bodySize = assetSize; c->rxUsed = 0;
     } else {
         char reply[768];
-        int n = snprintf(reply, sizeof(reply), "HTTP/1.1 200 OK\r\nContent-Type: text/html; charset=utf-8\r\nContent-Encoding: gzip\r\nContent-Length: %zu\r\nConnection: close\r\nCache-Control: no-store\r\nX-Content-Type-Options: nosniff\r\nReferrer-Policy: no-referrer\r\nContent-Security-Policy: default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src 'self' data:; media-src data:; connect-src 'self'; manifest-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'none'\r\n\r\n", c4fPageSize);
+        int n = snprintf(reply, sizeof(reply), "HTTP/1.1 200 OK\r\nContent-Type: text/html; charset=utf-8\r\nContent-Encoding: gzip\r\nContent-Length: %zu\r\nConnection: close\r\nCache-Control: no-store\r\nX-Content-Type-Options: nosniff\r\nReferrer-Policy: no-referrer\r\nContent-Security-Policy: default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; font-src 'self' data:; img-src 'self' data:; media-src data:; connect-src 'self'; manifest-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'none'\r\n\r\n", c4fPageSize);
         C4F_NET_LOG(c, "sending the page, %zu bytes", c4fPageSize);
         c4fQueue(c, reply, (size_t)n);
         c->body = c4fPage; c->bodySize = c4fPageSize; c->rxUsed = 0;
@@ -384,6 +455,7 @@ static void c4fWs(C4fNet *net, C4fNetClient *c)
 
 int c4fNetOpen(C4fNet *net, int port, C4fNetHandler handler, void *context)
 {
+    c4fReadSystemFonts();
     struct sockaddr_in addr;
     int one = 1;
     /* The certificate outlives a reopen: making one takes a moment. */
