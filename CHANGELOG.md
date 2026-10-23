@@ -7,6 +7,9 @@
   language; **L1** on its main screen switches between automatic, English and Português (Brasil). The
   service's error messages are shown translated on the page.
 - The PS4 app now draws accented letters (Latin-1).
+- Updated the Xbox-button workaround for Chrome and Edge on Windows: from version 156 the GameInput option
+  is hidden on the flags page. [Gamepad troubleshooting](docs/troubleshooting.md#gamepads) shows how to
+  bring it back, and a launch option that works in any version.
 
 ## 1.3.0 — 2026-10-22
 
