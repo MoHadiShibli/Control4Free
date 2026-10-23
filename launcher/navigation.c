@@ -168,6 +168,11 @@ C4fLauncherAction c4fNavigate(C4fLauncherScreen *screen, uint32_t standardPresse
         c4fConsume(standardUnhandled, remoteUnhandled);
         return C4F_ACTION_TESTER;
     }
+    /* L1 changes the language. The diagnostic build pages with it. */
+    if (!diagnostic && (standardPressed & C4F_INPUT_BUTTON_L1)) {
+        c4fConsume(standardUnhandled, remoteUnhandled);
+        return C4F_ACTION_LANGUAGE;
+    }
     if (screen->busy) return C4F_ACTION_NONE;
     if (pressed & C4F_NAV_BACK) {
         c4fConsume(standardUnhandled, remoteUnhandled);

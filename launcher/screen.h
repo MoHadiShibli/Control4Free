@@ -16,8 +16,11 @@ typedef enum {
     C4F_ACTION_STOP,
     C4F_ACTION_CLOSE,
     C4F_ACTION_CAPTURE,
-    C4F_ACTION_TESTER
+    C4F_ACTION_TESTER,
+    C4F_ACTION_LANGUAGE
 } C4fLauncherAction;
+/* The app's language, cycled with L1 (language.h). */
+enum { C4F_LANGUAGE_AUTO, C4F_LANGUAGE_ENGLISH, C4F_LANGUAGE_PORTUGUESE, C4F_LANGUAGE_COUNT };
 /* Connection round trips for the selected user's virtual-controller slots.
  * A negative RTT means that no fresh measurement is available yet. */
 typedef struct {
@@ -30,6 +33,7 @@ typedef struct {
     int actionMenu, actionFocus;
     int confirmChoice, confirmMenu; /* 0 Cancel / 1 Stop; menu-origin confirmation. */
     int autorun; /* C4F_AUTORUN_* from autorun.h */
+    int language; /* C4F_LANGUAGE_* */
     char address[64], message[160], autorunNote[96], runningVersion[32], inputNote[160];
     C4fTesterView tester; /* the controller test, when active */
     C4fTesterConnection connection;

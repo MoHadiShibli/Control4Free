@@ -63,6 +63,7 @@ static const C4fPlacement c4fIdentity = { 0, 0, 1, 0, 0, 0 };
 static uint32_t *c4fLayer;
 static uint32_t *c4fToolsBase, *c4fToolsFrame;
 static int c4fToolsBaseReady;
+static unsigned c4fLayersTranslation; /* the text translation the still layers were drawn in */
 
 typedef struct { uint32_t *px; int x, y, w, h; } C4fSprite;
 static C4fSprite c4fKnobs[3], c4fPressed[16], c4fTouchGlow, c4fLightStrip;
@@ -1310,6 +1311,29 @@ static void c4fDrawColorPicker(C4fCanvas *c, const C4fTesterView *v)
     c4fText(c, C4F_FONT_REGULAR, 28, 1324, 753, C4F_TEXT, value);
 }
 
+/* The still layers carry words: a new language draws them again. */
+static void c4fForgetOtherLanguage(void)
+{
+    const unsigned now = c4fTextTranslationGeneration();
+    if (now == c4fLayersTranslation) return;
+    c4fLayersTranslation = now;
+    free(c4fLayer);
+    c4fLayer = NULL;
+    if (c4fToolsBase && c4fToolsBaseReady) {
+        C4fCanvas base = { c4fToolsBase, C4F_SCREEN_WIDTH, C4F_SCREEN_HEIGHT };
+        c4fPaintBackdrop(&base, C4F_S);
+        c4fToolsBaseReady = 0;
+    }
+    free(c4fToolsFrame);
+    c4fToolsFrame = NULL;
+    for (int i = 0; i < C4F_TESTER_ITEMS; i++)
+        for (int variant = 0; variant < 4; variant++) {
+            free(c4fToolTiles[i][variant].px);
+            c4fToolTiles[i][variant].px = NULL;
+        }
+    c4fHasToolsKey = 0;
+}
+
 static void c4fDrawMenu(C4fCanvas *c, const C4fTesterView *v, const C4fTesterConnection *connection)
 {
     const size_t bytes = (size_t)c->w * c->h * sizeof(uint32_t);
@@ -1366,6 +1390,7 @@ void c4fDrawTester(uint32_t *pixels, const C4fLauncherScreen *s)
     const C4fTesterView *v = &s->tester;
     C4fCanvas c = { pixels, C4F_SCREEN_WIDTH, C4F_SCREEN_HEIGHT };
     const size_t bytes = (size_t)c.w * (size_t)c.h * sizeof(uint32_t);
+    c4fForgetOtherLanguage();
     if (v->menu) { c4fDrawMenu(&c, v, &s->connection); return; }
     const int state = v->selected >= 0 ? v->user[v->selected].state : -1, ready = state == C4F_TESTER_READY;
     const C4fColor accent = v->lightSet ? (C4fColor){ v->light[0], v->light[1], v->light[2], 255 } : C4F_ACCENT;

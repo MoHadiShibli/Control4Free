@@ -611,7 +611,11 @@ void c4fDrawLauncher(uint32_t *pixels, const C4fLauncherScreen *s)
     /* .home-foot and the button guide. */
     if (!s->confirmStop && !s->actionMenu)
         c4fText(&c, C4F_FONT_LIGHT, 23, left, 973, C4F_MUTED, "TV remote: OK opens actions / arrows select / Back returns");
-    c4fText(&c, C4F_FONT_LIGHT, 20, left, 1030, C4F_FAINT, "Control4Free " C4F_LAUNCHER_VERSION);
+    float footX = left + c4fText(&c, C4F_FONT_LIGHT, 20, left, 1030, C4F_FAINT, "Control4Free " C4F_LAUNCHER_VERSION);
+    static const char *const languages[C4F_LANGUAGE_COUNT] = {
+        "L1  Language: automatic", "L1  Language: English", "L1  Language: Portuguese (Brazil)" };
+    if (!s->confirmStop && !s->actionMenu && s->language >= 0 && s->language < C4F_LANGUAGE_COUNT)
+        c4fText(&c, C4F_FONT_LIGHT, 20, footX + 36, 1030, C4F_FAINT, languages[s->language]);
     if (!s->confirmStop && !s->busy) {
         C4fHint hints[5];
         int n = 0;

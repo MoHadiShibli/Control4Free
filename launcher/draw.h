@@ -62,13 +62,21 @@ void c4fFillPath(C4fCanvas *c, const C4fPath *p, C4fPlacement at, C4fColor color
 /* The mask blurred and spread: a soft halo or drop shadow under a shape. */
 void c4fShadowPath(C4fCanvas *c, const C4fPath *p, C4fPlacement at, float dx, float dy, int radius, C4fColor color);
 
-/* Text on a baseline. Sizes are CSS font-size in pixels. ASCII only. */
+/* Text on a baseline. Sizes are CSS font-size in pixels. UTF-8, drawn with
+ * the faces' ASCII and Latin-1 characters. c4fText, c4fTextWidth and
+ * c4fTextWrapped show a whole text's translation, when one is set. */
 float c4fText(C4fCanvas *c, int font, float size, float x, float y, C4fColor color, const char *text);
 float c4fTextN(C4fCanvas *c, int font, float size, float x, float y, C4fColor color, const char *text, int length);
 float c4fTextWidth(int font, float size, const char *text);
 /* Word-wrapped text; returns the number of lines (drawn only if c is set). */
 int c4fTextWrapped(C4fCanvas *c, int font, float size, float x, float y, float maxWidth,
                    float lineHeight, int maxLines, C4fColor color, const char *text);
+
+/* What to show in place of a text, or NULL to show it as it is. NULL turns
+ * translation off. Each change bumps the generation, so cached drawings of
+ * words know to redraw. */
+void c4fSetTextTranslation(const char *(*translate)(const char *text));
+unsigned c4fTextTranslationGeneration(void);
 
 /* Corner label and two equally sized vector flags; paint into static layers.
  * `right` is the right edge, `top` the top of the 60 x 30 pixel flags. */
