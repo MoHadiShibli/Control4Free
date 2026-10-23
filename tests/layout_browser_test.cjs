@@ -55,6 +55,53 @@ async function resize(page, percent) {
   await settle(page);
 }
 
+async function checkOrientationOrdering(browser, fixture) {
+  const context = await browser.newContext({ viewport: { width: 1920, height: 1080 } });
+  await context.addInitScript(() => {
+    const add = MediaQueryList.prototype.addEventListener;
+    window.pendingOrientation = [];
+    MediaQueryList.prototype.addEventListener = function(type, listener, options) {
+      if (type === 'change' && this.media === '(orientation: portrait)') {
+        return add.call(this, type, event => {
+          if (window.deferOrientation) window.pendingOrientation.push(() => listener.call(this, event));
+          else listener.call(this, event);
+        }, options);
+      }
+      return add.call(this, type, listener, options);
+    };
+  });
+  const page = await context.newPage();
+  await page.route('**/*', fixture);
+  try {
+    await page.goto('http://layout.test/');
+    await page.waitForFunction(() => !!window.c4fLayoutTest);
+    await page.evaluate(() => { c4fLayoutTest.openPad(0); c4fLayoutTest.editor.open(); c4fLayoutTest.editor.select('face'); });
+    await page.selectOption('#lbFaceMode', 'separate');
+    await drag(page, 'CROSS', -5000, 0);
+    await drag(page, 'CROSS', 10, 0);
+    const landscape = await page.evaluate(() => c4fLayoutTest.getLayout());
+    await page.evaluate(() => { window.deferOrientation = true; });
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.waitForFunction(() => pendingOrientation.length > 0);
+    await settle(page);
+    assert.deepEqual(await page.evaluate(() => c4fLayoutTest.getLayout()), landscape,
+      'resize must not fit the outgoing landscape layout to portrait bounds');
+    await page.evaluate(() => {
+      window.deferOrientation = false;
+      window.pendingOrientation.splice(0).forEach(run => run());
+    });
+    await settle(page);
+    assert.equal(await page.evaluate(() => c4fLayoutTest.editor.active), false);
+    assert.deepEqual(await page.evaluate(() => JSON.parse(localStorage.getItem('c4f.layout.landscape'))), landscape,
+      'rotation saves the original landscape edit before loading portrait');
+    assert.equal(await page.evaluate(() => c4fLayoutTest.getLayout().face.separate), false);
+    await page.setViewportSize({ width: 1920, height: 1080 });
+    await settle(page);
+    assert.deepEqual(await page.evaluate(() => c4fLayoutTest.getLayout()), landscape);
+    console.log('PASS controller layout: resize before orientation preserves the outgoing edit');
+  } finally { await context.close(); }
+}
+
 async function checkComponentResets(browser, fixture) {
   const context = await browser.newContext({ viewport: { width: 1000, height: 600 }, locale: 'en-US' });
   const page = await context.newPage(), errors = [];
@@ -302,6 +349,7 @@ module.exports = async function checkControllerLayout(browser) {
     const portrait = await page.evaluate(() => c4fLayoutTest.getLayout());
     await page.setViewportSize({ width: 1000, height: 600 });
     await page.waitForFunction(() => !matchMedia('(orientation: portrait)').matches);
+    await settle(page);
     assert.deepEqual(await page.evaluate(() => c4fLayoutTest.getLayout()), landscape, 'landscape retains its separate positions');
     assert.deepEqual(await page.evaluate(() => JSON.parse(localStorage.getItem('c4f.layout.portrait'))), portrait);
 
@@ -392,6 +440,7 @@ module.exports = async function checkControllerLayout(browser) {
     console.log('PASS controller layout: grouped compatibility, separate drag/size/hide and input, regrouping, save/reload, Cancel/reset, orientation, landscape phone fitting and hidden safe-area stability');
   } finally { await context.close(); }
 
+  await checkOrientationOrdering(browser, fixture);
   await checkComponentResets(browser, fixture);
 
   // Compact editor controls fit translated labels; controller geometry stays LTR.
