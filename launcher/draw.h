@@ -4,6 +4,10 @@
  * Blending reads the destination, so never draw straight into the
  * write-combined framebuffer. */
 #include <stdint.h>
+#ifdef __cplusplus
+extern "C" {
+#endif
+#include <stddef.h>
 
 typedef struct { uint32_t *px; int w, h; } C4fCanvas;
 typedef struct { uint8_t r, g, b, a; } C4fColor;
@@ -12,6 +16,17 @@ typedef struct { uint8_t r, g, b, a; } C4fColor;
 enum { C4F_FONT_LIGHT, C4F_FONT_REGULAR, C4F_FONT_COUNT };
 
 int c4fDrawInit(void);
+/* Drawing-thread locale direction; shaping still works for Arabic user names
+ * while the interface is English. ASCII technical values retain their order. */
+void c4fSetTextDirection(int rtl);
+int c4fTextIsRTL(void);
+/* Drawing thread only. Bytes remain owned by the caller and must outlive
+ * drawing. A change clears Unicode caches and invalidates cached UI layers. */
+int c4fTextSetArabicFonts(const unsigned char *light, size_t lightSize,
+                         const unsigned char *regular, size_t regularSize);
+/* Prefer the installed PS4 SST Arabic faces. Returns 0 on success; -1 retains
+ * the redistributable bundled font. Retry after leaving the sandbox if needed. */
+int c4fTextLoadSystemFonts(void);
 
 /* Signed distance to a rounded box: centre, half size, corner radius. */
 float c4fRoundBoxDistance(float px, float py, float cx, float cy, float hx, float hy, float r);
@@ -62,12 +77,15 @@ void c4fFillPath(C4fCanvas *c, const C4fPath *p, C4fPlacement at, C4fColor color
 /* The mask blurred and spread: a soft halo or drop shadow under a shape. */
 void c4fShadowPath(C4fCanvas *c, const C4fPath *p, C4fPlacement at, float dx, float dy, int radius, C4fColor color);
 
-/* Text on a baseline. Sizes are CSS font-size in pixels. UTF-8, drawn with
- * the faces' ASCII and Latin-1 characters. c4fText, c4fTextWidth and
- * c4fTextWrapped show a whole text's translation, when one is set. */
+/* Text on a baseline. Sizes are CSS font-size in pixels. UTF-8 Arabic uses
+ * Unicode bidi layout and contextual shaping; Latin text keeps the Roboto
+ * path. UI entry points resolve exact message keys before shaping. */
 float c4fText(C4fCanvas *c, int font, float size, float x, float y, C4fColor color, const char *text);
 float c4fTextN(C4fCanvas *c, int font, float size, float x, float y, C4fColor color, const char *text, int length);
 float c4fTextWidth(int font, float size, const char *text);
+/* User data uses the same renderer without looking it up as interface text. */
+float c4fTextRaw(C4fCanvas *c, int font, float size, float x, float y, C4fColor color, const char *text);
+float c4fTextWidthRaw(int font, float size, const char *text);
 /* Word-wrapped text; returns the number of lines (drawn only if c is set). */
 int c4fTextWrapped(C4fCanvas *c, int font, float size, float x, float y, float maxWidth,
                    float lineHeight, int maxLines, C4fColor color, const char *text);
@@ -82,4 +100,7 @@ unsigned c4fTextTranslationGeneration(void);
  * `right` is the right edge, `top` the top of the 60 x 30 pixel flags. */
 void c4fDrawSolidarityBadge(C4fCanvas *c, int right, int top);
 
+#ifdef __cplusplus
+}
+#endif
 #endif

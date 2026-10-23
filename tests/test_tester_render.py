@@ -12,21 +12,24 @@ import sys
 ROOT = Path(__file__).resolve().parents[1]
 
 
-def build(renderer=None, output=None):
+def build(renderer=None, output=None, fixture=None, extra_sources=()):
     sys.path.insert(0, str(ROOT / 'tools'))
     import package_launcher as package
     package.embed_fonts()
+    text_includes, text_libraries = package.text_host_flags()
     output = Path(output or ROOT / 'build/launcher/tester-render-host-test')
     output.parent.mkdir(parents=True, exist_ok=True)
     version = (ROOT / 'VERSION').read_text().strip()
     flags = ['clang-18', '-std=gnu11', '-O2', '-D_DEFAULT_SOURCE', '-Ilauncher',
-             '-Ivendor/stb', '-Ivendor/qrcodegen', f'-DC4F_LAUNCHER_VERSION="{version}"']
+             '-Ivendor/stb', '-Ivendor/qrcodegen', f'-DC4F_LAUNCHER_VERSION="{version}"', *text_includes]
     stb = output.with_suffix('.stb.o')
     subprocess.run([*flags, '-w', '-c', 'launcher/stb_truetype.c', '-o', str(stb)], cwd=ROOT, check=True)
-    subprocess.run([*flags, '-Wall', '-Wextra', '-Werror', 'tests/tester_render_test.c',
+    subprocess.run([*flags, '-Wall', '-Wextra', '-Werror', str(fixture or 'tests/tester_render_test.c'),
                     'launcher/screen.c', 'launcher/navigation.c', 'launcher/tester.c',
-                    str(renderer or 'launcher/tester_draw.c'), 'launcher/draw.c', 'launcher/logo.c',
-                    'vendor/qrcodegen/qrcodegen.c', str(package.FONTS), str(stb), '-lm', '-o', str(output)],
+                    str(renderer or 'launcher/tester_draw.c'), 'launcher/draw.c', 'launcher/text.c', 'launcher/logo.c',
+                    'launcher/message.c', 'vendor/qrcodegen/qrcodegen.c', str(package.FONTS), str(stb), *map(str, extra_sources),
+                    *([] if 'launcher/language.c' in extra_sources else ['launcher/language.c', 'tests/language_system_stub.c']),
+                    *text_libraries, '-lm', '-o', str(output)],
                    cwd=ROOT, check=True)
     return output
 

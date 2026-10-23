@@ -19,11 +19,22 @@ BINARY = ROOT / 'build/web-host-test'
 
 
 def build():
+    # Redistributable fixtures exercise runtime system-font loading. Sony font
+    # files are neither test inputs nor release assets.
+    font_root = ROOT / 'build/system-font-test'
+    (font_root / 'primary').mkdir(parents=True, exist_ok=True)
+    (font_root / 'fallback').mkdir(exist_ok=True)
+    (font_root / 'primary/SSTArabic-Light.otf').write_bytes(b'bad font')
+    for weight, source, directory in [('Light', 'Light', 'fallback'), ('Roman', 'Regular', 'primary')]:
+        (font_root / directory / f'SSTArabic-{weight}.otf').write_bytes(
+            (ROOT / f'vendor/noto-sans-arabic/NotoSansArabic-{source}.ttf').read_bytes())
     subprocess.run(['python3', 'tools/embed_client.py', 'client/index.html', 'build/client.c'], check=True)
     subprocess.run(['python3', 'tools/embed_file.py', 'build/assets.c',
                     'c4fManifest=client/manifest.webmanifest', 'c4fIcon=client/icon-192.png'], check=True)
     subprocess.run(['clang-18', '-std=gnu11', '-Wall', '-Wextra', '-Werror', '-g',
                     '-Iinclude', '-Ivendor/jsmn', '-Ivendor/qrcodegen', '-DC4F_TEST_WEBSOCKET', '-DC4F_STALE_MS=400', '-DC4F_RELEASE_MS=1800', '-DC4F_LATENCY_MS=700',
+                    '-DC4F_SYSTEM_FONT_PRIMARY="build/system-font-test/primary/"',
+                    '-DC4F_SYSTEM_FONT_FALLBACK="build/system-font-test/fallback/"',
                     *mbedtls_host.FLAGS,
                     'src/net.c', 'src/web.c', 'src/rtc.c', 'src/stun.c', 'src/sctp.c', 'src/klog_line.c',
                     'vendor/qrcodegen/qrcodegen.c', 'tests/web_stub.c', 'build/client.c',
@@ -294,6 +305,21 @@ def main():
         assert 'href="/manifest.webmanifest"' in page and 'href="/icon-192.png"' in page
         assert b'403' in http(b'GET /icon-192.png HTTP/1.1\r\nHost: evil.example:4264\r\n\r\n')
         print('PASS manifest and icon served for a home-screen shortcut', flush=True)
+
+        assert b"font-src 'self' data:" in http(b'GET / HTTP/1.1\r\nHost: 127.0.0.1:4264\r\n\r\n')
+        for route, weight in [('light', 'Light'), ('regular', 'Regular')]:
+            path = f'/fonts/arabic-{route}.otf'
+            headers, body = http(f'GET {path} HTTP/1.1\r\nHost: 127.0.0.1:4264\r\nOrigin: null\r\n\r\n'.encode()).split(b'\r\n\r\n', 1)
+            assert b'200 OK' in headers and b'Content-Type: font/otf' in headers
+            assert b'Access-Control-Allow-Origin: null' in headers
+            assert body == (ROOT / f'vendor/noto-sans-arabic/NotoSansArabic-{weight}.ttf').read_bytes()
+            assert b'403' in http(f'GET {path} HTTP/1.1\r\nHost: evil.example\r\n\r\n'.encode())
+            assert b'403' in http(f'GET {path} HTTP/1.1\r\nHost: 127.0.0.1:4264\r\nOrigin: https://evil.example\r\n\r\n'.encode())
+            headers = http(f'OPTIONS {path} HTTP/1.1\r\nHost: 127.0.0.1:4264\r\nOrigin: null\r\n\r\n'.encode())
+            assert b'204 No Content' in headers and b'Access-Control-Allow-Methods: GET' in headers
+        for path in ['/fonts/../SSTArabic-Bold.otf', '/fonts/arabic-bold.otf', '/fonts/arabic-light.otf?file=/etc/passwd']:
+            assert b'404' in http(f'GET {path} HTTP/1.1\r\nHost: 127.0.0.1:4264\r\n\r\n'.encode())
+        print('PASS bounded system font assets, fallback directory, saved-page CORS and strict paths', flush=True)
 
         c = server.c
         assert c.request('info')['result']['pads'] == 4

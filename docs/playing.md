@@ -49,8 +49,16 @@ The controller screen is a DualShock 4 laid out for your screen, best held sidew
 ## Your own layout
 
 Open the menu (**☰**) and choose **Edit the button layout**. Drag a button to move it, change its size, or
-hide it. **Reset to default** puts everything back; tap it twice, so a stray tap can't throw a layout away. Each device keeps its own layout, separately for portrait
-and landscape.
+hide it. Select the face buttons to reveal **Move buttons** beside **Size**. Choose **Separately** to move,
+resize or hide Cross, Square, Circle and Triangle individually, or **Together** to adjust the group.
+Switching between the two keeps your arrangement. **Done** saves it; **Cancel** discards the current edits.
+
+The selected control has its own **Reset** button beside **Hide**. It restores that control's default
+position, size and visibility. In separate mode, resetting a face button leaves the other three in place;
+in together mode, it restores the face-button group. **Done** saves a reset, and **Cancel** undoes it.
+
+**Reset to default** puts everything back; tap it twice, so a stray tap can't throw a layout away.
+Each device keeps its own layout, separately for portrait and landscape.
 
 ## Keyboard
 

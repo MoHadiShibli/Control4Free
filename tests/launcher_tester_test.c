@@ -26,6 +26,7 @@ typedef struct {
     int count, listError;
     FakePad pads[4];
     int stateCalls;
+    const char *nameOverride;
 } Fake;
 
 static FakePad *byUser(Fake *f, int32_t user)
@@ -52,7 +53,11 @@ static int fakeUsers(void *context, int32_t *users)
 
 static void fakeName(void *context, int32_t user, char *name, int size)
 {
-    (void)context;
+    Fake *f = context;
+    if (user == 1 && f->nameOverride) {
+        snprintf(name, (size_t)size, "%s", f->nameOverride);
+        return;
+    }
     /* User 3 has no name the app can draw: the tester falls back. */
     if (user == 3) { name[0] = 0; return; }
     snprintf(name, (size_t)size, user == 1 ? "Alex" : user == 2 ? "Sam\x01" : "Kim");
@@ -447,16 +452,20 @@ static void gridNavigationAndRepeat(void)
         { 4, 4, 3, 1 }, { 5, 5, 0, 2 }, { 6, 6, 1, 3 }, { 7, 7, 2, 0 },
         { 0, 0, 7, 5 }, { 1, 1, 4, 6 }, { 2, 2, 5, 7 }, { 3, 3, 6, 4 }
     };
-    for (int item = 0; item < C4F_TESTER_ITEMS; item++) {
-        for (int direction = 0; direction < 4; direction++) {
-            t.focus = item;
-            tap(&f, &t, &now, directions[direction]);
-            assert(t.focus == neighbors[item][direction]);
-            t.focus = item;
-            frame(&f, &t, now += 10, 0, directions[direction]);
-            assert(t.focus == neighbors[item][direction]);
-            frame(&f, &t, now += 10, 0, 0);
-            assert(t.focus == neighbors[item][direction]);
+    for (int rtl = 0; rtl < 2; rtl++) {
+        t.rtl = rtl;
+        for (int item = 0; item < C4F_TESTER_ITEMS; item++) {
+            for (int direction = 0; direction < 4; direction++) {
+                int visibleDirection = rtl && direction >= 2 ? 5 - direction : direction;
+                t.focus = item;
+                tap(&f, &t, &now, directions[direction]);
+                assert(t.focus == neighbors[item][visibleDirection]);
+                t.focus = item;
+                frame(&f, &t, now += 10, 0, directions[direction]);
+                assert(t.focus == neighbors[item][visibleDirection]);
+                frame(&f, &t, now += 10, 0, 0);
+                assert(t.focus == neighbors[item][visibleDirection]);
+            }
         }
     }
     c4fTesterSuspend(&t, now + 1000);
@@ -466,11 +475,12 @@ static void gridNavigationAndRepeat(void)
     puts("PASS 4-by-2 spatial wrap for controller/TV remote, immediate taps, 350/100 ms hold repeat and reset on focus loss");
 }
 
-static void colorPicker(void)
+static void colorPicker(int rtl)
 {
     Fake f;
     static C4fTester t;
     setup(&f, &t);
+    t.rtl = rtl;
     uint64_t now = openMenu(&f, &t);
     frame(&f, &t, now += 10, 0, 0);
     t.focus = C4F_TESTER_LIGHT_COLOR;
@@ -741,15 +751,32 @@ static void launcherEntry(void)
     puts("PASS Test controllers: in Actions unless locked, Options opens it, every menu item has a label");
 }
 
+static void unicodeNames(void)
+{
+    Fake f;
+    static C4fTester t;
+    const char *names[] = { "João", "أحمد DS4", "سام (Sam) 123", "أحمدمحمدأحمدمحمد" };
+    for (unsigned i = 0; i < sizeof(names) / sizeof(names[0]); i++) {
+        setup(&f, &t); f.nameOverride = names[i];
+        c4fTesterOpen(&t, 0);
+        C4fTesterView view; c4fTesterView(&t, &view);
+        assert(!strcmp(view.user[0].name, names[i]));
+        c4fTesterClose(&t);
+    }
+    puts("PASS Portuguese, Arabic and mixed UTF-8 usernames survive the input reader unchanged");
+}
+
 int main(void)
 {
     holdTiming();
     readsUsers();
+    unicodeNames();
     menuActions();
     switchUsers();
     menuOpeningSafety();
     gridNavigationAndRepeat();
-    colorPicker();
+    colorPicker(0);
+    colorPicker(1);
     menuAvailability();
     failures();
     logout();

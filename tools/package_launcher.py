@@ -24,20 +24,30 @@ SFO_VERSION = f'{int(major):02d}.{int(minor):02d}'
 
 def embed_fonts():
     sources = [ROOT / 'vendor/roboto/Roboto-Light.ttf', ROOT / 'vendor/roboto/Roboto-Regular.ttf']
+    sources += [ROOT / 'vendor/noto-sans-arabic/NotoSansArabic-Light.ttf', ROOT / 'vendor/noto-sans-arabic/NotoSansArabic-Regular.ttf']
     if FONTS.exists() and all(FONTS.stat().st_mtime >= s.stat().st_mtime for s in sources):
         return
     OUT.mkdir(parents=True, exist_ok=True)
     subprocess.run(['python3', str(ROOT / 'tools/embed_file.py'), str(FONTS),
-                    f'c4fFontLight={sources[0]}', f'c4fFontRegular={sources[1]}'], check=True)
+                    f'c4fFontLight={sources[0]}', f'c4fFontRegular={sources[1]}',
+                    f'c4fFontArabicLight={sources[2]}', f'c4fFontArabicRegular={sources[3]}'], check=True)
+
+
+def text_host_flags():
+    import build_text
+    out = build_text.build(ROOT / 'build/text-host', host=True)
+    return ([f'-I{ROOT}/vendor/harfbuzz/src', f'-I{ROOT}/vendor/sheenbidi/Headers'],
+            [str(out / 'libharfbuzz.a'), str(out / 'libsheenbidi.a')])
 
 
 def build_art_tool(diagnostic=False):
     """Host build of the launcher's drawing code, for the icon and previews."""
     embed_fonts()
+    text_includes, text_libraries = text_host_flags()
     art_version = VERSION + ('-diag' if diagnostic else '')
     flags = ['clang-18', '-std=gnu11', '-O2', '-D_DEFAULT_SOURCE', f'-I{ROOT}/launcher',
              f'-I{ROOT}/vendor/stb', f'-I{ROOT}/vendor/qrcodegen',
-             f'-DC4F_LAUNCHER_VERSION="{art_version}"']
+             f'-DC4F_LAUNCHER_VERSION="{art_version}"', *text_includes]
     extra_sources = []
     extra_flags = []
     art = ART
@@ -53,9 +63,10 @@ def build_art_tool(diagnostic=False):
     subprocess.run([*flags, '-w', '-c', str(ROOT / 'launcher/stb_truetype.c'), '-o', str(stb)], check=True)
     subprocess.run([*flags, '-Wall', '-Wextra', '-Werror', str(ROOT / 'tools/launcher_art.c'),
                     str(ROOT / 'launcher/screen.c'), str(ROOT / 'launcher/navigation.c'),
+                    str(ROOT / 'launcher/language.c'), str(ROOT / 'launcher/message.c'),
                     str(ROOT / 'launcher/tester.c'), str(ROOT / 'launcher/tester_draw.c'),
-                    str(ROOT / 'launcher/draw.c'), str(ROOT / 'launcher/logo.c'), *extra_sources,
-                    str(ROOT / 'vendor/qrcodegen/qrcodegen.c'), str(FONTS), str(stb), '-lm', *extra_flags, '-o', str(art)],
+                    str(ROOT / 'launcher/draw.c'), str(ROOT / 'launcher/text.c'), str(ROOT / 'launcher/logo.c'), *extra_sources,
+                    str(ROOT / 'vendor/qrcodegen/qrcodegen.c'), str(FONTS), str(stb), *text_libraries, '-lm', *extra_flags, '-o', str(art)],
                    check=True)
 
 
@@ -141,6 +152,10 @@ def main():
     shutil.copyfile(ROOT / 'vendor/jsmn/LICENSE', licenses / 'jsmn-MIT.txt')
     shutil.copyfile(ROOT / 'vendor/roboto/LICENSE', licenses / 'Roboto-Apache-2.0.txt')
     shutil.copyfile(ROOT / 'vendor/mbedtls/LICENSE', licenses / 'Mbed-TLS-LICENSE.txt')
+    shutil.copyfile(ROOT / 'vendor/harfbuzz/COPYING', licenses / 'HarfBuzz-COPYING.txt')
+    shutil.copyfile(ROOT / 'vendor/harfbuzz/src/ms-use/COPYING', licenses / 'HarfBuzz-ms-use-COPYING.txt')
+    shutil.copyfile(ROOT / 'vendor/sheenbidi/LICENSE', licenses / 'SheenBidi-Apache-2.0.txt')
+    shutil.copyfile(ROOT / 'vendor/noto-sans-arabic/OFL.txt', licenses / 'Noto-Sans-Arabic-OFL.txt')
     qrcodegen = (ROOT / 'vendor/qrcodegen/qrcodegen.h').read_text()
     (licenses / 'qrcodegen-MIT.txt').write_text(qrcodegen.split('*/', 1)[0] + '*/\n')
     stb = (ROOT / 'vendor/stb/stb_truetype.h').read_text()

@@ -2,6 +2,7 @@
 #define C4F_LAUNCHER_SERVICE_H
 #include <stddef.h>
 #include <stdint.h>
+#include "message.h"
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -26,6 +27,8 @@ uint64_t c4fLauncherTimeMs(void);
 void c4fLauncherSetHost(const char *ipv4);
 /* Why the last probe could not confirm the service, for the screen. */
 const char *c4fLauncherProblem(void);
+int c4fLauncherProblemIsKey(void);
+const C4fMessage *c4fLauncherMessage(void);
 /* DOWN only when nothing accepted a connection and something refused one.
  * Ambiguous answers must not allow starting another copy in the shared
  * payload host. */

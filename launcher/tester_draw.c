@@ -8,6 +8,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include "input.h"
+#include "language.h"
 #include "style.h"
 
 /* Layout, in TV pixels. */
@@ -57,6 +58,25 @@ static const float c4fLayout[C4F_C_COUNT][4] = {
 #define C4F_KNOB_TRAVEL 0.27f
 
 typedef struct { float x, y, w, h; } C4fBox;
+
+static void c4fTesterText(C4fCanvas *c, int font, float size, float x, float y,
+                          float width, C4fColor color, const char *text)
+{
+    float measured = c4fTextWidth(font, size, text);
+    if (measured > width && width > 0) {
+        size = floorf(size * width / measured);
+        measured = c4fTextWidth(font, size, text);
+    }
+    if (c4fTextIsRTL()) x += width - measured;
+    c4fText(c, font, size, x, y, color, text);
+}
+
+static const char *c4fTesterUserName(const C4fTesterView *view, int user, char *buffer, size_t size)
+{
+    if (!view->user[user].nameGenerated) return view->user[user].name;
+    snprintf(buffer, size, c4fTr("User %d"), user + 1);
+    return buffer;
+}
 typedef struct { float at; C4fColor color; } C4fStop;
 
 static const C4fPlacement c4fIdentity = { 0, 0, 1, 0, 0, 0 };
@@ -652,7 +672,7 @@ static void c4fBuildLayer(void)
     c4fText(&c, C4F_FONT_LIGHT, 13 * C4F_S, x + 16 * C4F_S, 62, C4F_MUTED, "Controller test");
     c4fDrawSolidarityBadge(&c, C4F_SCREEN_WIDTH - 64, 40);
 
-    c4fText(&c, C4F_FONT_LIGHT, 48, C4F_T_LEFT, 140, C4F_TEXT, "Controller test");
+    c4fTesterText(&c, C4F_FONT_LIGHT, 48, C4F_T_LEFT, 140, C4F_T_RIGHT - C4F_T_LEFT, C4F_TEXT, "Controller test");
     c4fTextWrapped(&c, C4F_FONT_LIGHT, 24, C4F_T_LEFT, 184, C4F_T_RIGHT - C4F_T_LEFT, 34, 2, C4F_MUTED,
                    "See the controller input received by this PS4. Select a user, then press buttons or move "
                    "the sticks. PS and Share go to the PS4 itself and aren't shown here.");
@@ -663,25 +683,25 @@ static void c4fBuildLayer(void)
 
     /* The panel's headings and labels. */
     const float tx = C4F_T_TEXT_X;
-    c4fText(&c, C4F_FONT_REGULAR, 24, tx, C4F_T_ROW_STICKS, C4F_MUTED, "Sticks");
-    c4fText(&c, C4F_FONT_LIGHT, 26, tx, C4F_T_ROW_STICKS + 40, C4F_TEXT, "Left");
-    c4fText(&c, C4F_FONT_LIGHT, 26, tx, C4F_T_ROW_STICKS + 76, C4F_TEXT, "Right");
-    c4fText(&c, C4F_FONT_REGULAR, 24, tx, C4F_T_ROW_TRIGGERS, C4F_MUTED, "Triggers");
+    c4fTesterText(&c, C4F_FONT_REGULAR, 24, tx, C4F_T_ROW_STICKS, C4F_T_INFO_W - 72, C4F_MUTED, "Sticks");
+    c4fTesterText(&c, C4F_FONT_LIGHT, 26, tx, C4F_T_ROW_STICKS + 40, 108, C4F_TEXT, "Left");
+    c4fTesterText(&c, C4F_FONT_LIGHT, 26, tx, C4F_T_ROW_STICKS + 76, 108, C4F_TEXT, "Right");
+    c4fTesterText(&c, C4F_FONT_REGULAR, 24, tx, C4F_T_ROW_TRIGGERS, C4F_T_INFO_W - 72, C4F_MUTED, "Triggers");
     for (int i = 0; i < 2; i++) {
         float y = C4F_T_ROW_TRIGGERS + 40 + i * 36;
         c4fText(&c, C4F_FONT_LIGHT, 26, tx, y, C4F_TEXT, i ? "R2" : "L2");
         c4fFillRoundRect(&c, C4F_T_BAR_X, y - 14, C4F_T_BAR_W, 14, 7, C4F_RGBA(0, 0, 0, .35f));
     }
-    c4fText(&c, C4F_FONT_REGULAR, 24, tx, C4F_T_ROW_TOUCH, C4F_MUTED, "Touchpad");
-    c4fText(&c, C4F_FONT_REGULAR, 24, tx, C4F_T_ROW_MOTION, C4F_MUTED, "Motion");
+    c4fTesterText(&c, C4F_FONT_REGULAR, 24, tx, C4F_T_ROW_TOUCH, 128, C4F_MUTED, "Touchpad");
+    c4fTesterText(&c, C4F_FONT_REGULAR, 24, tx, C4F_T_ROW_MOTION, 224, C4F_MUTED, "Motion");
     static const char *columns[4] = { "x", "y", "z", "w" };
     for (int i = 0; i < 4; i++)
         c4fTextRight(&c, C4F_FONT_REGULAR, 22, C4F_T_COLUMN_X + (i + 1) * C4F_T_COLUMN_W, C4F_T_ROW_MOTION,
                      C4F_FAINT, columns[i]);
-    c4fText(&c, C4F_FONT_LIGHT, 24, tx, C4F_T_ROW_MOTION + 40, C4F_TEXT, "Acceleration (G)");
-    c4fText(&c, C4F_FONT_LIGHT, 24, tx, C4F_T_ROW_MOTION + 76, C4F_TEXT, "Gyro (rad/s)");
-    c4fText(&c, C4F_FONT_LIGHT, 24, tx, C4F_T_ROW_MOTION + 112, C4F_TEXT, "Orientation");
-    c4fText(&c, C4F_FONT_REGULAR, 24, tx, C4F_T_ROW_LIGHT, C4F_MUTED, "Light bar");
+    c4fTesterText(&c, C4F_FONT_LIGHT, 24, tx, C4F_T_ROW_MOTION + 40, 224, C4F_TEXT, "Acceleration (G)");
+    c4fTesterText(&c, C4F_FONT_LIGHT, 24, tx, C4F_T_ROW_MOTION + 76, 224, C4F_TEXT, "Gyro (rad/s)");
+    c4fTesterText(&c, C4F_FONT_LIGHT, 24, tx, C4F_T_ROW_MOTION + 112, 224, C4F_TEXT, "Orientation");
+    c4fTesterText(&c, C4F_FONT_REGULAR, 24, tx, C4F_T_ROW_LIGHT, 128, C4F_MUTED, "Light bar");
 
     c4fText(&c, C4F_FONT_LIGHT, 20, C4F_T_LEFT, 1030, C4F_FAINT, "Control4Free " C4F_LAUNCHER_VERSION);
     c4fTextRight(&c, C4F_FONT_LIGHT, 23, C4F_T_RIGHT, 1030, C4F_MUTED,
@@ -704,20 +724,23 @@ static C4fColor c4fStateColor(int state)
 static void c4fDrawTabs(C4fCanvas *c, const C4fTesterView *v)
 {
     const float y = C4F_T_TABS_Y, h = 50;
-    float x = C4F_T_LEFT;
+    float x = c4fTextIsRTL() ? C4F_T_RIGHT : C4F_T_LEFT;
     int any = 0;
     for (int i = 0; i < C4F_TESTER_USERS; i++) {
         if (!v->user[i].used) continue;
+        char generated[128];
+        const char *name = c4fTesterUserName(v, i, generated, sizeof(generated));
         int on = i == v->selected;
-        float w = c4fTextWidth(C4F_FONT_REGULAR, 26, v->user[i].name) + 84;
+        float w = c4fTextWidthRaw(C4F_FONT_REGULAR, 26, name) + 84;
+        if (c4fTextIsRTL()) x -= w;
         any = 1;
         c4fFillRoundRect(c, x, y, w, h, 6 * C4F_S, on ? C4F_RGBA(40, 103, 205, .85f) : C4F_TILE);
         c4fInsetRoundRect(c, x, y, w, h, 6 * C4F_S, on ? 3 : 1 * C4F_S, on ? C4F_ACCENT : C4F_LINE);
-        c4fDot(c, x + 28, y + h / 2, c4fStateColor(v->user[i].state), v->user[i].state == C4F_TESTER_READY);
-        c4fText(c, C4F_FONT_REGULAR, 26, x + 52, y + h / 2 + 9, on ? C4F_TEXT : C4F_MUTED, v->user[i].name);
-        x += w + 16;
+        c4fDot(c, c4fTextIsRTL() ? x + w - 28 : x + 28, y + h / 2, c4fStateColor(v->user[i].state), v->user[i].state == C4F_TESTER_READY);
+        c4fTextRaw(c, C4F_FONT_REGULAR, 26, c4fTextIsRTL() ? x + 32 : x + 52, y + h / 2 + 9, on ? C4F_TEXT : C4F_MUTED, name);
+        x += c4fTextIsRTL() ? -16 : w + 16;
     }
-    if (!any) c4fText(c, C4F_FONT_LIGHT, 26, C4F_T_LEFT, y + 34, C4F_MUTED, "Waiting for the PS4's signed-in users...");
+    if (!any) c4fTesterText(c, C4F_FONT_LIGHT, 26, C4F_T_LEFT, y + 34, C4F_T_RIGHT - C4F_T_LEFT, C4F_MUTED, "Waiting for the PS4's signed-in users...");
 }
 
 /* A pressed plastic control: lit in the accent colour, like the page's .on. */
@@ -989,7 +1012,9 @@ static void c4fDrawTouchpad(C4fCanvas *c, C4fColor accent, const char *line1, co
     const C4fBox pad = c4fControl(C4F_C_TOUCHPAD);
     if (c4fLightStrip.px) c4fBlitSprite(c, &c4fLightStrip, 0, 0);
     else c4fPaintLightStrip(c, accent);
-    if (line1) c4fTextCentered(c, C4F_FONT_LIGHT, 22, pad.x + pad.w / 2, pad.y + pad.h * .9f - 30, C4F_P_ENGRAVED, line1);
+    if (line1) c4fTextRaw(c, C4F_FONT_LIGHT, 22,
+                        pad.x + (pad.w - c4fTextWidthRaw(C4F_FONT_LIGHT, 22, line1)) / 2,
+                        pad.y + pad.h * .9f - 30, C4F_P_ENGRAVED, line1);
     if (line2) c4fTextCentered(c, C4F_FONT_LIGHT, 20, pad.x + pad.w / 2, pad.y + pad.h * .9f - 4,
                                C4F_RGBA(236, 240, 248, .36f), line2);
 }
@@ -1054,8 +1079,8 @@ static void c4fDrawConnection(C4fCanvas *c, const C4fTesterView *v, const C4fTes
         int column = 0;
         for (int slot = 0; slot < 4; slot++) {
             if (!(connection->pads & (1U << slot))) continue;
-            char text[40];
-            if (connection->rttMs[slot] < 0) snprintf(text, sizeof(text), "C%d measuring...", slot + 1);
+            char text[128];
+            if (connection->rttMs[slot] < 0) snprintf(text, sizeof(text), c4fTr("C%d measuring..."), slot + 1);
             else snprintf(text, sizeof(text), "C%d %d ms", slot + 1, connection->rttMs[slot]);
             c4fText(c, C4F_FONT_REGULAR, 22, values + column++ * 176, baseline,
                     connection->rttMs[slot] < 0 ? C4F_MUTED : C4F_TEXT, text);
@@ -1079,7 +1104,9 @@ static int c4fHasToolsKey;
 
 static C4fBox c4fToolBox(int item)
 {
-    return (C4fBox){ C4F_T_LEFT + (item % C4F_TESTER_MENU_COLUMNS) * (C4F_TOOL_W + C4F_TOOL_GAP_X),
+    int column = item % C4F_TESTER_MENU_COLUMNS;
+    if (c4fTextIsRTL()) column = C4F_TESTER_MENU_COLUMNS - 1 - column;
+    return (C4fBox){ C4F_T_LEFT + column * (C4F_TOOL_W + C4F_TOOL_GAP_X),
                      C4F_TOOL_Y + (item / C4F_TESTER_MENU_COLUMNS) * (C4F_TOOL_H + C4F_TOOL_GAP_Y),
                      C4F_TOOL_W, C4F_TOOL_H };
 }
@@ -1133,9 +1160,11 @@ static void c4fPaintToolTile(C4fCanvas *c, int item, int focused, int available)
     c4fInsetRoundRect(c, b.x, b.y, b.w, b.h, 10, focused ? 3 : 1.5f,
                      focused ? C4F_ACCENT : available ? C4F_LINE : C4F_LINE_SOFT);
     C4fColor icon = available ? (focused ? C4F_TEXT : C4F_CROSS_KEY) : C4F_FAINT;
-    c4fToolIcon(c, item, b.x + 28, b.y + 29, icon);
-    c4fText(c, C4F_FONT_REGULAR, 30, b.x + 26, b.y + 137, available ? C4F_TEXT : C4F_FAINT, labels[item]);
-    c4fText(c, C4F_FONT_LIGHT, 22, b.x + 26, b.y + 174, available ? C4F_MUTED : C4F_FAINT, c4fToolHelp(item, available));
+    c4fToolIcon(c, item, c4fTextIsRTL() ? b.x + b.w - 92 : b.x + 28, b.y + 29, icon);
+    c4fTesterText(c, C4F_FONT_REGULAR, 30, b.x + 26, b.y + 137, b.w - 52,
+                   available ? C4F_TEXT : C4F_FAINT, labels[item]);
+    c4fTextWrapped(c, C4F_FONT_LIGHT, 22, b.x + 26, b.y + 174, b.w - 52, 26, 2,
+                   available ? C4F_MUTED : C4F_FAINT, c4fToolHelp(item, available));
     if (focused) {
         c4fFillRoundRect(c, b.x + 26, b.y + b.h - 16, b.w - 52, 3, 1.5f, C4F_ACCENT);
         c4fFillCircle(c, b.x + b.w - 28, b.y + 32, 4, C4F_TEXT);
@@ -1189,10 +1218,11 @@ static int c4fBuildTools(C4fCanvas *work)
 
 static void c4fDrawToolsDetails(C4fCanvas *c, const C4fTesterView *v, const C4fTesterConnection *connection)
 {
-    c4fText(c, C4F_FONT_LIGHT, 48, C4F_T_LEFT, 154, C4F_TEXT, v->colorMenu ? "Light bar" : "Controller tools");
-    c4fText(c, C4F_FONT_LIGHT, 24, C4F_T_LEFT, 202, C4F_MUTED, v->colorMenu ?
+    c4fTesterText(c, C4F_FONT_LIGHT, 48, C4F_T_LEFT, 154, C4F_T_RIGHT - C4F_T_LEFT, C4F_TEXT, v->colorMenu ? "Light bar" : "Controller tools");
+    c4fTesterText(c, C4F_FONT_LIGHT, 24, c4fTextIsRTL() ? C4F_T_RIGHT - 1100 : C4F_T_LEFT, 202, 1100, C4F_MUTED, v->colorMenu ?
             "Mix red, green and blue. Changes preview on the selected controller." : "Test motion, vibration and the light bar.");
-    if (!v->colorMenu) c4fTextRight(c, C4F_FONT_LIGHT, 24, C4F_T_RIGHT, 202, C4F_MUTED, "D-pad or arrows to move");
+    if (!v->colorMenu) c4fTesterText(c, C4F_FONT_LIGHT, 24, c4fTextIsRTL() ? C4F_T_LEFT : C4F_T_RIGHT - 470,
+                                    202, 470, C4F_MUTED, "D-pad or arrows to move");
     const C4fHint hints[2] = { { C4F_KEY_CROSS, v->colorMenu ? (v->colorFine ? "Fast adjustment" : "Fine adjustment") : "Select" },
                               { C4F_KEY_CIRCLE, v->colorMenu ? "Done" : "Back" } };
     c4fHints(c, C4F_T_RIGHT, 1022, hints, 2);
@@ -1200,32 +1230,43 @@ static void c4fDrawToolsDetails(C4fCanvas *c, const C4fTesterView *v, const C4fT
             "Up/Down: channel / Left/Right: adjust / OK: step size / Back: done" : "TV remote: OK select / Back return");
     const int selected = v->selected >= 0 && v->selected < C4F_TESTER_USERS;
     const int state = selected ? v->user[v->selected].state : -1;
-    const char *name = selected ? v->user[v->selected].name : "No one signed in", *status;
-    char detail[96];
+    char generatedName[128];
+    const char *name = selected ? c4fTesterUserName(v, v->selected, generatedName, sizeof(generatedName)) : "No one signed in", *status;
+    char detail[256];
     if (state == C4F_TESTER_READY) status = "Controller connected";
     else if (state == C4F_TESTER_NO_CONTROLLER) status = "No controller connected";
     else if (state == C4F_TESTER_SIGNED_OUT) status = "Signed out";
     else if (state == C4F_TESTER_FAILED) {
-        snprintf(detail, sizeof(detail), "Cannot read (0x%08x)", (unsigned)v->user[v->selected].error);
+        snprintf(detail, sizeof(detail), c4fTr("Cannot read (0x%08x)"), (unsigned)v->user[v->selected].error);
         status = detail;
     } else status = selected ? "Opening controller..." : "Waiting for a signed-in user";
-    c4fText(c, C4F_FONT_LIGHT, 20, C4F_T_LEFT, 257, C4F_FAINT, "SELECTED USER");
-    c4fText(c, C4F_FONT_REGULAR, 30, C4F_T_LEFT, 300, C4F_TEXT, name);
-    c4fText(c, C4F_FONT_LIGHT, 20, 620, 257, C4F_FAINT, "CONTROLLER");
-    c4fDot(c, 629, 290, c4fStateColor(state), 0);
-    c4fText(c, C4F_FONT_REGULAR, 26, 650, 300, state == C4F_TESTER_FAILED ? C4F_BAD : C4F_MUTED, status);
-    c4fText(c, C4F_FONT_LIGHT, 20, 1240, 257, C4F_FAINT, "TEST OUTPUT");
+    float userX = c4fTextIsRTL() ? 1330 : C4F_T_LEFT, statusX = c4fTextIsRTL() ? 720 : 620;
+    float outputX = c4fTextIsRTL() ? C4F_T_LEFT : 1240;
+    c4fTesterText(c, C4F_FONT_LIGHT, 20, userX, 257, 440, C4F_FAINT, "SELECTED USER");
+    if (selected) {
+        float width = c4fTextWidthRaw(C4F_FONT_REGULAR, 30, name);
+        float size = width > 440 ? floorf(30 * 440 / width) : 30;
+        float at = userX + (c4fTextIsRTL() ? 440 - c4fTextWidthRaw(C4F_FONT_REGULAR, size, name) : 0);
+        c4fTextRaw(c, C4F_FONT_REGULAR, size, at, 300, C4F_TEXT, name);
+    } else c4fTesterText(c, C4F_FONT_REGULAR, 30, userX, 300, 440, C4F_TEXT, name);
+    c4fTesterText(c, C4F_FONT_LIGHT, 20, statusX, 257, 560, C4F_FAINT, "CONTROLLER");
+    c4fDot(c, c4fTextIsRTL() ? statusX + 551 : statusX + 9, 290, c4fStateColor(state), 0);
+    c4fTesterText(c, C4F_FONT_REGULAR, 26, statusX + (c4fTextIsRTL() ? 0 : 30), 300, 530,
+                   state == C4F_TESTER_FAILED ? C4F_BAD : C4F_MUTED, status);
+    c4fTesterText(c, C4F_FONT_LIGHT, 20, outputX, 257, 530, C4F_FAINT, "TEST OUTPUT");
     if (v->lightSet) {
         const C4fColor light = { v->light[0], v->light[1], v->light[2], 255 };
-        c4fFillRoundRect(c, 1240, 278, 28, 18, 4, light);
-        c4fText(c, C4F_FONT_LIGHT, 24, 1281, 294, C4F_MUTED, "Light bar set by this test");
-    } else c4fText(c, C4F_FONT_LIGHT, 24, 1240, 294, C4F_MUTED, "Light bar: PS4 default");
-    if (v->rumble) c4fText(c, C4F_FONT_REGULAR, 22, 1240, 322, C4F_WARN,
+        c4fFillRoundRect(c, c4fTextIsRTL() ? outputX + 502 : outputX, 278, 28, 18, 4, light);
+        c4fTesterText(c, C4F_FONT_LIGHT, 24, outputX + (c4fTextIsRTL() ? 0 : 41), 294, 489, C4F_MUTED, "Light bar set by this test");
+    } else c4fTesterText(c, C4F_FONT_LIGHT, 24, outputX, 294, 530, C4F_MUTED, "Light bar: PS4 default");
+    if (v->rumble) c4fTesterText(c, C4F_FONT_REGULAR, 22, outputX, 322, 530, C4F_WARN,
                            v->rumble == 1 ? "Large motor running" : "Small motor running");
     c4fDrawConnection(c, v, connection, C4F_T_LEFT, 329);
     const int focus = v->focus >= 0 && v->focus < C4F_TESTER_ITEMS ? v->focus : C4F_TESTER_RESUME;
     const int available = c4fTesterItemAvailable(v, focus);
-    const char *note = v->note[0] ? v->note : v->colorMenu ? "The light bar returns to its PS4 color when you leave the tester." :
+    char translatedNote[C4F_MESSAGE_RENDER_SIZE];
+    c4fMessageRender(&v->noteText, translatedNote, sizeof(translatedNote));
+    const char *note = v->noteText.key ? translatedNote : v->note[0] ? v->note : v->colorMenu ? "The light bar returns to its PS4 color when you leave the tester." :
                        available ? "Choose a tool, or resume testing to see live input." :
                        focus == C4F_TESTER_USER ? "Sign in another PS4 user to switch players here." :
                        "Connect this user's controller to use this tool.";
@@ -1307,7 +1348,7 @@ static void c4fDrawColorPicker(C4fCanvas *c, const C4fTesterView *v)
     char value[32];
     snprintf(value, sizeof(value), "#%02X%02X%02X", v->light[0], v->light[1], v->light[2]);
     c4fText(c, C4F_FONT_REGULAR, 38, 1324, 701, C4F_TEXT, value);
-    snprintf(value, sizeof(value), "Step: %d", v->colorFine ? 1 : 16);
+    snprintf(value, sizeof(value), c4fTr("Step: %d"), v->colorFine ? 1 : 16);
     c4fText(c, C4F_FONT_REGULAR, 28, 1324, 753, C4F_TEXT, value);
 }
 
@@ -1331,6 +1372,13 @@ static void c4fForgetOtherLanguage(void)
             free(c4fToolTiles[i][variant].px);
             c4fToolTiles[i][variant].px = NULL;
         }
+    for (int channel = 0; channel < 3; channel++)
+        for (int focused = 0; focused < 2; focused++) {
+            free(c4fColorRows[channel][focused].px);
+            c4fColorRows[channel][focused].px = NULL;
+        }
+    free(c4fColorPreview.px);
+    c4fColorPreview.px = NULL;
     c4fHasToolsKey = 0;
 }
 
@@ -1351,12 +1399,14 @@ static void c4fDrawMenu(C4fCanvas *c, const C4fTesterView *v, const C4fTesterCon
     key.colorMenu = v->colorMenu; key.colorChannel = v->colorChannel; key.colorFine = v->colorFine;
     memcpy(key.light, v->light, sizeof(key.light));
     memcpy(key.note, v->note, sizeof(key.note));
+    key.noteText = v->noteText;
     C4fTesterConnection connectionKey = { 0 };
     connectionKey.available = connection->available; connectionKey.pads = connection->pads;
     memcpy(connectionKey.rttMs, connection->rttMs, sizeof(connectionKey.rttMs));
     unsigned available = 0;
     for (int i = 0; i < C4F_TESTER_USERS; i++) {
         key.user[i].used = v->user[i].used; key.user[i].state = v->user[i].state; key.user[i].error = v->user[i].error;
+        key.user[i].nameGenerated = v->user[i].nameGenerated;
         memcpy(key.user[i].name, v->user[i].name, sizeof(key.user[i].name));
     }
     for (int i = 0; i < C4F_TESTER_ITEMS; i++) if (c4fTesterItemAvailable(v, i)) available |= 1U << i;
@@ -1401,8 +1451,9 @@ void c4fDrawTester(uint32_t *pixels, const C4fLauncherScreen *s)
 
     c4fDrawTabs(&c, v);
     /* The page lights the controller in its colour; here, the colour this test set. */
-    char line[96];
-    const char *name = v->selected >= 0 ? v->user[v->selected].name : "", *detail;
+    char line[256];
+    char generatedName[128];
+    const char *name = v->selected >= 0 ? c4fTesterUserName(v, v->selected, generatedName, sizeof(generatedName)) : "", *detail;
     if (ready) {
         c4fDrawInput(&c, v, accent);
         detail = "Reading this user's controller";
@@ -1411,10 +1462,10 @@ void c4fDrawTester(uint32_t *pixels, const C4fLauncherScreen *s)
         c4fFillRoundRect(&c, C4F_P_X, C4F_P_Y, C4F_P_W, C4F_P_H, 12, C4F_RGBA(2, 6, 14, .55f));
         if (state == C4F_TESTER_NO_CONTROLLER) detail = "No controller connected";
         else if (state == C4F_TESTER_FAILED) {
-            snprintf(line, sizeof(line), "The PS4 would not read it (0x%08x)", (unsigned)v->user[v->selected].error);
+            snprintf(line, sizeof(line), c4fTr("The PS4 would not read it (0x%08x)"), (unsigned)v->user[v->selected].error);
             detail = line;
         } else if (state == C4F_TESTER_SIGNED_OUT) detail = "Signed out";
-        else if (state < 0) { name = "No one is signed in"; detail = NULL; }
+        else if (state < 0) { name = c4fTr("No one is signed in"); detail = NULL; }
         else detail = "Opening this user's controller...";
     }
     c4fDrawTouchpad(&c, accent, name, detail);
@@ -1423,7 +1474,10 @@ void c4fDrawTester(uint32_t *pixels, const C4fLauncherScreen *s)
     if (v->rumble)
         c4fText(&c, C4F_FONT_REGULAR, 26, C4F_P_X + 4, C4F_T_TOP + C4F_T_HEIGHT - 30, C4F_WARN,
                 v->rumble == 1 ? "Rumbling: large motor" : "Rumbling: small motor");
-    if (v->note[0]) c4fText(&c, C4F_FONT_LIGHT, 24, C4F_T_LEFT, 972, C4F_TEXT, v->note);
-    else c4fText(&c, C4F_FONT_LIGHT, 24, C4F_T_LEFT, 972, C4F_MUTED,
+    char translatedNote[C4F_MESSAGE_RENDER_SIZE];
+    c4fMessageRender(&v->noteText, translatedNote, sizeof(translatedNote));
+    if (v->note[0]) c4fTesterText(&c, C4F_FONT_LIGHT, 24, C4F_T_LEFT, 972, C4F_T_RIGHT - C4F_T_LEFT,
+                                 C4F_TEXT, v->noteText.key ? translatedNote : v->note);
+    else c4fTesterText(&c, C4F_FONT_LIGHT, 24, C4F_T_LEFT, 972, C4F_T_RIGHT - C4F_T_LEFT, C4F_MUTED,
                  "Hold L3 + R3 for two seconds for the menu: change user, rumble, light bar, leave.");
 }

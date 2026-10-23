@@ -34,7 +34,8 @@
 
 static char c4fHost[16];
 static char c4fProblem[128];
-static int c4fReached;
+static int c4fReached, c4fProblemIsKey;
+static C4fMessage c4fServiceMessage;
 
 uint64_t c4fLauncherTimeMs(void)
 {
@@ -53,6 +54,13 @@ void c4fLauncherSetHost(const char *ipv4)
 }
 
 const char *c4fLauncherProblem(void) { return c4fProblem; }
+int c4fLauncherProblemIsKey(void) { return c4fProblemIsKey; }
+const C4fMessage *c4fLauncherMessage(void)
+{
+    if (c4fServiceMessage.argType == C4F_MESSAGE_STRING)
+        c4fServiceMessage.valueIsKey = c4fProblemIsKey;
+    return &c4fServiceMessage;
+}
 
 static void c4fNote(const char *address, const char *what)
 {
@@ -168,7 +176,7 @@ static int c4fHttp(const char *method, const char *path, char *body, size_t capa
 {
     const char *targets[2];
     int count = c4fTargets(targets), refused = 0, connected = 0;
-    c4fProblem[0] = 0;
+    c4fProblem[0] = 0; c4fProblemIsKey = 0;
     for (int i = 0; i < count; i++) {
         int fd = c4fConnect(targets[i], C4F_SERVICE_PORT);
         if (fd < 0) {
@@ -218,6 +226,7 @@ int c4fLauncherProbe(C4fServiceStatus *status)
     jsmn_init(&parser);
     int count = jsmn_parse(&parser, body, strlen(body), tokens, 64);
     snprintf(c4fProblem, sizeof(c4fProblem), "the status reply is not from Control4Free");
+    c4fProblemIsKey = 1;
     if (count < 1 || tokens[0].type != JSMN_OBJECT || tokens[0].end != (int)strlen(body)) return -1;
     int app = 0, api = 0, controllers = 0, stopping = 0;
     unsigned latencyFields[C4F_SERVICE_PADS] = { 0 };
@@ -258,7 +267,7 @@ int c4fLauncherProbe(C4fServiceStatus *status)
     }
     if (!(app && api && controllers && stopping)) return -1;
     for (int p = 0; p < C4F_SERVICE_PADS; p++) if (latencyFields[p] != 7) status->latencyAvailable = 0;
-    c4fProblem[0] = 0;
+    c4fProblem[0] = 0; c4fProblemIsKey = 0;
     return 1;
 }
 
@@ -266,29 +275,29 @@ int c4fLauncherStart(const unsigned char *payload, size_t payloadSize, char *mes
 {
     C4fServiceStatus status;
     int probe = c4fLauncherProbe(&status);
-    if (probe == 1) { snprintf(message, size, "Already running. Open the address on your phone or PC."); return 0; }
-    if (probe != 0 && !c4fReached) { snprintf(message, size, "The app cannot check whether Control4Free is running (%s).", c4fProblem); return -1; }
-    if (probe != 0) { snprintf(message, size, "Control4Free is not responding (%s). Wait a moment after waking. If it stays stuck, restart the PS4.", c4fProblem); return -1; }
-    if (!payload) { snprintf(message, size, "The payload is missing. Reinstall the Control4Free package."); return -1; }
+    if (probe == 1) { c4fMessageWrite(&c4fServiceMessage, message, size, "Already running. Open the address on your phone or PC."); return 0; }
+    if (probe != 0 && !c4fReached) { c4fMessageWrite(&c4fServiceMessage, message, size, "The app cannot check whether Control4Free is running (%s).", c4fProblem); return -1; }
+    if (probe != 0) { c4fMessageWrite(&c4fServiceMessage, message, size, "Control4Free is not responding (%s). Wait a moment after waking. If it stays stuck, restart the PS4.", c4fProblem); return -1; }
+    if (!payload) { c4fMessageWrite(&c4fServiceMessage, message, size, "The payload is missing. Reinstall the Control4Free package."); return -1; }
     if (payloadSize < 64 || memcmp(payload, "\177ELF", 4) || payload[4] != 2 || payload[5] != 1) {
-        snprintf(message, size, "The bundled payload is damaged. Reinstall the Control4Free package."); return -1;
+        c4fMessageWrite(&c4fServiceMessage, message, size, "The bundled payload is damaged. Reinstall the Control4Free package."); return -1;
     }
     const char *targets[2];
     int count = c4fTargets(targets), fd = -1;
     for (int i = 0; i < count && fd < 0; i++) fd = c4fConnect(targets[i], C4F_PAYLOADER_PORT);
-    if (fd < 0) { snprintf(message, size, "PayLoader did not answer (errno %d). Enable PayLoader Server in GoldHEN > Server Settings, then retry Start.", errno); return -1; }
+    if (fd < 0) { c4fMessageWrite(&c4fServiceMessage, message, size, "PayLoader did not answer (errno %d). Enable PayLoader Server in GoldHEN > Server Settings, then retry Start.", errno); return -1; }
     int failed = c4fSendAll(fd, payload, payloadSize, c4fLauncherTimeMs() + 10000);
     shutdown(fd, SHUT_WR); close(fd);
-    if (failed) { snprintf(message, size, "The transfer to PayLoader broke off. Retry Start."); return -2; }
+    if (failed) { c4fMessageWrite(&c4fServiceMessage, message, size, "The transfer to PayLoader broke off. Retry Start."); return -2; }
     uint64_t deadline;
     deadline = c4fLauncherTimeMs() + 20000;
     while (c4fLauncherTimeMs() < deadline) {
         if (c4fLauncherProbe(&status) == 1 && !status.stopping) {
-            snprintf(message, size, "Ready. Open the address on your phone or PC."); return 0;
+            c4fMessageWrite(&c4fServiceMessage, message, size, "Ready. Open the address on your phone or PC."); return 0;
         }
         usleep(250000);
     }
-    snprintf(message, size, "Sent, but Control4Free did not start (%s). Retry Start.", c4fProblem);
+    c4fMessageWrite(&c4fServiceMessage, message, size, "Sent, but Control4Free did not start (%s). Retry Start.", c4fProblem);
     /* Sending again is safe: a copy that did start holds the payload's
      * instance lock, so a second one quits at once. */
     return -2;
@@ -298,16 +307,16 @@ int c4fLauncherStop(char *message, size_t size)
 {
     C4fServiceStatus status;
     int probe = c4fLauncherProbe(&status);
-    if (probe == 0) { snprintf(message, size, "Stopped. Ready to start again."); return 0; }
-    if (probe != 1 && !c4fReached) { snprintf(message, size, "The app cannot reach Control4Free (%s). Stop it on its controller page.", c4fProblem); return -1; }
-    if (probe != 1) { snprintf(message, size, "This copy does not answer the app (%s). Stop it on its controller page.", c4fProblem); return -1; }
+    if (probe == 0) { c4fMessageWrite(&c4fServiceMessage, message, size, "Stopped. Ready to start again."); return 0; }
+    if (probe != 1 && !c4fReached) { c4fMessageWrite(&c4fServiceMessage, message, size, "The app cannot reach Control4Free (%s). Stop it on its controller page.", c4fProblem); return -1; }
+    if (probe != 1) { c4fMessageWrite(&c4fServiceMessage, message, size, "This copy does not answer the app (%s). Stop it on its controller page.", c4fProblem); return -1; }
     char reply[256];
     int ret = c4fHttp("POST", "/api/stop", reply, sizeof(reply));
-    if (ret != 1) { snprintf(message, size, "Stop was not confirmed (%s). Check the controller page.", c4fProblem); return -1; }
+    if (ret != 1) { c4fMessageWrite(&c4fServiceMessage, message, size, "Stop was not confirmed (%s). Check the controller page.", c4fProblem); return -1; }
     uint64_t deadline = c4fLauncherTimeMs() + 5000;
     while (c4fLauncherTimeMs() < deadline) {
-        if (c4fLauncherProbe(&status) == 0) { snprintf(message, size, "Stopped. Ready to start again."); return 0; }
+        if (c4fLauncherProbe(&status) == 0) { c4fMessageWrite(&c4fServiceMessage, message, size, "Stopped. Ready to start again."); return 0; }
         usleep(100000);
     }
-    snprintf(message, size, "Still stopping. Wait a moment, then try again."); return -1;
+    c4fMessageWrite(&c4fServiceMessage, message, size, "Still stopping. Wait a moment, then try again."); return -1;
 }

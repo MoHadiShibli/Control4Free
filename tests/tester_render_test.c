@@ -6,6 +6,8 @@
 #include <string.h>
 #include <time.h>
 #include "screen.h"
+#include "language.h"
+#include "draw.h"
 
 static const char *c4fCases[] = {
     "idle", "sticks", "buttons", "motion", "touch", "red", "blue", "rumble", "note",
@@ -187,6 +189,10 @@ int main(int argc, char **argv)
         return 0;
     }
     if (c4fScreenInit()) return 2;
+    const char *language = getenv("C4F_TEST_LANGUAGE");
+    if (getenv("C4F_TEST_SYSTEM_FONTS") && c4fTextLoadSystemFonts()) return 3;
+    if (language) c4fLanguageUse(!strcmp(language, "ar") ? C4F_LANGUAGE_ARABIC :
+        !strcmp(language, "pt") ? C4F_LANGUAGE_PORTUGUESE : C4F_LANGUAGE_ENGLISH);
     uint32_t *pixels = calloc((size_t)C4F_SCREEN_WIDTH * C4F_SCREEN_HEIGHT, sizeof(*pixels));
     if (!pixels) return 2;
     C4fLauncherScreen state;

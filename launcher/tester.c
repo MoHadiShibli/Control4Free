@@ -122,9 +122,10 @@ static void c4fTesterUsers(C4fTester *t, uint64_t now)
             r->name[0] = 0;
             if (t->ops.userName) t->ops.userName(t->ops.context, r->user, r->name, (int)sizeof(r->name));
             r->name[sizeof(r->name) - 1] = 0;
-            /* Names are drawn in plain ASCII. */
-            for (char *p = r->name; *p; p++) if ((unsigned char)*p < 32 || (unsigned char)*p > 126) *p = '?';
-            if (!r->name[0]) snprintf(r->name, sizeof(r->name), "User %d", s + 1);
+            /* Preserve UTF-8 names. Only replace ASCII control characters. */
+            for (char *p = r->name; *p; p++) if ((unsigned char)*p < 32 || (unsigned char)*p == 127) *p = '?';
+            r->nameGenerated = !r->name[0];
+            if (r->nameGenerated) snprintf(r->name, sizeof(r->name), "User %d", s + 1);
             r->retryAt = now;
             c4fReaderState(t, s, C4F_TESTER_OPENING, 0);
             known = 1;
@@ -204,13 +205,13 @@ static void c4fTesterNextUser(C4fTester *t, int direction)
         }
     }
     c4fTesterForgetSignedOut(t);
-    t->note[0] = 0;
+    t->note[0] = 0; c4fMessageClear(&t->noteText);
 }
 
 static void c4fTesterResult(C4fTester *t, int result, const char *done)
 {
-    if (result) snprintf(t->note, sizeof(t->note), "The PS4 refused that (0x%08x).", (unsigned)result);
-    else snprintf(t->note, sizeof(t->note), "%s", done);
+    if (result) c4fMessageWrite(&t->noteText, t->note, sizeof(t->note), "The PS4 refused that (0x%08x).", (unsigned)result);
+    else c4fMessageWrite(&t->noteText, t->note, sizeof(t->note), done);
 }
 
 static void c4fTesterAct(C4fTester *t, int item, uint64_t now)
@@ -218,7 +219,7 @@ static void c4fTesterAct(C4fTester *t, int item, uint64_t now)
     C4fTesterView view;
     c4fTesterView(t, &view);
     if (!c4fTesterItemAvailable(&view, item)) {
-        snprintf(t->note, sizeof(t->note), "%s", item == C4F_TESTER_USER ?
+        c4fMessageWrite(&t->noteText, t->note, sizeof(t->note), item == C4F_TESTER_USER ?
                  "No other user is signed in." : "This user has no controller to test.");
         return;
     }
@@ -232,7 +233,7 @@ static void c4fTesterAct(C4fTester *t, int item, uint64_t now)
         return;
     }
     if (!r || r->user < 0 || r->handle < 0 || r->state != C4F_TESTER_READY) {
-        snprintf(t->note, sizeof(t->note), "This user has no controller to test.");
+        c4fMessageWrite(&t->noteText, t->note, sizeof(t->note), "This user has no controller to test.");
         return;
     }
     switch (item) {
@@ -257,7 +258,7 @@ static void c4fTesterAct(C4fTester *t, int item, uint64_t now)
             r->lightSet = 1;
             memcpy(r->light, rgb, 3);
             t->colorMenu = 1;
-            t->note[0] = 0;
+            t->note[0] = 0; c4fMessageClear(&t->noteText);
         } else {
             c4fTesterResult(t, result, "");
         }
@@ -294,7 +295,9 @@ void c4fTesterOpen(C4fTester *t, uint64_t now)
 {
     if (t->active) return;
     C4fTesterOps ops = t->ops;
+    int rtl = t->rtl;
     c4fTesterInit(t, &ops);
+    t->rtl = rtl;
     t->active = 1;
     c4fTesterUsers(t, now);
 }
@@ -386,9 +389,9 @@ static void c4fTesterMenuMove(C4fTester *t, uint32_t direction)
     } else if (direction & C4F_INPUT_BUTTON_DOWN) {
         row = (row + 1) % C4F_TESTER_MENU_ROWS;
     } else if (direction & C4F_INPUT_BUTTON_LEFT) {
-        column = (column + C4F_TESTER_MENU_COLUMNS - 1) % C4F_TESTER_MENU_COLUMNS;
+        column = (column + (t->rtl ? 1 : C4F_TESTER_MENU_COLUMNS - 1)) % C4F_TESTER_MENU_COLUMNS;
     } else if (direction & C4F_INPUT_BUTTON_RIGHT) {
-        column = (column + 1) % C4F_TESTER_MENU_COLUMNS;
+        column = (column + (t->rtl ? C4F_TESTER_MENU_COLUMNS - 1 : 1)) % C4F_TESTER_MENU_COLUMNS;
     }
     t->focus = row * C4F_TESTER_MENU_COLUMNS + column;
 }
@@ -397,7 +400,7 @@ static void c4fTesterColorInput(C4fTester *t, uint32_t navigation, uint32_t pres
 {
     if (pressed & C4F_INPUT_BUTTON_CIRCLE) {
         t->colorMenu = 0;
-        snprintf(t->note, sizeof(t->note), "Light bar set. It goes back to normal when you leave.");
+        c4fMessageWrite(&t->noteText, t->note, sizeof(t->note), "Light bar set. It goes back to normal when you leave.");
         return;
     }
     if (navigation & C4F_INPUT_BUTTON_UP) t->colorChannel = (t->colorChannel + 2) % 3;
@@ -416,7 +419,7 @@ static void c4fTesterColorInput(C4fTester *t, uint32_t navigation, uint32_t pres
         if (!result) {
             r->lightSet = 1;
             memcpy(r->light, rgb, sizeof(rgb));
-            t->note[0] = 0;
+            t->note[0] = 0; c4fMessageClear(&t->noteText);
         } else c4fTesterResult(t, result, "");
     } else if (pressed & C4F_INPUT_BUTTON_CROSS) t->colorFine = !t->colorFine;
 }
@@ -435,7 +438,7 @@ int c4fTesterFrame(C4fTester *t, uint64_t now, uint32_t remotePressed)
     if (t->rumble && now >= t->rumbleUntil) c4fTesterStopRumble(t);
     if (t->colorMenu && (t->selected < 0 || t->readers[t->selected].state != C4F_TESTER_READY)) {
         t->colorMenu = 0;
-        snprintf(t->note, sizeof(t->note), "This user's controller is unavailable.");
+        c4fMessageWrite(&t->noteText, t->note, sizeof(t->note), "This user's controller is unavailable.");
     }
     if (menuOpener >= 0 && !t->menu) {
         c4fTesterMenuOpen(t, menuOpener);
@@ -520,10 +523,12 @@ void c4fTesterView(const C4fTester *t, C4fTesterView *v)
         if (!v->user[s].used) continue;
         v->user[s].id = r->user;
         snprintf(v->user[s].name, sizeof(v->user[s].name), "%s", r->name);
+        v->user[s].nameGenerated = r->nameGenerated;
         v->user[s].state = r->state;
         v->user[s].error = r->error;
     }
     snprintf(v->note, sizeof(v->note), "%s", t->note);
+    v->noteText = t->noteText;
     if (t->selected < 0) return;
     const C4fTesterReader *r = &t->readers[t->selected];
     v->rumble = t->rumble && t->rumbleReader == t->selected ? t->rumble : 0;

@@ -1,15 +1,11 @@
 # Changelog
 
-## Unreleased
+## 1.3.1 — 2026-10-24
 
-- **Brazilian Portuguese.** The controller page follows the browser's language, with a picker at the
-  bottom of the home screen and in **Settings → This device**. The PS4 app follows the console's system
-  language; **L1** on its main screen switches between automatic, English and Português (Brasil). The
-  service's error messages are shown translated on the page.
-- The PS4 app now draws accented letters (Latin-1).
-- Updated the Xbox-button workaround for Chrome and Edge on Windows: from version 156 the GameInput option
-  is hidden on the flags page. [Gamepad troubleshooting](docs/troubleshooting.md#gamepads) shows how to
-  bring it back, and a launch option that works in any version.
+- Arabic and Brazilian Portuguese for the web interface and PS4 app.
+- Move, resize and hide face buttons individually, or keep them grouped.
+- Reset individual controls in the layout editor.
+- Updated Xbox-button troubleshooting for Chrome and Edge on Windows.
 
 ## 1.3.0 — 2026-10-22
 

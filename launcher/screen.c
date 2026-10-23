@@ -8,6 +8,7 @@
 #include <string.h>
 #include "autorun.h"
 #include "draw.h"
+#include "language.h"
 #include "logo.h"
 #include "navigation.h"
 #include "qrcodegen.h"
@@ -25,7 +26,15 @@
 #define C4F_PANEL_TOP    (C4F_ROW_TOP + C4F_ROW_HEIGHT + 28)
 #define C4F_PANEL_HEIGHT 128.0f
 
-static uint32_t *c4fBackdrop;
+static uint32_t *c4fBackdrop, *c4fRtlBackdrop;
+
+/* Align interface text in its allotted box; technical fields use c4fTextRaw. */
+static void c4fUiText(C4fCanvas *c, int font, float size, float x, float y,
+                      float width, C4fColor color, const char *text)
+{
+    if (c4fTextIsRTL()) x += width - c4fTextWidth(font, size, text);
+    c4fText(c, font, size, x, y, color, text);
+}
 
 static float c4fClamp(float v) { return v < 0 ? 0 : v > 1 ? 1 : v; }
 
@@ -417,7 +426,7 @@ static C4fLook c4fLookFor(const C4fLauncherScreen *s, char *meta, size_t metaSiz
         look = (C4fLook){ "Working", "Please wait", s->message, "Checking", C4F_WARN, C4F_ACCENT, 0 };
     } else if (s->running == 1) {
         if (s->controllers == 1) snprintf(meta, metaSize, "1 controller connected");
-        else snprintf(meta, metaSize, "%d controllers connected", s->controllers);
+        else snprintf(meta, metaSize, c4fTr("%d controllers connected"), s->controllers);
         look = (C4fLook){ "Running", "Control4Free is running",
                           "Open the address or scan the code on your phone or PC. Pick a controller there, then "
                           "choose its user on the PS4.",
@@ -459,7 +468,7 @@ void c4fDrawActionOverlay(uint32_t *pixels, const C4fLauncherScreen *s)
     c4fBandRoundRect(&c, dx, dy, dw, dh, 6 * C4F_S, 3 * C4F_S, C4F_ACCENT);
 
     if (s->confirmStop) {
-        c4fText(&c, C4F_FONT_LIGHT, 48, dx + 48, dy + 92, C4F_TEXT, "Stop Control4Free?");
+        c4fUiText(&c, C4F_FONT_LIGHT, 48, dx + 48, dy + 92, dw - 96, C4F_TEXT, "Stop Control4Free?");
         c4fTextWrapped(&c, C4F_FONT_LIGHT, 26, dx + 48, dy + 148, dw - 96, 39, 2, C4F_MUTED,
                        "Every controller disconnects. You can start Control4Free again from this screen.");
         if (!s->confirmMenu) {
@@ -469,7 +478,7 @@ void c4fDrawActionOverlay(uint32_t *pixels, const C4fLauncherScreen *s)
         }
         const float bw = 240, gap = 24, by = dy + 235;
         for (int i = 0; i < 2; i++) {
-            float bx = dx + dw - 48 - 2 * bw - gap + i * (bw + gap);
+            float bx = dx + dw - 48 - 2 * bw - gap + (c4fTextIsRTL() ? 1 - i : i) * (bw + gap);
             int focused = s->confirmChoice == i;
             c4fFillRoundRect(&c, bx, by, bw, 64, 6 * C4F_S,
                             focused ? C4F_RGBA(40, 103, 205, .85f) : C4F_TILE);
@@ -478,13 +487,13 @@ void c4fDrawActionOverlay(uint32_t *pixels, const C4fLauncherScreen *s)
             c4fTextCentered(&c, C4F_FONT_REGULAR, 30, bx + bw / 2, by + 42,
                             focused ? C4F_TEXT : C4F_MUTED, i ? "Stop" : "Cancel");
         }
-        c4fText(&c, C4F_FONT_LIGHT, 23, dx + 48, dy + dh - 48, C4F_MUTED,
+        c4fUiText(&c, C4F_FONT_LIGHT, 23, dx + 48, dy + dh - 48, dw - 96, C4F_MUTED,
                 "Arrows / D-pad: select    OK / Cross: confirm    Back / Circle: cancel");
         return;
     }
 
-    c4fText(&c, C4F_FONT_LIGHT, 48, dx + 48, dy + 84, C4F_TEXT, "Actions");
-    c4fText(&c, C4F_FONT_LIGHT, 24, dx + 48, dy + 125, C4F_MUTED,
+    c4fUiText(&c, C4F_FONT_LIGHT, 48, dx + 48, dy + 84, dw - 96, C4F_TEXT, "Actions");
+    c4fUiText(&c, C4F_FONT_LIGHT, 24, dx + 48, dy + 125, dw - 96, C4F_MUTED,
             s->busy ? "Working... You can return to the screen." : "Use arrows or the D-pad to choose an action.");
     int focus = 0;
     for (int i = 0; i < count; i++) if ((int)actions[i] == s->actionFocus) focus = i;
@@ -495,16 +504,17 @@ void c4fDrawActionOverlay(uint32_t *pixels, const C4fLauncherScreen *s)
                         focused ? C4F_RGBA(40, 103, 205, .85f) : C4F_RGBA(255, 255, 255, .04f));
         c4fInsetRoundRect(&c, rx, ry, rw, 64, 6 * C4F_S,
                          focused ? 3 : 1 * C4F_S, focused ? C4F_ACCENT : C4F_LINE_SOFT);
-        c4fText(&c, C4F_FONT_REGULAR, 30, rx + 24, ry + 42,
+        c4fUiText(&c, C4F_FONT_REGULAR, 30, rx + 24, ry + 42, rw - 48,
                 focused ? C4F_TEXT : C4F_MUTED, c4fActionLabel(s, actions[i]));
         if (focused) {
-            float cx = rx + rw - 30, cy = ry + 32;
-            c4fSegment(&c, cx - 5, cy - 9, cx + 4, cy, 3, C4F_TEXT);
-            c4fSegment(&c, cx + 4, cy, cx - 5, cy + 9, 3, C4F_TEXT);
+            float cx = c4fTextIsRTL() ? rx + 30 : rx + rw - 30, cy = ry + 32;
+            float sign = c4fTextIsRTL() ? -1 : 1;
+            c4fSegment(&c, cx - 5 * sign, cy - 9, cx + 4 * sign, cy, 3, C4F_TEXT);
+            c4fSegment(&c, cx + 4 * sign, cy, cx - 5 * sign, cy + 9, 3, C4F_TEXT);
         }
     }
     static const C4fHint hints[2] = { { C4F_KEY_CROSS, "Select" }, { C4F_KEY_CIRCLE, "Back" } };
-    c4fText(&c, C4F_FONT_LIGHT, 23, dx + 48, dy + dh - 32, C4F_MUTED, "TV remote: OK select / Back return");
+    c4fUiText(&c, C4F_FONT_LIGHT, 23, dx + 48, dy + dh - 32, dw - 96, C4F_MUTED, "TV remote: OK select / Back return");
     c4fHints(&c, dx + dw - 48, dy + dh - 40, hints, 2);
 }
 
@@ -513,11 +523,29 @@ void c4fDrawLauncher(uint32_t *pixels, const C4fLauncherScreen *s)
     C4fCanvas c = { pixels, C4F_SCREEN_WIDTH, C4F_SCREEN_HEIGHT };
     const float left = C4F_LEFT, right = C4F_RIGHT, top = C4F_ROW_TOP, height = C4F_ROW_HEIGHT;
     const float qrWidth = C4F_QR_WIDTH, mainWidth = C4F_MAIN_WIDTH, pad = 16 * C4F_S;
-    char meta[48], count[8];
+    const float mainX = c4fTextIsRTL() ? right - mainWidth : left;
+    char meta[256], count[8], message[C4F_MESSAGE_RENDER_SIZE], autorun[C4F_MESSAGE_RENDER_SIZE];
+    c4fMessageRender(&s->messageText, message, sizeof(message));
+    c4fMessageRender(&s->autorunText, autorun, sizeof(autorun));
     C4fLook look = c4fLookFor(s, meta, sizeof(meta));
+    if (s->busy && s->messageText.key) look.subtitle = message;
     int live = s->running == 1 && !s->locked;
 
-    if (c4fBackdrop) memcpy(pixels, c4fBackdrop, (size_t)c.w * (size_t)c.h * sizeof(uint32_t));
+    if (c4fTextIsRTL() && !c4fRtlBackdrop) {
+        c4fRtlBackdrop = malloc((size_t)c.w * c.h * sizeof(uint32_t));
+        if (c4fRtlBackdrop) {
+            C4fCanvas background = { c4fRtlBackdrop, c.w, c.h };
+            c4fPaintBackdrop(&background, C4F_S);
+            c4fBlurUnder(&background, mainX, top, mainWidth, height, 6 * C4F_S, 6 * C4F_S);
+            c4fBlurUnder(&background, left, top, qrWidth, height, 6 * C4F_S, 6 * C4F_S);
+            c4fBlurUnder(&background, left, C4F_PANEL_TOP, right - left, C4F_PANEL_HEIGHT, 6 * C4F_S, 10 * C4F_S);
+#ifndef C4F_DIAG
+            c4fDrawSolidarityBadge(&background, C4F_SCREEN_WIDTH - 64, 40);
+#endif
+        }
+    }
+    const uint32_t *background = c4fTextIsRTL() && c4fRtlBackdrop ? c4fRtlBackdrop : c4fBackdrop;
+    if (background) memcpy(pixels, background, (size_t)c.w * (size_t)c.h * sizeof(uint32_t));
     else memset(pixels, 0, (size_t)c.w * (size_t)c.h * sizeof(uint32_t));
 
     /* .topbar: the app mark, the name and the state. */
@@ -528,25 +556,27 @@ void c4fDrawLauncher(uint32_t *pixels, const C4fLauncherScreen *s)
     c4fText(&c, C4F_FONT_LIGHT, 13 * C4F_S, x + 16 * C4F_S, 62, C4F_MUTED, look.pill);
 
     /* .screen-title and .screen-sub */
-    c4fText(&c, C4F_FONT_LIGHT, 40 * C4F_S, left, 196, C4F_TEXT, look.title);
-    c4fTextWrapped(&c, C4F_FONT_LIGHT, 26, left, 250, 1500, 39, 2, C4F_MUTED, look.subtitle);
+    c4fUiText(&c, C4F_FONT_LIGHT, 40 * C4F_S, left, 196, right - left, C4F_TEXT, look.title);
+    c4fTextWrapped(&c, C4F_FONT_LIGHT, 26, left, 250, right - left, 39, 2, C4F_MUTED, look.subtitle);
 
     /* Where to connect, as a controller tile. */
-    c4fTile(&c, left, top, mainWidth, height, look.bar);
+    c4fTile(&c, mainX, top, mainWidth, height, look.bar);
     if (s->running == 1) snprintf(count, sizeof(count), "%d", s->controllers);
     else snprintf(count, sizeof(count), "-");
-    c4fRingBadge(&c, left + pad + 26 * C4F_S, top + pad + 26 * C4F_S + 4, look.bar, count);
-    float textX = left + pad + 52 * C4F_S + 22;
-    c4fText(&c, C4F_FONT_REGULAR, 30, textX, top + 66, C4F_TEXT, "Open on your phone or PC");
-    c4fText(&c, C4F_FONT_LIGHT, 23, textX, top + 102, C4F_MUTED, look.meta);
+    c4fRingBadge(&c, c4fTextIsRTL() ? mainX + mainWidth - pad - 26 * C4F_S : mainX + pad + 26 * C4F_S,
+                   top + pad + 26 * C4F_S + 4, look.bar, count);
+    float textX = mainX + pad + (c4fTextIsRTL() ? 0 : 52 * C4F_S + 22);
+    float textW = mainWidth - 2 * pad - 52 * C4F_S - 22;
+    c4fUiText(&c, C4F_FONT_REGULAR, 30, textX, top + 66, textW, C4F_TEXT, "Open on your phone or PC");
+    c4fUiText(&c, C4F_FONT_LIGHT, 23, textX, top + 102, textW, C4F_MUTED, look.meta);
 
-    float fieldX = left + pad, fieldY = top + 150, fieldWidth = mainWidth - 2 * pad, fieldHeight = 88;
+    float fieldX = mainX + pad, fieldY = top + 150, fieldWidth = mainWidth - 2 * pad, fieldHeight = 88;
     c4fFillRoundRect(&c, fieldX, fieldY, fieldWidth, fieldHeight, 4 * C4F_S, C4F_RGBA(0, 0, 0, .3f));
     c4fInsetRoundRect(&c, fieldX, fieldY, fieldWidth, fieldHeight, 4 * C4F_S, 1 * C4F_S, C4F_LINE);
     if (s->address[0])
-        c4fText(&c, C4F_FONT_REGULAR, 40, fieldX + 28, fieldY + fieldHeight / 2 + 14, live ? C4F_TEXT : C4F_MUTED, s->address);
+        c4fTextRaw(&c, C4F_FONT_REGULAR, 40, fieldX + 28, fieldY + fieldHeight / 2 + 14, live ? C4F_TEXT : C4F_MUTED, s->address);
     else
-        c4fText(&c, C4F_FONT_LIGHT, 28, fieldX + 28, fieldY + fieldHeight / 2 + 10, C4F_MUTED,
+        c4fUiText(&c, C4F_FONT_LIGHT, 28, fieldX + 28, fieldY + fieldHeight / 2 + 10, fieldWidth - 56, C4F_MUTED,
                 "Connect the PS4 to your home network");
     c4fTextWrapped(&c, C4F_FONT_LIGHT, 24, fieldX, fieldY + fieldHeight + 44, fieldWidth, 36, 2, C4F_MUTED,
                    "Use the same network as the PS4. Touch, a keyboard and gamepads connected to the phone "
@@ -555,12 +585,12 @@ void c4fDrawLauncher(uint32_t *pixels, const C4fLauncherScreen *s)
     /* The last result along the bottom of the tile. */
     float lineY = top + height - 104;
     c4fFillRoundRect(&c, fieldX, lineY, fieldWidth, 1 * C4F_S, 0, C4F_LINE_SOFT);
-    c4fDot(&c, fieldX + 4 * C4F_S, lineY + 44, look.dot, look.glow);
-    c4fTextWrapped(&c, C4F_FONT_LIGHT, 24, fieldX + 24, lineY + 52, fieldWidth - 24, 34, 2, C4F_TEXT,
-                   s->busy ? "Working..." : s->message);
+    c4fDot(&c, c4fTextIsRTL() ? fieldX + fieldWidth - 4 * C4F_S : fieldX + 4 * C4F_S, lineY + 44, look.dot, look.glow);
+    c4fTextWrapped(&c, C4F_FONT_LIGHT, 24, fieldX + (c4fTextIsRTL() ? 0 : 24), lineY + 52, fieldWidth - 24, 34, 2, C4F_TEXT,
+                   s->busy ? "Working..." : s->messageText.key ? message : s->message);
 
     /* The QR code tile. */
-    float qrX = C4F_QR_LEFT, card = 340, cardX = qrX + (qrWidth - card) / 2, cardY = top + 34;
+    float qrX = c4fTextIsRTL() ? left : C4F_QR_LEFT, card = 340, cardX = qrX + (qrWidth - card) / 2, cardY = top + 34;
     c4fTile(&c, qrX, top, qrWidth, height, look.bar);
     if (live && s->address[0]) {
         c4fQrCard(&c, cardX, cardY, card, s->address);
@@ -577,10 +607,13 @@ void c4fDrawLauncher(uint32_t *pixels, const C4fLauncherScreen *s)
     /* .panel: whether GoldHEN starts it by itself. */
     const char *panelTitle, *panelText;
     C4fColor panelDot = C4F_FAINT;
-    char versions[160];
+    char versions[256];
     int mismatch = live && s->runningVersion[0] && strcmp(s->runningVersion, C4F_LAUNCHER_VERSION);
     if (mismatch) {
-        snprintf(versions, sizeof(versions), "Installed %s; running %s", C4F_LAUNCHER_VERSION, s->runningVersion);
+        char installed[64], running[64];
+        snprintf(installed, sizeof(installed), c4fTextIsRTL() ? "\xE2\x81\xA8%s\xE2\x81\xA9" : "%s", C4F_LAUNCHER_VERSION);
+        snprintf(running, sizeof(running), c4fTextIsRTL() ? "\xE2\x81\xA8%s\xE2\x81\xA9" : "%s", s->runningVersion);
+        snprintf(versions, sizeof(versions), c4fTr("Installed %s; running %s"), installed, running);
         panelTitle = versions;
         panelText = "Press Square, then Cross to stop, and Cross again to start this app's version. All players disconnect.";
         panelDot = C4F_WARN;
@@ -598,22 +631,23 @@ void c4fDrawLauncher(uint32_t *pixels, const C4fLauncherScreen *s)
         panelText = "Press Triangle to turn auto-start on. GoldHEN then starts Control4Free each time it loads.";
     } else {
         panelTitle = "Auto-start status unknown";
-        panelText = s->autorunNote[0] ? s->autorunNote : "Checking with GoldHEN...";
+        panelText = s->autorunText.key ? autorun : s->autorunNote[0] ? s->autorunNote : "Checking with GoldHEN...";
         panelDot = s->autorunNote[0] ? C4F_BAD : C4F_WARN;
     }
     float panelY = C4F_PANEL_TOP;
     c4fPanel(&c, left, panelY, right - left, C4F_PANEL_HEIGHT, C4F_PANEL, C4F_LINE_SOFT);
     c4fDot(&c, left + 20 * C4F_S + 4 * C4F_S, panelY + 43, panelDot, s->autorun == C4F_AUTORUN_ON);
-    c4fText(&c, C4F_FONT_LIGHT, 19 * C4F_S, left + 20 * C4F_S + 24, panelY + 52, C4F_TEXT, panelTitle);
+    c4fUiText(&c, C4F_FONT_LIGHT, 19 * C4F_S, left + 20 * C4F_S + 24, panelY + 52,
+              right - left - 40 * C4F_S - 24, C4F_TEXT, panelTitle);
     c4fTextWrapped(&c, C4F_FONT_LIGHT, 23, left + 20 * C4F_S, panelY + 94, right - left - 40 * C4F_S, 34, 1, C4F_MUTED,
                    panelText);
 
     /* .home-foot and the button guide. */
     if (!s->confirmStop && !s->actionMenu)
-        c4fText(&c, C4F_FONT_LIGHT, 23, left, 973, C4F_MUTED, "TV remote: OK opens actions / arrows select / Back returns");
+        c4fUiText(&c, C4F_FONT_LIGHT, 23, left, 973, right - left, C4F_MUTED, "TV remote: OK opens actions / arrows select / Back returns");
     float footX = left + c4fText(&c, C4F_FONT_LIGHT, 20, left, 1030, C4F_FAINT, "Control4Free " C4F_LAUNCHER_VERSION);
     static const char *const languages[C4F_LANGUAGE_COUNT] = {
-        "L1  Language: automatic", "L1  Language: English", "L1  Language: Portuguese (Brazil)" };
+        "L1  Language: automatic", "L1  Language: English", "L1  Language: Portuguese (Brazil)", "L1  Language: Arabic" };
     if (!s->confirmStop && !s->actionMenu && s->language >= 0 && s->language < C4F_LANGUAGE_COUNT)
         c4fText(&c, C4F_FONT_LIGHT, 20, footX + 36, 1030, C4F_FAINT, languages[s->language]);
     if (!s->confirmStop && !s->busy) {
